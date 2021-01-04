@@ -1,32 +1,63 @@
-NUM_PARAMS_EACH = 20
-
 class DSU:
     def __init__(self):
         self.parents = {}
         self.sizes = {}
+        self.nexts = {}
 
     def find(self, x):
-        if x in self.parents and self.parents[x] != x:
+        if self.parents[x] != x:
             self.parents[x] = self.find(self.parents[x])
-            return self.parents[x]
+            
+        return self.parents[x]
 
     def union(self, x, y):
+        print("union", x, y)
         if x not in self.parents:
             self.parents[x] = x
             self.sizes[x] = 1
+            self.nexts[x] = x
 
         if y not in self.parents:
             self.parents[y] = y
             self.sizes[y] = 1
+            self.nexts[y] = y
 
         xr, yr = self.find(x), self.find(y)
+        print("roots", xr, yr)
         if self.sizes[xr] < self.sizes[yr]:
             self.parents[yr] = xr
+            # swap the next pointer of xr and yr
+            self.nexts[yr], self.nexts[xr] = self.nexts[xr], self.nexts[yr]
             self.sizes[xr] += self.sizes[yr]
         elif (self.sizes[yr] < self.sizes[xr] or 
             xr != yr): # if they have the same size but are different nodes
             self.parents[xr] = yr
+            # swap the next point of xr and yr
+            self.nexts[xr], self.nexts[yr] = self.nexts[yr], self.nexts[xr]
             self.sizes[yr] += self.sizes[xr]
+
+    def groups(self):
+        groups = []
+        for x in self.parents:
+            print("groups", x, self.parents[x])
+            if self.parents[x] == x:
+                print("groups:root", x)
+                groups.append(self.getGroup(x))
+
+        return groups
+
+    def getGroup(self, x):
+        '''
+            get all the elements in the same group as @x@
+        '''
+        result = [x]
+        cur = x
+        nxt = self.nexts[x]
+        while x != nxt:
+            result.append(nxt)
+            cur, nxt = nxt, self.nexts[cur]
+
+        return result
 
 class LogAnalyzer:
     def __init__(self):
@@ -45,9 +76,12 @@ class LogAnalyzer:
                 self.insert(r)
 
     def insert(self, param):
-        value = param.value
+        value = str(param.value)
         if value not in self.value_to_param:
             self.value_to_param[value] = param
 
         root = self.value_to_param[value]
         self.dsu.union(root, param)
+
+    def analysis_result(self):
+        return self.dsu.groups()

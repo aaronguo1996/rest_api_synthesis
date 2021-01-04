@@ -2,24 +2,32 @@
 
 import argparse
 import unittest
+import os
 
-from traces import parser
+from traces import parser, analyzer
 from tests import test_runner
 
 # definitions of all the subcommands
-LOG_PARSER=0
-TEST_PARSER=1
+ANALYSIS_PARSER = 0
+TEST_PARSER     = 10
 
-def build_log_parser(subparsers):
+# definitions of constants
+DEFAULT_DEBUG_OUTPUT = 'debug.log' 
+
+def build_analysis_parser(subparsers):
     '''
-        Command line arguments for parsing traces
+        Command ling arguments for analyze traces
     '''
-    log_parser = subparsers.add_parser("parser")
-    log_parser.add_argument("--log-file", type=str, required=True,
-                            help="Path to the log file to be parsed")
-    log_parser.add_argument("--hostname", type=str, required=True,
-                            help="Hostname of the APIs to be analyzed")
-    log_parser.set_defaults(subparser=LOG_PARSER)
+    analysis_parser = subparsers.add_parser("analyze")
+    analysis_parser.add_argument("--log-file", type=str, required=True,
+                                 help="Path to the log file to be parsed")
+    analysis_parser.add_argument("--hostname", type=str, required=True,
+                                 help="Hostname of the APIs to be analyzed")
+    analysis_parser.add_argument("--debug", action="store_true",
+                                 help="Enable writing debug traces to logs")
+    analysis_parser.add_argument("--debug-output", type=str, default=DEFAULT_DEBUG_OUTPUT,
+                                 help="Path to the debug file")
+    analysis_parser.set_defaults(subparser=ANALYSIS_PARSER)
 
 def build_test_parser(subparsers):
     '''
@@ -36,7 +44,7 @@ def build_cmd_parser():
     '''
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(help="Sub-command help")
-    build_log_parser(subparsers)
+    build_analysis_parser(subparsers)
     build_test_parser(subparsers)
     return parser
 
@@ -44,13 +52,32 @@ def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
 
-    if args.subparser == LOG_PARSER:
-        log_parser = parser.LogParser(args.log_file, args.hostname)
-        log_parser.parse_entries()
-    elif args.subparser == TEST_PARSER:
-        test_runner.run_test(args.suites)
-    else:
-        raise NotImplementedError
+    # clear the log file if exists
+    if args.debug and os.path.exists(args.debug_output):
+        os.remove(args.debug_output)
 
+    entries = None
+    if args.subparser == ANALYSIS_PARSER:
+        log_parser = parser.LogParser(args.log_file, args.hostname)
+        entries = log_parser.parse_entries()
+        if args.debug:
+            # write entries to log file
+            with open(args.debug_output, 'a+') as f:
+                f.write("==================== Start Logging Parse Results ====================\n")
+                for e in entries:
+                    f.write(str(e) + "\n")
+
+        log_analyzer = analyzer.LogAnalyzer()
+        log_analyzer.analyze(entries)
+        groups = log_analyzer.analysis_result()
+        if args.debug:
+            with open(args.debug_output, 'a+') as f:
+                f.write("==================== Start Logging Analyze Results ====================\n")
+                for g in groups:
+                    f.write(str(g) + "\n")
+
+    if args.subparser == TEST_PARSER:
+        test_runner.run_test(args.suites)
+    
 if __name__ == "__main__":
     main()
