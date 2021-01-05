@@ -3,6 +3,7 @@
 import argparse
 import unittest
 import os
+import json
 
 from traces import parser, analyzer
 from tests import test_runner
@@ -19,14 +20,8 @@ def build_analysis_parser(subparsers):
         Command ling arguments for analyze traces
     '''
     analysis_parser = subparsers.add_parser("analyze")
-    analysis_parser.add_argument("--log-file", type=str, required=True,
-                                 help="Path to the log file to be parsed")
-    analysis_parser.add_argument("--hostname", type=str, required=True,
-                                 help="Hostname of the APIs to be analyzed")
-    analysis_parser.add_argument("--debug", action="store_true",
-                                 help="Enable writing debug traces to logs")
-    analysis_parser.add_argument("--debug-output", type=str, default=DEFAULT_DEBUG_OUTPUT,
-                                 help="Path to the debug file")
+    analysis_parser.add_argument("config_file", nargs='?',
+                                 help="Path to the configuration file")
     analysis_parser.set_defaults(subparser=ANALYSIS_PARSER)
 
 def build_test_parser(subparsers):
@@ -52,17 +47,25 @@ def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
 
+    configuration = {}
+    with open(args.config_file, 'r') as config:
+        configuration = json.loads(config.read())
+
     # clear the log file if exists
-    if args.debug and os.path.exists(args.debug_output):
-        os.remove(args.debug_output)
+    if (configuration["enable_debug"] and 
+        os.path.exists(configuration["debug_output"])):
+        os.remove(configuration["debug_output"])
 
     entries = None
     if args.subparser == ANALYSIS_PARSER:
-        log_parser = parser.LogParser(args.log_file, args.hostname)
-        entries = log_parser.parse_entries()
-        if args.debug:
+        log_parser = parser.LogParser(configuration["log_file"], 
+                                      configuration["hostname"],
+                                      configuration["doc_file"])
+        entries = log_parser.parse_entries(configuration["uninteresting_endpoints"],
+                                           configuration["ignore_field_names"])
+        if configuration["enable_debug"]:
             # write entries to log file
-            with open(args.debug_output, 'a+') as f:
+            with open(configuration["debug_output"], 'a+') as f:
                 f.write("==================== Start Logging Parse Results ====================\n")
                 for e in entries:
                     f.write(str(e) + "\n")
@@ -70,8 +73,8 @@ def main():
         log_analyzer = analyzer.LogAnalyzer()
         log_analyzer.analyze(entries)
         groups = log_analyzer.analysis_result()
-        if args.debug:
-            with open(args.debug_output, 'a+') as f:
+        if configuration["enable_debug"]:
+            with open(configuration["debug_output"], 'a+') as f:
                 f.write("==================== Start Logging Analyze Results ====================\n")
                 for g in groups:
                     f.write(str(g) + "\n")

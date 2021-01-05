@@ -1,3 +1,5 @@
+from traces import typeChecker
+
 class Parameter:
     def __init__(self, arg_name, func_name, value):
         self.arg_name = arg_name
@@ -15,19 +17,34 @@ class ResponseParameter(Parameter):
         super().__init__(arg_name, func_name, value)
         self.path = path
 
-    def flatten(self):
+    def flatten(self, path_to_defs, skip_fields):
         results = []
+
+        if self.arg_name in skip_fields:
+            return results
+
         if isinstance(self.value, dict):
             for k, v in self.value.items():
                 p = ResponseParameter(k, self.func_name, self.path + [k], v)
-                results += p.flatten()
+                results += p.flatten(path_to_defs, skip_fields)
         elif isinstance(self.value, list):
             #TODO: infer type for each element in the array
             # if we are able to match an object type against it, we get rid of the index from the path
             # if we cannot match an object against it, leave the index as the arg name
             for i in range(len(self.value)):
-                p = ResponseParameter(str(i), self.func_name, self.path + ["["+ str(i) +"]"], self.value[i])
-                results += p.flatten()
+                p = None
+                obj_defs = typeChecker.Type.get_object_def(path_to_defs)
+                for obj_name, obj in obj_defs.items():
+                    obj_type = typeChecker.Type(obj_name, obj)
+                    if obj_type.is_type_of(self.value[i]):
+                        # print("find object for", self.value[i], "is", obj_type.schema["title"])
+                        p = ResponseParameter(str(i), self.func_name, self.path + [obj_name], self.value[i])
+                        break
+                
+                if not p:
+                    p = ResponseParameter(str(i), self.func_name, self.path + ["["+ str(i) +"]"], self.value[i])
+                
+                results += p.flatten(path_to_defs, skip_fields)
         else:
             return [self]
 

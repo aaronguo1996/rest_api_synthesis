@@ -1,0 +1,17 @@
+{
+    "log_file": "logs/app.slack.com.20210104.har",
+    "doc_file": "slack_web_openapi_v2.json",
+    "enable_debug": true,
+    "debug_output": "debug.log",
+    "hostname": "https://apitest-pk79527.slack.com",
+    "path_to_definitions": "#/definitions",
+    "uninteresting_endpoints": [
+        "experiments.*",
+        "search.modules",
+        "search.autocomplete.*",
+        "api.features"
+    ],
+    "ignore_field_names": [
+        "text"
+    ]
+}

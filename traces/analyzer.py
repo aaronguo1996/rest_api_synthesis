@@ -11,7 +11,6 @@ class DSU:
         return self.parents[x]
 
     def union(self, x, y):
-        print("union", x, y)
         if x not in self.parents:
             self.parents[x] = x
             self.sizes[x] = 1
@@ -23,7 +22,6 @@ class DSU:
             self.nexts[y] = y
 
         xr, yr = self.find(x), self.find(y)
-        print("roots", xr, yr)
         if self.sizes[xr] < self.sizes[yr]:
             self.parents[yr] = xr
             # swap the next pointer of xr and yr
@@ -39,9 +37,7 @@ class DSU:
     def groups(self):
         groups = []
         for x in self.parents:
-            print("groups", x, self.parents[x])
             if self.parents[x] == x:
-                print("groups:root", x)
                 groups.append(self.getGroup(x))
 
         return groups
@@ -77,6 +73,11 @@ class LogAnalyzer:
 
     def insert(self, param):
         value = str(param.value)
+        
+        # skip empty values, they are meaningless
+        if not value:
+            return
+
         if value not in self.value_to_param:
             self.value_to_param[value] = param
 
