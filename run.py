@@ -73,6 +73,7 @@ def main():
         log_analyzer = analyzer.LogAnalyzer()
         log_analyzer.analyze(entries)
         groups = log_analyzer.analysis_result()
+        log_analyzer.to_graph(configuration["analysis_params"]["allow_only_input"])
         if configuration["enable_debug"]:
             with open(configuration["debug_output"], 'a+') as f:
                 f.write("==================== Start Logging Analyze Results ====================\n")

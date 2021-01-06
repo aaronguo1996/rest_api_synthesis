@@ -84,10 +84,6 @@ class Type:
 
     def is_type_of(self, obj):
         try:
-            # TODO: whitelist blocks objects for now
-            if self.name == "blocks":
-                return True
-
             # print("Does this match:", obj, self.schema)
             expected_type = self.get_ref_type()
             if self.is_array_type(expected_type):
@@ -96,7 +92,10 @@ class Type:
             if self.is_union_type(expected_type):
                 return self.of_union_type(obj, expected_type)
 
-            if isinstance(obj, dict):
+            if isinstance(self.schema, dict):
+                if not isinstance(obj, dict):
+                    return False
+                    
                 for k, v in obj.items():
                     types = expected_type.get("properties", {})
                     if k in types:

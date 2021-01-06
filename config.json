@@ -5,13 +5,27 @@
     "debug_output": "debug.log",
     "hostname": "https://apitest-pk79527.slack.com",
     "path_to_definitions": "#/definitions",
+    "analysis_params": {
+        "allow_only_input": false
+    },
     "uninteresting_endpoints": [
         "experiments.*",
         "search.modules",
         "search.autocomplete.*",
-        "api.features"
+        "api.features",
+        "apps.profile.get"
     ],
     "ignore_field_names": [
-        "text"
+        "text",
+        "blocks",
+        "slack_route",
+        "_x_id",
+        "_x_csid",
+        "_x_version_ts",
+        "_x_sonic",
+        "_x_reason",
+        "_x_gantry",
+        "_x_mode",
+        "token"
     ]
 }

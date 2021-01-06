@@ -67,17 +67,16 @@ class LogParser:
         post_data = request.get("postData", {})
         if "params" in post_data:
             post_params = post_data.get("params")
-            post_params = [ x for x in post_params if x["name"] not in skip_fields]
             request_params += post_params
         else:
             post_body = json.loads(post_data.get("text", "{}"))
             for k, v in post_body.items():
-                if k not in skip_fields:
-                    request_params.append({
-                        "name": k,
-                        "value": v
-                    })
+                request_params.append({
+                    "name": k,
+                    "value": v
+                })
 
+        request_params = [ x for x in request_params if x["name"] not in skip_fields]
         for rp in request_params:
             p = log.RequestParameter(rp["name"], endpoint, rp["value"])
             parameters.append(p)

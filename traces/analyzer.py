@@ -1,3 +1,7 @@
+import re
+from graphviz import Digraph
+from traces import log
+
 class DSU:
     def __init__(self):
         self.parents = {}
@@ -86,3 +90,47 @@ class LogAnalyzer:
 
     def analysis_result(self):
         return self.dsu.groups()
+
+    def to_graph(self, allow_only_input=False):
+        '''
+            output the analysis result as a graph in dot format
+        '''
+        dot = Digraph()
+        
+        groups = self.analysis_result()
+        edges = []
+        for group in groups:
+            # pick representative in each group, the shortest path name
+            rep = ""
+            for param in group:
+                if isinstance(param, log.ResponseParameter):
+                    path_str = '.'.join(param.path)
+                    if not rep or len(rep) > len(path_str):
+                        rep = path_str
+            
+            if not rep:
+                if not allow_only_input:
+                    continue
+                # none of the parameters in the group is from a response
+                # pick the first as the representative
+                print("not response, choosing", group[0])
+                rep = group[0].arg_name
+            
+            dot.node(rep, label=rep, shape="oval")
+
+            for param in group:
+                dot.node(param.func_name, label=param.func_name, shape='rectangle')
+                if isinstance(param, log.ResponseParameter):
+                    # add an edge between the method and its return type
+                    if '[' not in rep and not re.search("image_*", rep):
+                        edges.append((param.func_name, rep))
+                else:
+                    # add an edge between parameter name and the method
+                    if '[' not in rep and not re.search("image_*", rep):
+                        edges.append((rep, param.func_name))
+
+        unique_edges = list(dict.fromkeys(edges))
+        for v1, v2 in unique_edges:
+            dot.edge(v1, v2)
+
+        dot.render('output/dependencies.gv', view=True)

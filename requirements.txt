@@ -1,1 +1,2 @@
 haralyzer==1.8.0
+graphviz==0.16
