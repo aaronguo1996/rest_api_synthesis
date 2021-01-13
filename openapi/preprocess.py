@@ -11,10 +11,14 @@ class PreProcessor:
         self._counter = 0
         self._new_refs = {}
 
-    def preprocess(self):
+    def preprocess(self, output_file):
         # restructure the input file to make it satisfy the OpenAPI format
         with open(self._doc_path, 'r') as f:
             doc_obj = json.loads(f.read())
+            # we can only preprocess OpenAPI v2
+            if doc_obj.get(defs.DOC_VERSION) != defs.DOC_V2:
+                raise InvalidSwaggerDoc
+
             doc_obj_v2 = self._fix_items_types(doc_obj)
             # add new definitions into doc
             doc_obj_v2[defs.DOC_RESPONSES] = {}
@@ -24,7 +28,7 @@ class PreProcessor:
             doc_obj_v3 = self._to_openapi_v3(doc_obj_v2)
             # doc_obj_final = doc_obj_v3
             doc_obj_final = self._fix_union_types(doc_obj_v3)
-            self._write_to_file(doc_obj_final)
+            self._write_to_file(doc_obj_final, output_file)
 
     def _not_none_type(self, t):
         if isinstance(t, str):
@@ -213,10 +217,6 @@ class PreProcessor:
         response = conn.recv()
         return json.loads(response)
 
-    def _write_to_file(self, doc):
-        file_name = self._doc_path
-        if file_name[-5:] == ".json":
-            file_name = file_name[:-5]
-
-        with open(file_name + "_preprocess.json", 'w+') as output:
+    def _write_to_file(self, doc, output_file):
+        with open(output_file, 'w+') as output:
             output.write(json.dumps(doc))

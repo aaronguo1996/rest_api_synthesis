@@ -5,9 +5,6 @@ import json
 from fuzzer.error import ConnectionError
 from openapi import defs
 
-SUCCESS_CODES = [200, 201, 204]
-UTF8 = 'utf-8'
-
 class Connection:
     """Maintain a network connection to the host server
     """
@@ -54,12 +51,13 @@ class Connection:
             [type]: [description]
         """
         response = self._conn.getresponse()
-        if response.code in SUCCESS_CODES:
+        if response.code in defs.SUCCESS_CODES:
             buf = response.read()
-            resp_str = buf.decode(UTF8)
-            return resp_str
+            resp_str = buf.decode(defs.UTF8)
+            return response.code, resp_str
         else:
-            raise ConnectionError(response.code, response.reason)
+            return response.code, response.reason
+            # raise ConnectionError(response.code, response.reason)
 
     def close(self):
         self._conn.close()

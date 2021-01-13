@@ -2,3 +2,4 @@ haralyzer==1.8.0
 graphviz==0.16
 prance
 openapi_spec_validator
+xeger

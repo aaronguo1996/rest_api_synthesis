@@ -4,13 +4,15 @@ import argparse
 import unittest
 import os
 import json
+import logging
 
 from traces import parser, analyzer
 from tests import test_runner
 
 # definitions of all the subcommands
 ANALYSIS_PARSER = 0
-TEST_PARSER     = 10
+FUZZ_PARSER = 1
+TEST_PARSER = 10
 
 # definitions of constants
 DEFAULT_DEBUG_OUTPUT = 'debug.log' 
@@ -56,29 +58,37 @@ def main():
         os.path.exists(configuration["debug_output"])):
         os.remove(configuration["debug_output"])
 
+    logging.basicConfig(
+        filename=configuration["debug_output"],
+        encoding='utf-8', level=logging.DEBUG)
+
     entries = None
-    if args.subparser == ANALYSIS_PARSER:
-        log_parser = parser.LogParser(configuration["log_file"], 
-                                      configuration["hostname"],
-                                      configuration["doc_file"])
-        entries = log_parser.parse_entries(configuration["uninteresting_endpoints"],
-                                           configuration["ignore_field_names"])
+    if args.subparser == ANALYSIS_PARSER or args.subparser == FUZZ_PARSER:
+        log_parser = parser.LogParser(
+            configuration["log_file"], 
+            configuration["hostname"],
+            configuration["doc_file"])
+        entries = log_parser.parse_entries(
+            configuration["uninteresting_endpoints"],
+            configuration["ignore_field_names"])
         if configuration["enable_debug"]:
             # write entries to log file
-            with open(configuration["debug_output"], 'a+') as f:
-                f.write("==================== Start Logging Parse Results ====================\n")
-                for e in entries:
-                    f.write(str(e) + "\n")
+            logging.debug("========== Start Logging Parse Results ==========")
+            for e in entries:
+                logging.debug(e)
 
         log_analyzer = analyzer.LogAnalyzer()
         log_analyzer.analyze(entries)
         groups = log_analyzer.analysis_result()
-        log_analyzer.to_graph(configuration["analysis_params"]["allow_only_input"])
+        graph_flag = configuration["analysis_params"]["allow_only_input"]
+        log_analyzer.to_graph(graph_flag)
         if configuration["enable_debug"]:
-            with open(configuration["debug_output"], 'a+') as f:
-                f.write("==================== Start Logging Analyze Results ====================\n")
-                for g in groups:
-                    f.write(str(g) + "\n")
+            logging.debug("========== Start Logging Analyze Results ==========")
+            for g in groups:
+                logging.debug(g)
+
+    if args.subparser == FUZZ_PARSER:
+        pass
 
     if args.subparser == TEST_PARSER:
         test_runner.run_test(args.suites)
