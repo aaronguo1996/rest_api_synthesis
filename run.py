@@ -110,7 +110,7 @@ def main():
         endpoints = configuration["fuzz"]["endpoints"]
         engine.to_graph(endpoints, "dependencies_0")
         engine.saturate_all(
-            endpoints, 2, 
+            endpoints, configuration["fuzz"]["iterations"], 
             configuration["fuzz"]["timeout_per_request"])
 
 if __name__ == "__main__":

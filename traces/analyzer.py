@@ -1,8 +1,5 @@
 import re
-import os
-from graphviz import Digraph
 from traces import log
-from multiprocessing import Manager
 import logging
 
 class DSU:
@@ -14,7 +11,7 @@ class DSU:
         self._logger = logging.getLogger(__name__)
 
     def find(self, x):
-        # self._logger.debug(f"Find {x} in DSU")
+        # self._logger.debug(f"Finding {x} in DSU")
         if x not in self._parents:
             return None
 
@@ -36,7 +33,23 @@ class DSU:
             self._nexts[y] = y
             self._values[y] = set([y.value])
 
+        # if x != y and str(x) == str(y):
+        #     self._logger.debug(f"Weird unequal for {x} and {y}")
+        #     self._logger.debug(f"Func names: {x.func_name == y.func_name}")
+        #     self._logger.debug(f"Arg names: {x.arg_name == y.arg_name}")
+        #     self._logger.debug(f"Methods: {x.method.upper() == y.method.upper()}")
+        #     self._logger.debug(f"Paths: {x.path == y.path}")
+
+        # self._logger.debug(f"Union {x} and {y} in DSU")
         xr, yr = self.find(x), self.find(y)
+        # if x == y and xr != yr:
+        #     self._logger.debug(f"Weird unequal for {x} and {y}")
+        #     self._logger.debug(f"Func names: {x.func_name == y.func_name}")
+        #     self._logger.debug(f"Arg names: {x.arg_name == y.arg_name}")
+        #     self._logger.debug(f"Methods: {x.method.upper() == y.method.upper()}")
+        #     self._logger.debug(f"Paths: {tuple(x.path) == tuple(y.path)}")
+
+        # self._logger.debug(f"Union roots {xr} and {yr} in DSU")
         if self._sizes[xr] < self._sizes[yr]:
             self._parents[yr] = xr
             # swap the next pointer of xr and yr
@@ -45,6 +58,8 @@ class DSU:
             self._values[xr] = self._values[xr].union(self._values[yr])
         elif self._sizes[yr] < self._sizes[xr] or xr != yr: # if they have the same size but are different nodes
             self._parents[xr] = yr
+            if self._sizes[xr] == self._sizes[yr]:
+                self._logger.debug((self._parents[xr], self._parents[yr]))
             # swap the next point of xr and yr
             self._nexts[xr], self._nexts[yr] = self._nexts[yr], self._nexts[xr]
             self._sizes[yr] += self._sizes[xr]
@@ -59,12 +74,15 @@ class DSU:
         return groups
 
     def get_value_bank(self, x):
-        return self._values.get(x, [])
+        return self._values.get(self.find(x), set())
 
     def get_group(self, x):
         '''
             get all the elements in the same group as @x@
         '''
+        if x not in self._parents:
+            return []
+
         result = [x]
         cur = x
         nxt = self._nexts[x]
@@ -106,11 +124,10 @@ class LogAnalyzer:
     def analysis_result(self):
         return self.dsu.groups()
 
-    def to_graph(self, **kwargs):
+    def to_graph(self, dot, **kwargs):
         '''
             output the analysis result as a graph in dot format
         '''
-        dot = Digraph()
         allow_only_input = kwargs.get("allow_only_input", False)
         endpoints = kwargs.get("endpoints")
         
@@ -150,6 +167,6 @@ class LogAnalyzer:
             if endpoints and v1 not in endpoints and v2 not in endpoints:
                 continue
 
-            dot.edge(v1, v2)
+            dot.edge(v1, v2, style="solid")
 
         return dot

@@ -11,6 +11,7 @@ import json
 import os
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
+from graphviz import Digraph
 
 class FuzzResult:
     def __init__(self, method, endpoint, code, response, params):
@@ -45,8 +46,8 @@ class FuzzResult:
 
 
 class BasicFuzzer:
-    def __init__(self, hostname, base_path, 
-        endpoint, method, ep_method_def, value_dict):
+    def __init__(self, hostname, base_path, endpoint, method, ep_method_def,
+        value_dict, real_dependencies, inferred_dependencies, depth_limit):
         # create a logger for this module
         self._logger = logging.getLogger(__name__)
         self._endpoint = endpoint
@@ -56,6 +57,9 @@ class BasicFuzzer:
         self._base_path = base_path
         self._value_dict = value_dict
         self._conn = Connection(hostname, base_path)
+        self._fuzzing_depth_limit = depth_limit
+        self._real_dependencies = real_dependencies
+        self._inferred_dependencies = inferred_dependencies
 
     def _random_from_type(self, param_name, param_type):
         x = Xeger(limit=20)
@@ -143,12 +147,14 @@ class BasicFuzzer:
             return None
 
 class FuzzerThread(BasicFuzzer):
-    def __init__(self, hostname, base_path, 
-        endpoint, method, ep_method_def, value_dict, _, depth_limit):
+    def __init__(self, hostname, base_path, endpoint, method, ep_method_def, 
+        value_dict, real_dependencies, inferred_dependencies, _, depth_limit):
         super().__init__(
             hostname, base_path,
-            endpoint, method, ep_method_def, value_dict)
-        self._fuzzing_depth_limit = depth_limit
+            endpoint, method, ep_method_def, 
+            value_dict, real_dependencies, inferred_dependencies, depth_limit
+        )
+        
 
     def _try_producer(self, depth, producer_gen):
         try:
@@ -233,12 +239,12 @@ class FuzzerThread(BasicFuzzer):
         return param_dict
 
 class SaturationThread(BasicFuzzer):
-    def __init__(self, hostname, base_path,
-        endpoint, method, ep_method_def, value_dict, analyzer, depth_limit):
+    def __init__(self, hostname, base_path, endpoint, method, ep_method_def, 
+        value_dict, real_dependencies, inferred_dependencies, analyzer, depth_limit):
         super().__init__(
             hostname, base_path,
-            endpoint, method, ep_method_def, value_dict)
-        self._fuzzing_depth_limit = depth_limit
+            endpoint, method, ep_method_def, value_dict,
+            real_dependencies, inferred_dependencies, depth_limit)
         self._analyzer = analyzer
 
     # get params from bank
@@ -262,9 +268,30 @@ class SaturationThread(BasicFuzzer):
             param = RequestParameter(
                 self._method, param_name, self._endpoint, None)
             if self._analyzer.dsu.find(param):
+                # if we already have the value bank for this variable
                 param_value_bank = self._analyzer.dsu.get_value_bank(param)
-                param_val = random.choice(param_value_bank)
+                param_val = random.choice(list(param_value_bank))
+            elif param_name in self._inferred_dependencies:
+                self._logger.debug(f"Trying fill parameter {param_name} by inferred dependencies")
+                # try inferred dependencies but do not create new values
+                producers = self._inferred_dependencies.get(param_name, [])
+                param_value_bank = set()
+                for producer in producers:
+                    resp = ResponseParameter(
+                        producer.method,
+                        producer.path[-1],
+                        producer.endpoint,
+                        producer.path,
+                        None
+                    )
+                    bank = self._analyzer.dsu.get_value_bank(resp)
+                    param_value_bank = param_value_bank.union(bank)
+
+                param_val = random.choice(list(param_value_bank))
             else:
+                param_val = None
+
+            if not param_val:
                 self._logger.debug(f"No dependency found for {param_name}. Trying random values.")
                 param_val = self._random_from_type(param_name, param_type)
 
@@ -336,17 +363,20 @@ class Fuzzer:
                         t = fuzz_type(
                             self._hostname, self._base_path, 
                             ep, method, ep_method_def,
-                            self._value_dict, self._analyzer, self._depth_limit)
+                            self._value_dict, 
+                            self._real_dependencies,
+                            self._inferred_dependencies,
+                            self._analyzer, self._depth_limit)
                         futures.append(executor.submit(t.run))
                 for future in as_completed(futures):
                     try:
-                        self._logger.debug(f"Get result")
                         results.append(future.result(timeout=timeout))
                     except TimeoutError:
                         print("We lacked patience and got a TimeoutError")
                     except Exception:
                         print("we get other exceptions")
 
+            # self._logger.debug("===============Start to write new results into DSU")
             for fuzz_result in results:
                 if fuzz_result:
                     self._add_new_result(fuzz_result)
@@ -359,8 +389,58 @@ class Fuzzer:
     def saturate_all(self, endpoints, iterations, timeout):
         self._run_all(SaturationThread, endpoints, iterations, timeout)
 
+    def get_param_names(self, ep_method_def):
+        header_params = ep_method_def.get(defs.DOC_PARAMS)
+        param_names = [p[defs.DOC_NAME] for p in header_params]
+
+        request_body = ep_method_def.get(defs.DOC_REQUEST)
+        if request_body:
+            body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_JSON)
+            body_schema = body_def.get(defs.DOC_SCHEMA)
+            body_params = body_schema.get(defs.DOC_PROPERTIES, {})
+            param_names += list(body_params.keys())
+
+        return param_names
+
     def to_graph(self, endpoints, filename):
+        dot = Digraph(strict=True)
+        
+        # add inferred dependencies as dashed edges in the graph
+        # print(self._inferred_dependencies.get("user"))
+        for ep in endpoints:
+            ep_def = self._paths.get(ep)
+            for _, ep_method_def in ep_def.items():
+                param_names = self.get_param_names(ep_method_def)
+                for name in param_names:
+                    producers = self._inferred_dependencies.get(name, [])
+                    for producer in producers:
+                        resp = ResponseParameter(
+                            producer.method,
+                            producer.path[-1],
+                            producer.endpoint,
+                            producer.path,
+                            None
+                        )
+                        group = self._analyzer.dsu.get_group(resp)
+                        rep = ""
+                        for param in group:
+                            if isinstance(param, ResponseParameter):
+                                path_str = '.'.join(param.path)
+                                if not rep or len(rep) > len(path_str):
+                                    rep = path_str
+                        
+                        # if not rep:
+                        #     rep = '.'.join(producer.path)
+
+                        if rep and producer.endpoint in endpoints:
+                            dot.node(rep, shape="oval")
+                            dot.node(ep, shape="rectangle")
+                            dot.node(producer.endpoint, shape="rectangle")
+                            dot.edge(rep, ep, style="dashed")
+                            dot.edge(producer.endpoint, rep, style="dashed")
+
         dot = self._analyzer.to_graph(
+            dot,
             endpoints=endpoints, 
             allow_only_input=False,
             filename=filename,

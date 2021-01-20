@@ -43,13 +43,13 @@ class ResponseParameter(Parameter):
                     if obj_type.is_type_of(self.value[i]):
                         # print("find object for", self.value[i], "is", obj_type.schema["title"])
                         p = ResponseParameter(
-                            self.method, str(i), self.func_name,
+                            self.method, defs.INDEX_ANY, self.func_name,
                             self.path + [defs.INDEX_ANY], self.value[i])
                         break
                 
                 if not p:
                     p = ResponseParameter(
-                        self.method, str(i), self.func_name,
+                        self.method, defs.INDEX_ANY, self.func_name,
                         self.path + [defs.INDEX_ANY], self.value[i])
                 
                 results += p.flatten(path_to_defs, skip_fields)
@@ -65,14 +65,14 @@ class ResponseParameter(Parameter):
 
         return (self.arg_name == other.arg_name and
                 self.func_name == other.func_name and
-                self.method.upper() == self.method.upper() and 
+                self.method.upper() == other.method.upper() and 
                 self.path == other.path)
 
     def __str__(self):
-        return '.'.join(self.path)
+        return self.arg_name + '_' + self.func_name + '_' + self.method.upper() + '_' + '.'.join(self.path)
 
     def __hash__(self):
-        return hash((self.arg_name, self.func_name, self.method.upper(), str(self.path)))
+        return hash((self.arg_name, self.func_name, self.method.upper(), tuple(self.path)))
 
 class RequestParameter(Parameter):
     def __init__(self, method, arg_name, func_name, value):
@@ -88,7 +88,7 @@ class RequestParameter(Parameter):
                 self.func_name == other.func_name)
 
     def __str__(self):
-        return self.func_name + ':' + self.arg_name
+        return self.func_name + ':' + self.arg_name + ':' + self.method.upper()
 
     def __hash__(self):
         return hash((self.arg_name, self.method.upper(), self.func_name))
