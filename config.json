@@ -1,31 +1,56 @@
 {
     "log_file": "logs/app.slack.com.20210104.har",
-    "doc_file": "slack_web_openapi_v2.json",
+    "doc_file": "slack_web_openapi_v2_small_preprocess.json",
     "enable_debug": true,
     "debug_output": "debug.log",
     "hostname": "https://apitest-pk79527.slack.com",
-    "path_to_definitions": "#/definitions",
-    "analysis_params": {
-        "allow_only_input": false
+    "path_to_definitions": "#/components/schemas",
+    "fuzz": {
+        "value_dict": {
+            "token": "xoxp-1442946594759-1463848871412-1618073336579-1735b1e1b231339f9677e134350fed4c"
+        },
+        "fuzz_depth": 3,
+        "timeout_total": 600,
+        "timeout_per_request": 60,
+        "endpoints": [
+            "/chat.postMessage",
+            "/conversations.history",
+            "/conversations.info",
+            "/conversations.join",
+            "/conversations.list",
+            "/conversations.members",
+            "/conversations.open",
+            "/users.conversations",
+            "/users.info",
+            "/users.list",
+            "/users.lookupByEmail"
+        ]
     },
-    "uninteresting_endpoints": [
-        "experiments.*",
-        "search.modules",
-        "search.autocomplete.*",
-        "api.features",
-        "apps.profile.get"
-    ],
-    "ignore_field_names": [
-        "text",
-        "blocks",
-        "slack_route",
-        "_x_id",
-        "_x_csid",
-        "_x_version_ts",
-        "_x_sonic",
-        "_x_reason",
-        "_x_gantry",
-        "_x_mode",
-        "token"
-    ]
+    "analysis": {
+        "params": {
+            "plot_only_input": false
+        },
+        "uninteresting_endpoints": [
+            "experiments.*",
+            "search.modules",
+            "search.autocomplete.*",
+            "api.features",
+            "apps.profile.get"
+        ],
+        "ignore_field_names": [
+            "text",
+            "blocks",
+            "slack_route",
+            "_x_id",
+            "_x_csid",
+            "_x_version_ts",
+            "_x_sonic",
+            "_x_reason",
+            "_x_gantry",
+            "_x_mode",
+            "token",
+            "ok"
+        ]
+    },
+    "test_suites": []
 }

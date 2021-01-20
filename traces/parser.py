@@ -10,15 +10,15 @@ HOSTNAME_PREFIX = "https://"
 HOSTNAME_PREFIX_LEN = len(HOSTNAME_PREFIX)
 
 class LogParser:
-    def __init__(self, log_file, hostname, doc_file, path_to_defs = "#/definitions"):
+    def __init__(self, log_file, hostname, doc,
+        path_to_defs = "#/components/schemas"):
         self.log_file = log_file
         self.hostname = hostname
         self.sanitize_hostname()
         self.path_to_defs = path_to_defs
 
         # update the class variable doc_obj for typeChecker
-        doc_obj = self.read_definitions(doc_file)
-        typeChecker.Type.doc_obj = doc_obj
+        typeChecker.Type.doc_obj = doc
 
     def parse_entries(self, skips, skip_fields):
         '''
@@ -29,11 +29,11 @@ class LogParser:
             har_file = json.loads(f.read())
             har_entries = har_file["log"]["entries"]
             # exclude all the non-json responses
-            entries += self.resolve_entries(har_entries, skips, skip_fields)
+            entries += self._resolve_entries(har_entries, skips, skip_fields)
 
         return entries
 
-    def resolve_entry(self, skip_fields, entry):
+    def _resolve_entry(self, skip_fields, entry):
         '''
             resolve a request/response entry into an LogEntry object
         '''
@@ -44,8 +44,14 @@ class LogParser:
             raise Exception("Request not found in the log entry")
 
         # strip out the hostname part and get the real endpoint
+        servers = typeChecker.Type.doc_obj.get("servers")
+        server = servers[0].get("url")
+        server_result = urlparse(server)
+        base_path = server_result.path
         url_obj = urlparse(request.get("url", ""))
         endpoint = url_obj.path
+        if base_path == endpoint[:len(base_path)]:
+            endpoint = endpoint[len(base_path):]
 
         if not endpoint:
             raise Exception("Endpoint not found in the request entry")
@@ -78,7 +84,7 @@ class LogParser:
 
         request_params = [ x for x in request_params if x["name"] not in skip_fields]
         for rp in request_params:
-            p = log.RequestParameter(rp["name"], endpoint, rp["value"])
+            p = log.RequestParameter(method, rp["name"], endpoint, rp["value"])
             parameters.append(p)
 
         responses = []
@@ -86,19 +92,18 @@ class LogParser:
         response_params = json.loads(response_text)
         for k, v in response_params.items():
             # flatten the returned object
-            p = log.ResponseParameter(k, endpoint, [k], v)
+            p = log.ResponseParameter(method, k, endpoint, [k], v)
             if k not in skip_fields:
                 responses += p.flatten(self.path_to_defs, skip_fields)
 
         return log.LogEntry(endpoint, method, parameters, responses)
 
-    def resolve_entries(self, entries, skips, skip_fields):
+    def _resolve_entries(self, entries, skips, skip_fields):
         '''
             resolve all the traces
         '''
         result_entries = []
         for e in entries:
-            #TODO: skip these blacklists
             should_skip = False
             for s in skips:
                 if re.search(s, e["request"]["url"]):
@@ -109,7 +114,7 @@ class LogParser:
 
             if (e["response"]["content"]["mimeType"] == JSON_TYPE and
                 self.hostname in e["request"]["url"]):
-                entry = self.resolve_entry(skip_fields, e)
+                entry = self._resolve_entry(skip_fields, e)
                 result_entries.append(entry)
 
         return result_entries

@@ -1,63 +1,60 @@
-import http.client
-import urllib.parse
+from urllib.parse import urlencode
+from urllib.request import urlopen
 import json
+import logging
 
 from fuzzer.error import ConnectionError
 from openapi import defs
 
 class Connection:
-    """Maintain a network connection to the host server
-    """
-    def __init__(self, hostname):
-        """[summary]
+    def __init__(self, hostname, base_path):
+        self._hostname = hostname
+        self._base_path = base_path
+        self._logger = logging.getLogger(__name__)
 
-        Args:
-            hostname ([type]): [description]
-        """
-        self._conn = http.client.HTTPSConnection(hostname)
+    def send_and_recv(self, endpoint, headers, data):
+        url = "https://" + self._hostname + self._base_path + endpoint
+        params = urlencode(data).encode()
+        self._logger.info(f"Sending to {url} the message {params}")
+        resp = urlopen(url, params)
+        return_code = resp.getcode()
+        resp_body = resp.read().decode(defs.UTF8)
+        self._logger.info(f"Getting back from {url, params} the response {resp_body}")
+        return return_code, resp_body
 
-    def send_urlencoded(self, method, endpoint, headers, data):
-        """[summary]
+    # def send_urlencoded(self, method, endpoint, headers, data):
+        
+    #     default_headers = {
+    #         defs.HEADER_CONTENT: defs.HEADER_FORM,
+    #         defs.HEADER_ACCEPT: defs.HEADER_JSON
+    #     }
+    #     default_headers.update(headers)
+    #     url_with_params = endpoint + "?" + params if params else endpoint
+    #     self._conn.request(method, url_with_params, headers=default_headers)
+    #     self._logger.info(f"Sending to {endpoint} the message {params}"
+    #         f" with headers {default_headers}")
 
-        Args:
-            method ([type]): [description]
-            endpoint ([type]): [description]
-            header ([type]): [description]
-            data ([type]): [description]
-        """
-        params = urllib.parse.urlencode(data).encode()
-        default_headers = {
-            defs.HEADER_CONTENT: defs.HEADER_FORM,
-            defs.HEADER_ACCEPT: defs.HEADER_JSON
-        }
-        default_headers.update(headers)
-        self._conn.request(method, endpoint, params, default_headers)
+    # def send_body(self, method, endpoint, headers, body):
+    #     default_headers = {
+    #         defs.HEADER_CONTENT: defs.HEADER_JSON,
+    #         defs.HEADER_ACCEPT: defs.HEADER_JSON
+    #     }
+    #     default_headers.update(headers)
+    #     self._conn.request(
+    #         method, endpoint, json.dumps(body).encode(), default_headers)
+    #     self._logger.info(f"Sending to {endpoint} the message {body}"
+    #         f" with headers {default_headers}")
 
-    def send_body(self, method, endpoint, headers, body):
-        default_headers = {
-            defs.HEADER_CONTENT: defs.HEADER_JSON,
-            defs.HEADER_ACCEPT: defs.HEADER_JSON
-        }
-        default_headers.update(headers)
-        self._conn.request(method, endpoint, json.dumps(body).encode(), default_headers)
+    # def recv(self):
+    #     response = self._conn.getresponse()
+    #     if response.code in defs.SUCCESS_CODES:
+    #         buf = response.read()
+    #         resp_str = buf.decode(defs.UTF8)
+    #         self._logger.info(f"Receiving {response.code} :{resp_str}")
+    #         return response.code, resp_str
+    #     else:
+    #         return response.code, response.reason
+    #         # raise ConnectionError(response.code, response.reason)
 
-    def recv(self):
-        """[summary]
-
-        Raises:
-            ConnectionError: [description]
-
-        Returns:
-            [type]: [description]
-        """
-        response = self._conn.getresponse()
-        if response.code in defs.SUCCESS_CODES:
-            buf = response.read()
-            resp_str = buf.decode(defs.UTF8)
-            return response.code, resp_str
-        else:
-            return response.code, response.reason
-            # raise ConnectionError(response.code, response.reason)
-
-    def close(self):
-        self._conn.close()
+    # def close(self):
+    #     self._conn.close()

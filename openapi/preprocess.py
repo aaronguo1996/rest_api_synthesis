@@ -212,9 +212,8 @@ class PreProcessor:
         return doc
 
     def _to_openapi_v3(self, doc):
-        conn = Connection("converter.swagger.io")
-        conn.send_body("POST", "/api/convert", {}, doc)
-        response = conn.recv()
+        conn = Connection("https://converter.swagger.io", "/api")
+        response = conn.send_and_recv("/convert", {}, doc)
         return json.loads(response)
 
     def _write_to_file(self, doc, output_file):

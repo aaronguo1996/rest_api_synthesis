@@ -24,3 +24,9 @@ class InvalidSwaggerDoc(Exception):
 
 class InvalidSchemaType(Exception):
     pass
+
+class ExceedDepthLimit(Exception):
+    pass
+
+class NoParamInBank(Exception):
+    pass
