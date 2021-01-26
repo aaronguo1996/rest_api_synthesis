@@ -1,7 +1,7 @@
 from urllib.parse import urlencode
-from urllib.request import urlopen
-import json
+from urllib.request import urlopen, Request
 import logging
+import time
 
 from fuzzer.error import ConnectionError
 from openapi import defs
@@ -15,12 +15,19 @@ class Connection:
     def send_and_recv(self, endpoint, headers, data):
         url = "https://" + self._hostname + self._base_path + endpoint
         params = urlencode(data).encode()
+        headers.update({"User-Agent": "RestSyn/0.1"})
+        req = Request(url, data=params, headers=headers)
         self._logger.info(f"Sending to {url} the message {params}")
-        resp = urlopen(url, params)
-        return_code = resp.getcode()
-        resp_body = resp.read().decode(defs.UTF8)
-        self._logger.info(f"Getting back from {url, params} the response {resp_body}")
-        return return_code, resp_body
+        try:
+            resp = urlopen(req)
+            return_code = resp.getcode()
+            resp_body = resp.read().decode(defs.UTF8)
+            self._logger.info(f"Getting back from {url, params} the response {resp_body}")
+            return return_code, resp_body
+        except Exception as e:
+            time.sleep(60)
+            return 404, str(e)
+
 
     # def send_urlencoded(self, method, endpoint, headers, data):
         

@@ -58,8 +58,6 @@ class DSU:
             self._values[xr] = self._values[xr].union(self._values[yr])
         elif self._sizes[yr] < self._sizes[xr] or xr != yr: # if they have the same size but are different nodes
             self._parents[xr] = yr
-            if self._sizes[xr] == self._sizes[yr]:
-                self._logger.debug((self._parents[xr], self._parents[yr]))
             # swap the next point of xr and yr
             self._nexts[xr], self._nexts[yr] = self._nexts[yr], self._nexts[xr]
             self._sizes[yr] += self._sizes[xr]
@@ -156,17 +154,21 @@ class LogAnalyzer:
                 dot.node(param.func_name, label=param.func_name, shape='rectangle')
                 if isinstance(param, log.ResponseParameter):
                     # add an edge between the method and its return type
+                    # TODO: modify the rep for array here
+                    l, s = param.path_to_str(rep)
                     if '[' not in rep and not re.search("image_*", rep):
-                        edges.add((param.func_name, rep))
+                        edges.add((param.func_name, s))
+
+                    if l > 0:
+                        edges.add((s, rep))
                 else:
                     # add an edge between parameter name and the method
                     if '[' not in rep and not re.search("image_*", rep):
                         edges.add((rep, param.func_name))
 
         for v1, v2 in edges:
-            if endpoints and v1 not in endpoints and v2 not in endpoints:
+            if ((v1[0] == '/' and v1 not in endpoints) or 
+                (v2[0] == '/' and v2 not in endpoints)):
                 continue
 
             dot.edge(v1, v2, style="solid")
-
-        return dot

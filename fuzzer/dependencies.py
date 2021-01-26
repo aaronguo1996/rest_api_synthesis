@@ -75,7 +75,26 @@ class DependencyResolver:
 
         return self._dependencies
 
-    def get_dependencies_from_doc(self, paths):
+    def _create_producers_with_same_output(self, resp_arg):
+        producers = set()
+        for producer in self._producers:
+            if resp_arg == producer.path[-1]:
+                producers.add(producer)
+
+        return producers
+
+    def _get_name_mapping(self, groups, param_name):
+        for group in groups:
+            params, resps = split_by(
+                lambda x: isinstance(x, RequestParameter), group)
+            
+            param_names = [rp.arg_name for rp in params]
+            if param_name in param_names:
+                producers = self._create_producers_with_same_output(resps)
+                curr_producers = self._dependencies[param_name]
+                self._dependencies[param_name] = curr_producers.union(producers)
+
+    def get_dependencies_from_doc(self, paths, groups):
         self._flatten_responses(paths)
 
         for _, path_def in paths.items():
@@ -98,6 +117,7 @@ class DependencyResolver:
                     request_properties = request_schema.get(defs.DOC_PROPERTIES)
                     for param_name in request_properties:
                         self._get_dependencies_for_param(param_name)
+                        self._get_name_mapping(groups, param_name)
 
         return self._dependencies
         

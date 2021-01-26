@@ -9,9 +9,13 @@ import logging
 import random
 import json
 import os
+import pickle
+import time
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from graphviz import Digraph
+
+RESULT_FILE = os.path.join("output/", "results.pkl")
 
 class FuzzResult:
     def __init__(self, method, endpoint, code, response, params):
@@ -77,7 +81,7 @@ class BasicFuzzer:
             int_range = defined_regex or range(0,100)
             return random.choice(int_range)
         elif param_type == defs.TYPE_NUM:
-            float_range = defined_regex or range(0, 1)
+            float_range = defined_regex or (0, 1)
             return random.uniform(*float_range)
         elif param_type == defs.TYPE_BOOL:
             return random.choice([True, False])
@@ -87,28 +91,32 @@ class BasicFuzzer:
             raise Exception("Cannot generate random values for type", param_type)
 
     def _fuzz_get(self, depth):
-        params = self._ep_method_def.get(defs.DOC_PARAMS)
+        params = self._ep_method_def.get(defs.DOC_PARAMS, [])
         return self._fuzz_params(depth + 1, params)
 
     def _fuzz_post(self, depth):
-        header_params = self._ep_method_def.get(defs.DOC_PARAMS)
+        header_params = self._ep_method_def.get(defs.DOC_PARAMS, [])
         headers = self._fuzz_params(depth + 1, header_params)
         
         request_body = self._ep_method_def.get(defs.DOC_REQUEST)
-        body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_JSON)
-        body_schema = body_def.get(defs.DOC_SCHEMA)
-        requires = body_schema.get(defs.DOC_REQUIRED, [])
-        body_params = body_schema.get(defs.DOC_PROPERTIES, {})
+        body = {}
+        if request_body:
+            body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_JSON)
+            if not body_def:
+                body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_FORM)
+            body_schema = body_def.get(defs.DOC_SCHEMA)
+            requires = body_schema.get(defs.DOC_REQUIRED, [])
+            body_params = body_schema.get(defs.DOC_PROPERTIES, {})
 
-        body_param_lst = []
-        for param_name in body_params:
-            param = body_params[param_name]
-            param.update({
-                defs.DOC_NAME: param_name,
-                defs.DOC_REQUIRED: param_name in requires,
-            })
-            body_param_lst.append(param)
-        body = self._fuzz_params(depth + 1, body_param_lst)
+            body_param_lst = []
+            for param_name in body_params:
+                param = body_params[param_name]
+                param.update({
+                    defs.DOC_NAME: param_name,
+                    defs.DOC_REQUIRED: param_name in requires,
+                })
+                body_param_lst.append(param)
+            body = self._fuzz_params(depth + 1, body_param_lst)    
 
         body.update(headers)
         return body
@@ -253,9 +261,13 @@ class SaturationThread(BasicFuzzer):
         for param_obj in params:
             required = param_obj.get(defs.DOC_REQUIRED)
 
-            # skip optional arguments for now
+            # # skip optional arguments for now
+            # if not required:
+            #     continue
+            # randomly choose one of these optional arguments
             if not required:
-                continue
+                if random.random() > 0.75:
+                    continue
 
             param_name = param_obj.get(defs.DOC_NAME)
             param_schema = param_obj.get(defs.DOC_SCHEMA)
@@ -268,6 +280,7 @@ class SaturationThread(BasicFuzzer):
             param = RequestParameter(
                 self._method, param_name, self._endpoint, None)
             if self._analyzer.dsu.find(param):
+                self._logger.debug(f"Trying fill parameter {param_name} by real dependencies")
                 # if we already have the value bank for this variable
                 param_value_bank = self._analyzer.dsu.get_value_bank(param)
                 param_val = random.choice(list(param_value_bank))
@@ -287,7 +300,10 @@ class SaturationThread(BasicFuzzer):
                     bank = self._analyzer.dsu.get_value_bank(resp)
                     param_value_bank = param_value_bank.union(bank)
 
-                param_val = random.choice(list(param_value_bank))
+                if param_value_bank:
+                    param_val = random.choice(list(param_value_bank))
+                else:
+                    param_val = None
             else:
                 param_val = None
 
@@ -300,8 +316,8 @@ class SaturationThread(BasicFuzzer):
         return param_dict
 
 class Fuzzer:
-    def __init__(self, openapi_doc, analyzer, val_dict,
-        depth_limit=3, path_to_defs="#/components/schemas", skip_fields=[]):
+    def __init__(self, openapi_doc, analyzer, val_dict, depth_limit=3,
+        path_to_defs="#/components/schemas", skip_fields=[], plot_graph = False):
         self._logger = logging.getLogger(__name__)
         # parse the spec into dict
         self._doc = openapi_doc
@@ -332,6 +348,10 @@ class Fuzzer:
 
         self._path_to_defs = path_to_defs
         self._skip_fields = skip_fields
+
+        self._error_buckets = set()
+        self._covered_endpoints = set()
+        self._plot_graph = plot_graph
 
     def _add_new_result(self, result: FuzzResult):
         if result.has_error:
@@ -381,21 +401,62 @@ class Fuzzer:
                 if fuzz_result:
                     self._add_new_result(fuzz_result)
 
-            self.to_graph(endpoints, f"dependencies_{i}")
-            
+            if self._plot_graph:
+                self.to_graph(endpoints, f"dependencies_{i}")
+
+            self.get_coverage(i, results)
+            self.write_results(i, results)
+
+            # rest between iterations to avoid spoof
+            time.sleep(30)
+
+    def write_results(self, i, results):
+        with open(RESULT_FILE, "ab+") as f:
+            pickle.dump({
+                "Iteration": i,
+                "Results": results,
+                "Endpoints": self._covered_endpoints,
+                "Error buckets": self._error_buckets,
+            }, f)
+
+    def bucket_error(self, result):
+        if result.has_error:
+            self._error_buckets.add((result.code, result.response_body))
+
+    def get_coverage(self, i, results):
+        cnt = 0
+        for r in results:
+            if r and not r.has_error:
+                cnt += 1
+                self._covered_endpoints.add(r.endpoint)
+        
+        coverage = cnt / len(results)
+        self._logger.info(f"Coverage at iteration {i}: {coverage}")
+        return coverage
+
     def fuzz_all(self, endpoints, iterations, timeout):
+        if os.path.exists(RESULT_FILE):
+            os.remove(RESULT_FILE)
         self._run_all(FuzzerThread, endpoints, iterations, timeout)
     
     def saturate_all(self, endpoints, iterations, timeout):
+        if os.path.exists(RESULT_FILE):
+            os.remove(RESULT_FILE)
+
         self._run_all(SaturationThread, endpoints, iterations, timeout)
 
     def get_param_names(self, ep_method_def):
         header_params = ep_method_def.get(defs.DOC_PARAMS)
-        param_names = [p[defs.DOC_NAME] for p in header_params]
+        if header_params:
+            param_names = [p[defs.DOC_NAME] for p in header_params]
+        else:
+            param_names = []
 
         request_body = ep_method_def.get(defs.DOC_REQUEST)
         if request_body:
             body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_JSON)
+            if not body_def:
+                body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_FORM)
             body_schema = body_def.get(defs.DOC_SCHEMA)
             body_params = body_schema.get(defs.DOC_PROPERTIES, {})
             param_names += list(body_params.keys())
@@ -408,6 +469,7 @@ class Fuzzer:
         # add inferred dependencies as dashed edges in the graph
         # print(self._inferred_dependencies.get("user"))
         for ep in endpoints:
+            # print(ep)
             ep_def = self._paths.get(ep)
             for _, ep_method_def in ep_def.items():
                 param_names = self.get_param_names(ep_method_def)
@@ -439,7 +501,7 @@ class Fuzzer:
                             dot.edge(rep, ep, style="dashed")
                             dot.edge(producer.endpoint, rep, style="dashed")
 
-        dot = self._analyzer.to_graph(
+        self._analyzer.to_graph(
             dot,
             endpoints=endpoints, 
             allow_only_input=False,

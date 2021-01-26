@@ -1,7 +1,6 @@
 import json
-import os
 import re
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
 
 from traces import log, typeChecker
 
@@ -90,6 +89,17 @@ class LogParser:
         responses = []
         response_text = entry["response"]["content"]["text"]
         response_params = json.loads(response_text)
+        
+        if "ok" not in response_params:
+            obj_defs = typeChecker.Type.get_object_def(self.path_to_defs)
+            for obj_name, obj in obj_defs.items():
+                obj_type = typeChecker.Type(obj_name, obj)
+                if obj_type.is_type_of(response_params):
+                    p = log.ResponseParameter(
+                        self.method, obj_name, self.func_name,
+                        self.path + [obj_name], self.value[i])
+                    break
+
         for k, v in response_params.items():
             # flatten the returned object
             p = log.ResponseParameter(method, k, endpoint, [k], v)

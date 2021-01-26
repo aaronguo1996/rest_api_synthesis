@@ -58,6 +58,11 @@ class ResponseParameter(Parameter):
 
         return results
 
+    def path_to_str(self, rep):
+        ind = [p for p in self.path if p == defs.INDEX_ANY]
+        cnt = len(ind)
+        return cnt, "[" * cnt + rep + "]" * cnt
+
     def __eq__(self, other): 
         if not isinstance(other, ResponseParameter):
             # don't attempt to compare against unrelated types

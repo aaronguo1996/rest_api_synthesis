@@ -1,10 +1,12 @@
 #!/usr/bin/python3.8
 
 import argparse
-import unittest
+import pickle
 import os
 import json
 import logging
+import matplotlib.pyplot as plt
+from collections import defaultdict
 
 from traces import parser, analyzer
 from fuzzer import fuzzer
@@ -27,7 +29,9 @@ def build_cmd_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("config_file", nargs='?',
                         help="Path to the configuration file")
-    parser.add_argument("--test", help="Run unit tests")
+    parser.add_argument("--test", action="store_true", help="Run unit tests")
+    parser.add_argument("--plot", action="store_true", help="Plot graphs without fuzzing")
+    parser.add_argument("--print-log", action="store_true", help="Print log from previous run")
     return parser
 
 def read_doc(doc_path):
@@ -45,6 +49,68 @@ def read_doc(doc_path):
         preprocessor.preprocess(new_path)
         return read_doc(new_path)
 
+def read_data():
+    # {
+    #         "Iteration": i,
+    #         "Results": results,
+    #         "Endpoints": self._covered_endpoints,
+    #         "Error buckets": self._error_buckets,
+    #     }
+    results = []
+    with open(fuzzer.RESULT_FILE, "rb") as f:
+        try:
+            x = pickle.load(f)
+            while x:
+                results.append(x)
+                x = pickle.load(f)
+        except:
+            pass
+
+    return results
+
+def plot_errors(iter_results):
+    errors = defaultdict(int)
+    for i_result in iter_results:
+        results = i_result["Results"]
+        for r in results:
+            if r.has_error:
+                errors[(r.return_code, r.response_body.get("error"))] += 1
+
+    lists = errors.items()
+    labels, y = zip(*lists) # unpack a list of pairs into two tuples
+    plt.figure(figsize=(20,20))
+    plt.bar(range(len(y)), y)
+    plt.xticks(range(len(y)), labels, rotation=90)
+    plt.xlabel("Errors")
+    plt.ylabel("Number of Occurrences")
+    plt.savefig("errors.png")
+    plt.close()
+
+def plot_coverage(iter_results):
+    coverage = {}
+    for i_result in iter_results:
+        coverage[i_result["Iteration"]] = len(i_result["Endpoints"])
+
+    lists = coverage.items()
+    x, y = zip(*lists)
+    plt.plot(x, y)
+    plt.xlabel("Iteration")
+    plt.ylabel("Number of Endpoints")
+    plt.savefig("coverage.png")
+    plt.close()
+
+def print_errors(iter_results):
+    with open("errors.log", "w+") as f:
+        for i_result in iter_results:
+            for r in i_result["Results"]:
+                if r.has_error:
+                    f.write(r.endpoint)
+                    f.write('\n')
+                    f.write(json.dumps(r.request_params))
+                    f.write('\n')
+                    f.write(json.dumps(r.response_body))
+                    f.write('\n')
+
 def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
@@ -55,6 +121,7 @@ def main():
 
     # clear the log file if exists
     if (configuration["enable_debug"] and 
+        not args.plot and not args.print_log and
         os.path.exists(configuration["debug_output"])):
         os.remove(configuration["debug_output"])
 
@@ -68,12 +135,19 @@ def main():
             raise Exception("Test suites need to be specified in configuration file")
 
         test_runner.run_test(configuration["test_suites"])
+    elif args.plot:
+        results = read_data()
+        plot_errors(results)
+        plot_coverage(results)
+    elif args.print_log:
+        results = read_data()
+        print_errors(results)
     else:
         print("Reading OpenAPI document...")
         doc = read_doc(configuration["doc_file"])
 
-        with open('debug.json', 'w+') as f:
-            f.write(json.dumps(doc))
+        # with open('debug.json', 'w+') as f:
+        #     f.write(json.dumps(doc))
 
         print("Parsing OpenAPI document...")
         entries = None
@@ -105,10 +179,17 @@ def main():
             configuration["fuzz"]["value_dict"], 
             configuration["fuzz"]["fuzz_depth"],
             configuration["path_to_definitions"],
-            configuration["analysis"]["ignore_field_names"]
+            configuration["analysis"]["ignore_field_names"],
+            configuration["fuzz"]["plot_graph"],
         )
+
         endpoints = configuration["fuzz"]["endpoints"]
-        engine.to_graph(endpoints, "dependencies_0")
+        if not endpoints:
+            endpoints = list(doc["paths"].keys())
+
+        if configuration["fuzz"]["plot_graph"]:
+            engine.to_graph(endpoints, "dependencies_0")
+
         engine.saturate_all(
             endpoints, configuration["fuzz"]["iterations"], 
             configuration["fuzz"]["timeout_per_request"])

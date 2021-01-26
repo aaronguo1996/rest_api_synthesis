@@ -12,6 +12,8 @@
         "fuzz_depth": 3,
         "timeout_total": 600,
         "timeout_per_request": 60,
+        "iterations": 2,
+        "plot_graph": true,
         "endpoints": [
             "/chat.postMessage",
             "/conversations.history",

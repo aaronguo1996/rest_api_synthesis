@@ -1,1 +1,1 @@
-# rest_api_synthesis
+# rest_api_fuzz

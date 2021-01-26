@@ -13,6 +13,7 @@
         "timeout_total": 600,
         "timeout_per_request": 60,
         "iterations": 100,
+        "plot_graph": false,
         "endpoints": []
     },
     "analysis": {
