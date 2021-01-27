@@ -6,58 +6,64 @@ const initialState = {
             key: 0,
             isVisible: true,
             children: [1,2,3],
+            parent: null,
         },
         {
             key: 1,
             isVisible: true,
             children: [],
+            parent: 0,
         },
         {
             key: 2,
             isVisible: true,
             children: [4,5],
+            parent: 0,
         },
         {
             key: 3,
             isVisible: true,
             children: [],
+            parent: 0,
         },
         {
             key: 4,
             isVisible: true,
             children: [],
+            parent: null,
         },
         {
             key: 5,
             isVisible: true,
             children: [],
+            parent: 0,
         },
     ],
     links: [
         {
             source: 0,
             target: 1,
-            isVisible: true,
         },
-        {
-            source: 0,
-            target: 2,
-            isVisible: true,
-        },
+        // {
+        //     source: 0,
+        //     target: 2,
+        //     isVisible: true,
+        // },
         {
             source: 0,
             target: 3,
-            isVisible: true,
         },
         {
             source: 2,
             target: 4,
-            isVisible: true,
         },
         {
             source: 2,
             target: 5,
-            isVisible: true,
+        },
+        {
+            source: 0,
+            target: 5,
         },
     ]
 };
@@ -74,16 +80,16 @@ const changeVisibilityForNode = (childrenIndex, v) => {
 };
 
 // only look at the next level without propagation?
-const changeVisibilityForEdge = (childrenIndex, e) => {
-    if(childrenIndex.includes(e.source) ||
-        childrenIndex.includes(e.target)) {
-        return {
-            ...e,
-            isVisible: !e.isVisible,
-        };
-    }
-    return e;
-};
+// const changeVisibilityForEdge = (childrenIndex, e) => {
+//     if(childrenIndex.includes(e.source) ||
+//         childrenIndex.includes(e.target)) {
+//         return {
+//             ...e,
+//             isVisible: !e.isVisible,
+//         };
+//     }
+//     return e;
+// };
 
 const rootReducer = (state = initialState, action) => {
     switch(action.type) {
@@ -92,8 +98,8 @@ const rootReducer = (state = initialState, action) => {
                 ...state,
                 nodes: state.nodes.map(v => 
                     changeVisibilityForNode(action.payload.children, v)),
-                links: state.links.map(e =>
-                    changeVisibilityForEdge(action.payload.children, e)),
+                // links: state.links.map(e =>
+                //     changeVisibilityForEdge(action.payload.children, e)),
             };
         default:
             return {

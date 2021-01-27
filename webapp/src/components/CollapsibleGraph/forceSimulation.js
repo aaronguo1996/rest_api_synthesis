@@ -5,7 +5,7 @@ export const graphHeight = 500;
 export const force = d3.forceSimulation()
     .force("charge", d3.forceManyBody().strength(-1000))
     .force("center", d3.forceCenter(graphWidth / 2, graphHeight / 2))
-    .force("link", d3.forceLink().id(d => d.key).distance(200))
+    .force("link", d3.forceLink().id(d => d.key).distance(100))
     .force("y", d3.forceY(0))
     .force("x", d3.forceX(0));
 
