@@ -74,19 +74,25 @@ class CollapsibleGraph extends React.Component {
 
     renderChart() {
         const {changeChildrenVisibility} = this.props;
-        const old = new Map(this.node.data().map(d => [d.key, d]));
+        const oldNodes = this.rect.data().concat(this.ellipse.data());
+        const old = new Map(oldNodes.map(d => [d.key, d]));
         const visibleNodes = this.getVisibleNodes()
             .map(d => Object.assign(old.get(d.key) || {}, d));
         const visibleLinks = this.getVisibleEdges(visibleNodes)
             .map(d => Object.assign({}, d));
 
         // console.log(visibleNodes);
+        // console.log(visibleLinks);
         
-        this.node = this.node
-            .data(visibleNodes, d => d.key)
+        // this.node = this.node
+        const visibleEndpoints = visibleNodes.filter(d => d.kind === "endpoint");
+        const visibleFields = visibleNodes.filter(d => d.kind === "field");
+        const textHalfLen = d => d.name.length * 3.5 + 20
+        this.ellipse = this.ellipse
+            .data(visibleFields, d => d.key)
             .join(
                 function(enter) {
-                    return enter.append("circle");
+                    return enter.append("ellipse");
                 },
                 function(update) {
                     return update;
@@ -95,11 +101,48 @@ class CollapsibleGraph extends React.Component {
                     return exit.remove();
                 }
             )
-            .attr("r", 10)
+            .attr("rx", textHalfLen)
+            .attr("ry", 15)
+            .attr("fill", d => scale(d.key))
+            .call(drag(force))
+            .on("click", (_, d) => changeChildrenVisibility({children: d.children}));
+
+        this.rect = this.rect
+            .data(visibleEndpoints, d => d.key)
+            .join(
+                function(enter) {
+                    return enter.append("rect");
+                },
+                function(update) {
+                    return update;
+                },
+                function(exit) {
+                    return exit.remove();
+                }
+            )
+            .attr("width", d => 2 * textHalfLen(d))
+            .attr("height", 30)
             .attr("fill", d => scale(d.key))
             .call(drag(force))
             .on("click", (_, d) => changeChildrenVisibility({children: d.children}));
         
+        this.text = this.text
+            .data(visibleNodes, d => d.key)
+            .join(
+                function(enter) {
+                    return enter.append("text")
+                        .text(d => d.name);
+                },
+                function(update) {
+                    return update;
+                },
+                function(exit) {
+                    return exit.remove();
+                }
+            )
+            .call(drag(force))
+            .on("click", (_, d) => changeChildrenVisibility({children: d.children}));
+
         this.link = this.link
             .data(visibleLinks, d => [d.source, d.target])
             .join(
@@ -124,15 +167,27 @@ class CollapsibleGraph extends React.Component {
         
         force.on("tick", () => {
             this.link
-                .attr( "d", (d) => "M" + d.source.x + "," + d.source.y + ", " + d.target.x + "," + d.target.y);
+                .attr( "d", d => "M" 
+                    + d.source.x + "," 
+                    + d.source.y + ", "
+                    + d.target.x + "," 
+                    + d.target.y);
                 // .attr("x1", d => d.source.x)
                 // .attr("y1", d => d.source.y)
                 // .attr("x2", d => d.target.x)
                 // .attr("y2", d => d.target.y);
+            this.text
+                // for centralize the text
+                .attr("x", d => d.x - d.name.length * 3.5)
+                .attr("y", d => d.y + 5);
 
-            this.node
+            this.ellipse
                 .attr("cx", d => d.x)
                 .attr("cy", d => d.y);
+
+            this.rect
+                .attr("x", d => d.x - this.rect.attr("width")/2 + 10)
+                .attr("y", d => d.y - this.rect.attr("height")/2);
         });
 
         force.alpha(1).restart();
@@ -143,21 +198,27 @@ class CollapsibleGraph extends React.Component {
         // define arrows
         this.d3Graph.append("svg:defs").append("svg:marker")
             .attr("id", "arrow")
+            .attr("fill", "#999")
             .attr("viewBox", "0 -5 10 10")
-            .attr('refX', -50) //so that it comes towards the center.
+            .attr('refX', -75) //so that it comes towards the center.
             .attr("markerWidth", 5)
             .attr("markerHeight", 5)
             .attr("orient", "auto")
             .append("svg:path")
             .attr("d", "M0,-5L10,0L0,5");
         this.link = this.d3Graph.append("g")
-            .attr("stroke", "#000")
+            .attr("stroke", "#999")
             // .attr("stroke-opacity", 0.6)
             .selectAll("path");
-        this.node = this.d3Graph.append("g")
+        this.ellipse = this.d3Graph.append("g")
+            .selectAll("ellipse");
+        this.rect = this.d3Graph.append("g")
             .attr("stroke", "#fff")
-            .attr("stroke-width", 1.5)
-            .selectAll("circle");
+            .attr("stroke-width", 1)
+            .selectAll("rect");
+        this.text = this.d3Graph.append("g")
+            // .attr("fill", "#fff")
+            .selectAll("text");
         this.renderChart();
     }
 
