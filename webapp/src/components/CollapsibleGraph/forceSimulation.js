@@ -35,4 +35,5 @@ export const drag = simulation => {
 };
 
 // export const scale = d3.scaleOrdinal(d3.schemeCategory10);
-export const scale = d3.scaleOrdinal(d3.schemeSet3);
+// export const scale = d3.scaleOrdinal(d3.schemeSet3);
+export const scale = d3.scaleOrdinal(d3.schemeTableau10);

@@ -217,7 +217,7 @@ class CollapsibleGraph extends React.Component {
             .attr("stroke-width", 1)
             .selectAll("rect");
         this.text = this.d3Graph.append("g")
-            // .attr("fill", "#fff")
+            .attr("fill", "#fff")
             .selectAll("text");
         this.renderChart();
     }
