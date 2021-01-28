@@ -2,7 +2,7 @@ import json
 import re
 from urllib.parse import urlparse
 
-from traces import log, typeChecker
+from analyzer.traces import log, typeChecker
 
 JSON_TYPE = "application/json"
 HOSTNAME_PREFIX = "https://"

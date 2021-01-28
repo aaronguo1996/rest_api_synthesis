@@ -1,5 +1,5 @@
-from traces import typeChecker
-from openapi import defs
+from analyzer.traces import typeChecker
+from analyzer.openapi import defs
 
 class Parameter:
     def __init__(self, method, arg_name, func_name, value):

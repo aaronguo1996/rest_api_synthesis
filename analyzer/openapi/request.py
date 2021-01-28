@@ -3,8 +3,8 @@ from urllib.request import urlopen, Request
 import logging
 import time
 
-from fuzzer.error import ConnectionError
-from openapi import defs
+from analyzer.openapi.error import ConnectionError
+from analyzer.openapi import defs
 
 class Connection:
     def __init__(self, hostname, base_path):
