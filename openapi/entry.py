@@ -1,12 +1,13 @@
-from analyzer.traces import typeChecker
-from analyzer.openapi import defs
+from analyzer import typeChecker
+from openapi import defs
 
 class Parameter:
-    def __init__(self, method, arg_name, func_name, value):
+    def __init__(self, method, arg_name, func_name, is_required, value=None):
         self.method = method
         self.arg_name = arg_name
         self.func_name = func_name
         self.value = value
+        self.is_required = is_required
 
     def __str__(self):
         return self.__dict__
@@ -98,7 +99,7 @@ class RequestParameter(Parameter):
     def __hash__(self):
         return hash((self.arg_name, self.method.upper(), self.func_name))
 
-class LogEntry:
+class PathEntry:
     def __init__(self, endpoint, method, parameters, responses):
         self.endpoint = endpoint
         self.method = method

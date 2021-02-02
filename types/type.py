@@ -1,11 +1,13 @@
+# definition of types
 import re
 
-class Type:
+class SchemaType:
     doc_obj = {}
     
-    def __init__(self, name, obj):
+    def __init__(self, name, obj, path = []):
         self.name = name
         self.schema = obj
+        self.path = path
 
     @staticmethod
     def to_python_type(typ):
@@ -23,7 +25,7 @@ class Type:
             return dict
         elif isinstance(typ, list):
             meaningful_typs = list(filter(lambda x: x != "none", typ))
-            return Type.to_python_type(meaningful_typs[0])
+            return SchemaType.to_python_type(meaningful_typs[0])
         else:
             raise Exception(f"Unknown type {typ} from json to python")
 
@@ -42,7 +44,7 @@ class Type:
             if not isinstance(obj, list):
                 return False
 
-            field_type = Type(self.name, array_type["items"]["properties"])
+            field_type = SchemaType(self.name, array_type["items"]["properties"])
             for o in obj:
                 if not field_type.is_type_of(o):
                     return False

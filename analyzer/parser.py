@@ -2,7 +2,7 @@ import json
 import re
 from urllib.parse import urlparse
 
-from analyzer.traces import log, typeChecker
+from openapi import log, typeChecker
 
 JSON_TYPE = "application/json"
 HOSTNAME_PREFIX = "https://"
@@ -97,7 +97,7 @@ class LogParser:
                 if obj_type.is_type_of(response_params):
                     p = log.ResponseParameter(
                         self.method, obj_name, self.func_name,
-                        self.path + [obj_name], self.value[i])
+                        self.path + [obj_name], self.value)
                     break
 
         for k, v in response_params.items():

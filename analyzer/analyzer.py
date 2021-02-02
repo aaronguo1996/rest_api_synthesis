@@ -1,5 +1,5 @@
 import re
-from analyzer.traces import log
+from openapi import log
 import logging
 
 class DSU:
