@@ -19,6 +19,9 @@ class Encoder:
         self.create_petrinet()
 
     def init(self, inputs, outputs):
+        self._solver.reset()
+        self._path_len = 0
+        self._targets = []
         # variables
         # for t in range(self._path_len):
         self._add_variables(self._path_len)
@@ -57,14 +60,13 @@ class Encoder:
         places = self._net.place()
         for place in places:
             key = (place.name, t)
-            self._place_to_variable[key] = len(self._place_to_variable)
+            if key not in self._place_to_variable:
+                self._place_to_variable[key] = len(self._place_to_variable)
 
     def _fire_transitions(self, t):
         transitions = self._net.transition()
         for trans in transitions:
-            entries = [e for e in self._entries 
-                if e.endpoint + ":" + e.method == trans.name]
-            entry = entries[0]
+            entry = self._entries.get(trans.name)
             tr_idx = self._trans_to_variable.get(trans.name)
             
             # precondition: enough tokens in input places
@@ -138,8 +140,8 @@ class Encoder:
             self._targets.append(Int(f"t{t}") < len(self._trans_to_variable))
 
     def add_transition(self, entry):
-        self._entries.append(entry)
         trans_name = entry.endpoint + ":" + entry.method
+        self._entries[trans_name] = entry
         trans_idx = len(self._trans_to_variable)
         self._trans_to_variable[trans_name] = trans_idx
         self._variable_to_trans.append(trans_name)
