@@ -1,12 +1,13 @@
-from analyzer import typeChecker
+from schemas.schema_type import SchemaType
 from openapi import defs
 
 class Parameter:
-    def __init__(self, method, arg_name, func_name, is_required, value=None):
+    def __init__(self, method, arg_name, func_name, is_required, typ, value=None):
         self.method = method
         self.arg_name = arg_name
         self.func_name = func_name
         self.value = value
+        self.type = typ
         self.is_required = is_required
 
     def __str__(self):
@@ -16,8 +17,8 @@ class Parameter:
         return self.__str__()
 
 class ResponseParameter(Parameter):
-    def __init__(self, method, arg_name, func_name, path, value):
-        super().__init__(method, arg_name, func_name, value)
+    def __init__(self, method, arg_name, func_name, path, typ, value):
+        super().__init__(method, arg_name, func_name, True, typ, value)
         self.path = path
 
     def flatten(self, path_to_defs, skip_fields):
@@ -30,7 +31,7 @@ class ResponseParameter(Parameter):
             for k, v in self.value.items():
                 p = ResponseParameter(
                     self.method, k, self.func_name,
-                    self.path + [k], v)
+                    self.path + [k], self.type, v)
                 results += p.flatten(path_to_defs, skip_fields)
         elif isinstance(self.value, list):
             #TODO: infer type for each element in the array
@@ -38,20 +39,20 @@ class ResponseParameter(Parameter):
             # if we cannot match an object against it, leave the index as the arg name
             for i in range(len(self.value)):
                 p = None
-                obj_defs = typeChecker.Type.get_object_def(path_to_defs)
+                obj_defs = SchemaType.get_object_def(path_to_defs)
                 for obj_name, obj in obj_defs.items():
-                    obj_type = typeChecker.Type(obj_name, obj)
+                    obj_type = SchemaType(obj_name, obj)
                     if obj_type.is_type_of(self.value[i]):
                         # print("find object for", self.value[i], "is", obj_type.schema["title"])
                         p = ResponseParameter(
                             self.method, defs.INDEX_ANY, self.func_name,
-                            self.path + [defs.INDEX_ANY], self.value[i])
+                            self.path + [defs.INDEX_ANY], obj_type, self.value[i])
                         break
                 
                 if not p:
                     p = ResponseParameter(
                         self.method, defs.INDEX_ANY, self.func_name,
-                        self.path + [defs.INDEX_ANY], self.value[i])
+                        self.path + [defs.INDEX_ANY], self.type, self.value[i])
                 
                 results += p.flatten(path_to_defs, skip_fields)
         else:
@@ -81,8 +82,8 @@ class ResponseParameter(Parameter):
         return hash((self.arg_name, self.func_name, self.method.upper(), tuple(self.path)))
 
 class RequestParameter(Parameter):
-    def __init__(self, method, arg_name, func_name, value):
-        super().__init__(method, arg_name, func_name, value)
+    def __init__(self, method, arg_name, func_name, is_required, typ, value):
+        super().__init__(method, arg_name, func_name, is_required, typ, value)
 
     def __eq__(self, other): 
         if not isinstance(other, RequestParameter):
