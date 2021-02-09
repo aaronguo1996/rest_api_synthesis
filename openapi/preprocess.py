@@ -219,3 +219,5 @@ class PreProcessor:
     def _write_to_file(self, doc, output_file):
         with open(output_file, 'w+') as output:
             output.write(json.dumps(doc))
+            
+        

@@ -1,0 +1,6 @@
+KEY_SKIP_FIELDS = "ignore_field_names"
+KEY_DOC_FILE = "doc_file"
+KEY_ENDPOINTS = "endpoints"
+KEY_DEBUG = "enable_debug"
+KEY_OUTPUT = "debug_output"
+KEY_TEST_SUITES = "test_suites"

@@ -1,76 +1,112 @@
 import unittest
 from synthesizer.encoder import *
-from openapi.entry import PathEntry, RequestParameter, ResponseParameter
+from analyzer.entry import DocEntry, RequestParameter, ResponseParameter
 
 class EncoderTestCase(unittest.TestCase):
     def setUp(self):
         self._encoder = Encoder({})
         self._entries = [
-            PathEntry("/users.list", "GET", [], [
-                ResponseParameter("GET", "users", "/users.list", [], "user", [])
+            DocEntry("/users.list", "GET", [], [
+                ResponseParameter(
+                    "GET", "users", "/users.list", 
+                    [], True, "user", [])
             ]),
-            PathEntry("/conversations.members", "GET", [
-                RequestParameter("GET", "channel", "/conversations.members", True, "channel.id", None)
+            DocEntry("/conversations.members", "GET", [
+                RequestParameter(
+                    "GET", "channel", "/conversations.members", 
+                    True, "channel.id", None)
             ], [
-                ResponseParameter("GET", "members", "/conversations.members", [], "user.id", [])
+                ResponseParameter(
+                    "GET", "members", "/conversations.members", 
+                    [], True, "user.id", [])
             ]),
-            PathEntry("/conversations.info", "GET", [
-                RequestParameter("GET", "channel", "/conversations.info", True, "channel.id", None)
+            DocEntry("/conversations.info", "GET", [
+                RequestParameter(
+                    "GET", "channel", "/conversations.info", 
+                    True, "channel.id", None)
             ], [
-                ResponseParameter("GET", "channel", "/conversations.info", [], "channel", [])
+                ResponseParameter(
+                    "GET", "channel", "/conversations.info", 
+                    [], True, "channel", [])
             ]),
-            PathEntry("/conversations.list", "GET", [], [
-                ResponseParameter("GET", "channel", "/conversations.list", [], "channel", [])
+            DocEntry("/conversations.list", "GET", [], [
+                ResponseParameter(
+                    "GET", "channel", "/conversations.list", 
+                    [], True, "channel", [])
             ]),
-            PathEntry("/users.lookupByEmail", "GET", [
-                RequestParameter("GET", "email", "/users.lookupByEmail", True, "user.profile.email", None)
+            DocEntry("/users.lookupByEmail", "GET", [
+                RequestParameter(
+                    "GET", "email", "/users.lookupByEmail", 
+                    True, "user.profile.email", None)
             ], [
-                ResponseParameter("GET", "user", "/users.lookupByEmail", {}, "user", None)
+                ResponseParameter(
+                    "GET", "user", "/users.lookupByEmail", 
+                    [], True, "user", None)
             ]),
-            PathEntry("/users.info", "GET", [
-                RequestParameter("GET", "user", "/users.info", True, "user.id", None)
+            DocEntry("/users.info", "GET", [
+                RequestParameter(
+                    "GET", "user", "/users.info", 
+                    True, "user.id", None)
             ], [
-                ResponseParameter("GET", "user", "/users.info", {}, "user", [])
+                ResponseParameter(
+                    "GET", "user", "/users.info", 
+                    [], True, "user", [])
             ]),
-            PathEntry("projection_channel_id", "", [
-                RequestParameter("", "", "projection_channel_id", True, "channel", None)
+            DocEntry("projection_channel_id", "", [
+                RequestParameter(
+                    "", "", "projection_channel_id", 
+                    True, "channel", None)
             ], [
-                ResponseParameter("", "", "projection_channel_id", [], "channel.id", None)
+                ResponseParameter(
+                    "", "", "projection_channel_id", 
+                    [], True, "channel.id", None)
             ]),
-            PathEntry("projection_user_email", "", [
-                RequestParameter("", "", "projection_user_email", True, "user", None)
+            DocEntry("projection_user_email", "", [
+                RequestParameter(
+                    "", "", "projection_user_email", 
+                    True, "user", None)
             ], [
-                ResponseParameter("", "", "projection_user_email", [], "user.profile.email", None)
+                ResponseParameter(
+                    "", "", "projection_user_email", 
+                    [], True, "user.profile.email", None)
             ]),
-            PathEntry("join_1_1", "", [ # this works like clone transitions, but allow produce tokens to be leaked
+            DocEntry("join_1_1", "", [ # this works like clone transitions, but allow produce tokens to be leaked
                 RequestParameter("", "", "join_1", True, "channel.name", None),
                 RequestParameter("", "", "join_1", True, "channel", None),
             ], [
-                ResponseParameter("", "", "join_1", [], "channel", None),
+                ResponseParameter("", "", "join_1", [], True, "channel", None),
             ]),
-            PathEntry("join_1_2", "", [ # this works like clone transitions, but allow produce tokens to be leaked
+            DocEntry("join_1_2", "", [ # this works like clone transitions, but allow produce tokens to be leaked
                 RequestParameter("", "", "join_1", True, "channel.name", None),
                 RequestParameter("", "", "join_1", True, "channel", None),
             ], [
-                ResponseParameter("", "", "join_1", [], "channel.name", None),
+                ResponseParameter(
+                    "", "", "join_1", 
+                    [], True, "channel.name", None),
             ]),
-            PathEntry("join_2_1", "", [ # this works like clone transitions, but allow produce tokens to be leaked
+            DocEntry("join_2_1", "", [ # this works like clone transitions, but allow produce tokens to be leaked
                 RequestParameter("", "", "join_2", True, "user.id", None),
                 RequestParameter("", "", "join_2", True, "user", None),
             ], [
-                ResponseParameter("", "", "join_2", [], "user.id", None),
+                ResponseParameter("", "", "join_2", [], True, "user.id", None),
             ]),
-            PathEntry("join_2_2", "", [ # this works like clone transitions, but allow produce tokens to be leaked
+            DocEntry("join_2_2", "", [ # this works like clone transitions, but allow produce tokens to be leaked
                 RequestParameter("", "", "join_2", True, "user.id", None),
                 RequestParameter("", "", "join_2", True, "user", None),
             ], [
-                ResponseParameter("", "", "join_2", [], "user", None),
+                ResponseParameter("", "", "join_2", [], True, "user", None),
             ]),
-            PathEntry("/conversations.history", "GET", [
-                RequestParameter("GET", "channel", "/conversations.history", True, "channel.id", None),
-                RequestParameter("GET", "last_read", "/conversations.history", False, "ts", None)
+            DocEntry("/conversations.history", "GET", [
+                RequestParameter(
+                    "GET", "channel", "/conversations.history", 
+                    True, "channel.id", None),
+                RequestParameter(
+                    "GET", "last_read", "/conversations.history", 
+                    False, "ts", None)
             ], [
-                ResponseParameter("GET", "messages", "/conversations.history", [], "message", [])
+                ResponseParameter(
+                    "GET", "messages", "/conversations.history", 
+                    [], True, "message", [])
             ]),
         ]
 

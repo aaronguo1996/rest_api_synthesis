@@ -1,6 +1,7 @@
 import './App.css';
 import React from 'react';
 import CollapsibleGraph from "./components/CollapsibleGraph/CollapsibleGraph"
+import CollapsibleForest from "./components/CollapsibleForest"
 
 function App() {
   return (
@@ -19,7 +20,8 @@ function App() {
           Learn React
         </a>
       </header> */}
-      <CollapsibleGraph/>
+      {/* <CollapsibleGraph/> */}
+      <CollapsibleForest/>
     </div>
   );
 }

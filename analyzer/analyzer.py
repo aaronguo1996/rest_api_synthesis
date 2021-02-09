@@ -1,6 +1,9 @@
 import re
-from openapi import log
 import logging
+from schemas.schema_type import SchemaType
+
+from analyzer.entry import ResponseParameter, RequestParameter
+from analyzer.utils import get_representative
 
 class DSU:
     def __init__(self):
@@ -88,29 +91,32 @@ class DSU:
             result.append(nxt)
             cur, nxt = nxt, self._nexts[cur]
 
-        return result
+        return set(result)
 
 class LogAnalyzer:
     def __init__(self):
         self.value_to_param = {}
         self.dsu = DSU()
 
-    def analyze(self, entries):
+    def analyze(self, entries, skip_fields, path_to_defs = "#/components/schemas"):
         '''
             Match the value of each request argument or response parameter
             in a log entry and union the common ones
         '''
         for entry in entries:
+            responses = entry.response.flatten(path_to_defs, skip_fields)
+
             for p in entry.parameters:
                 self.insert(p)
-            for r in entry.responses:
+            for r in responses:
                 self.insert(r)
 
     def insert(self, param):
         value = str(param.value)
         
-        # skip empty values, they are meaningless
+        # skip empty values for merge, but add them as separate nodes, they are meaningless
         if not value:
+            self.dsu.union(param, param)
             return
 
         if value not in self.value_to_param:
@@ -133,12 +139,7 @@ class LogAnalyzer:
         edges = set()
         for group in groups:
             # pick representative in each group, the shortest path name
-            rep = ""
-            for param in group:
-                if isinstance(param, log.ResponseParameter):
-                    path_str = '.'.join(param.path)
-                    if not rep or len(rep) > len(path_str):
-                        rep = path_str
+            rep, _ = get_representative(group)
             
             if not rep:
                 if not allow_only_input:
@@ -148,27 +149,201 @@ class LogAnalyzer:
                 # print("not response, choosing", group[0])
                 rep = group[0].arg_name
             
+            # if not rep or rep == "blocks":
+            #     print(f"not rep in group {group}")
+
             dot.node(rep, label=rep, shape="oval")
 
             for param in group:
                 dot.node(param.func_name, label=param.func_name, shape='rectangle')
-                if isinstance(param, log.ResponseParameter):
+                if isinstance(param, ResponseParameter):
                     # add an edge between the method and its return type
                     # TODO: modify the rep for array here
-                    l, s = param.path_to_str(rep)
-                    if '[' not in rep and not re.search("image_*", rep):
-                        edges.add((param.func_name, s))
+                    # l, s = param.path_to_str(rep)
+                    # if param.func_name == "/conversations.members":
+                    #     print("conversations.members has")
+                    #     print(param)
+                    #     print(param.type)
+                    #     print(param.type.get_oldest_parent())
 
-                    if l > 0:
-                        edges.add((s, rep))
+                    if '[' not in rep and not re.search("image_.*", rep):
+                        if param.type:
+                            p = param.type.get_oldest_parent()
+                            if p.name == param.type.name:
+                                edges.add((param.func_name, rep))
+                            else:
+                                projection = f"projection ({param.type.name})"
+                                dot.node(projection, label=projection, shape='rectangle')
+                                edges.add((p.name, projection))
+                                edges.add((projection, rep))
+                                edges.add((param.func_name, p.name))
+                        else:
+                            edges.add((param.func_name, rep))
+
+                    # if l > 0:
+                    #     edges.add((s, rep))
                 else:
                     # add an edge between parameter name and the method
-                    if '[' not in rep and not re.search("image_*", rep):
+                    if '[' not in rep and not re.search("image_.*", rep):
                         edges.add((rep, param.func_name))
 
         for v1, v2 in edges:
+            # print(v1, v2)
             if ((v1[0] == '/' and v1 not in endpoints) or 
                 (v2[0] == '/' and v2 not in endpoints)):
                 continue
 
             dot.edge(v1, v2, style="solid")
+
+    def to_json(self):
+        groups = self.analysis_result()
+        nodes, edges = [], []
+        for group in groups:
+            # pick representative in each group, the shortest path name
+            rep, _ = get_representative(group)
+            
+            if not rep:
+                continue
+
+            nodes.append({
+                "key": rep,
+                "name": rep,
+                "isVisible": True,
+                "children": [],
+                "parent": None,
+                "kind": "field",
+            })
+
+            for param in group:
+                nodes.append({
+                    "key": param.func_name,
+                    "name": param.func_name,
+                    "isVisible": True,
+                    "children": [],
+                    "parent": None,
+                    "kind": "endpoint",
+                })
+                if '[' not in rep and not re.search("image_*", rep):
+                    if isinstance(param, ResponseParameter):
+                        # add an edge between the method and its return type
+                        if param.type:
+                            p = param.type.get_oldest_parent()
+                            if p.name == param.type.name:
+                                edges.append({
+                                    "source": param.func_name, 
+                                    "target": rep,
+                                })
+                            elif "unknown_obj" not in p.name:
+                                # projection = f"projection ({param.type.name})"
+                                # nodes.append({
+                                #     "key": projection,
+                                #     "name": projection,
+                                #     "isVisible": True,
+                                #     "children": [],
+                                #     "parent": None,
+                                #     "kind": "endpoint",
+                                # })
+                                nodes.append({
+                                    "key": p.name,
+                                    "name": p.name,
+                                    "isVisible": True,
+                                    "children": [],
+                                    "parent": None,
+                                    "kind": "field",
+                                })
+                                edges.append({
+                                    "source": p.name,
+                                    "target": rep,
+                                })
+                                # edges.append({
+                                #     "source": p.name, 
+                                #     "target": projection,
+                                # })
+                                # edges.append({
+                                #     "source": projection, 
+                                #     "target": rep,
+                                # })
+                                # edges.append({
+                                #     "source": param.func_name, 
+                                #     "target": p.name
+                                # })
+                        else:
+                            edges.append({
+                                "source": param.func_name, 
+                                "target": rep
+                            })
+                    else:
+                        # add an edge between parameter name and the method
+                        edges.append({
+                            "source": rep, 
+                            "target": param.func_name
+                        })
+
+        edges = list({(v["source"], v["target"]):v for v in edges}.values())
+        edgeNodes = [v for e in edges for v in (e["source"], e["target"])]
+        nodes = list({v["key"]:v for v in nodes if v["key"] in edgeNodes}.values())
+        return {
+            "nodes": nodes,
+            "links": edges,
+        }
+
+    def _find_descendant(self, param):
+        params = self.dsu._parents.keys()
+        for p in params:
+            # if isinstance(p, ResponseParameter) and "response_metadata" in p.path:
+            #     print("find descendent", p)
+            if (isinstance(p, ResponseParameter) and
+                p.func_name == param.func_name and
+                p.method.upper() == param.method.upper() and
+                param.path == p.path[:len(param.path)]):
+                
+                return p
+                # else:
+                #     group = self.dsu.get_group(p)
+                #     _, rep_type = get_representative(group)
+                #     param.type = rep_type
+                #     return param
+
+        # if "response_metadata" in param.path:
+        #     print("Not find descendent")
+        return None
+
+    def find_same_type(self, param):
+        params = self.dsu._parents.keys()
+        for p in params:
+            if p.type and p.type.name == param.type.name:
+                group = self.dsu.get_group(p)
+                _, rep_type = get_representative(group)
+                # TODO: we do not want to find the parent of this type, correct?
+                param.type = rep_type
+                # print("find type for param", rep, rep_type.name, rep_type.schema)
+                break
+        
+        return param
+
+    def set_type(self, param):
+        if isinstance(param, ResponseParameter):
+            descendant = self._find_descendant(param)
+            # if param does not belong to any group, create a new type
+            if descendant is None:
+                # print(f"{param} does not belong to any group")
+                param.type = SchemaType(str(param), None)
+            else:
+                # group = self.dsu.get_group(descendant)
+                # _, rep_type = get_representative(group)
+                if descendant.type:
+                    param.type = descendant.type.get_oldest_parent()
+                else:
+                    # print(f"{param} does not have a descendant type {descendant}")
+                    param.type = descendant.type
+        elif isinstance(param, RequestParameter):
+            group = self.dsu.get_group(param)
+            # if param does not belong to any group
+            if group == []:
+                param.type = SchemaType(str(param), None)
+            else:
+                _, rep_type = get_representative(group)
+                param.type = rep_type
+        else:
+            raise Exception("Unexpected parameter type: "
+                "neither ResponseParameter nor RequestParameter")

@@ -23,6 +23,7 @@ DOC_PARAMS = "parameters"
 DOC_NAME = "name"
 DOC_ID = "id"
 DOC_REQUEST = "requestBody"
+DOC_OK = "ok"
 
 # definitions of types in OpenAPI
 TYPE_NONE = "none"

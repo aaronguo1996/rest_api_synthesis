@@ -3,6 +3,7 @@ import re
 from urllib.parse import urlparse
 
 from openapi import log, typeChecker
+from analyzer.entry import TraceEntry
 
 JSON_TYPE = "application/json"
 HOSTNAME_PREFIX = "https://"
@@ -83,13 +84,13 @@ class LogParser:
 
         request_params = [ x for x in request_params if x["name"] not in skip_fields]
         for rp in request_params:
-            p = log.RequestParameter(method, rp["name"], endpoint, rp["value"])
+            p = log.RequestParameter(method, rp["name"], endpoint, True, None, rp["value"])
             parameters.append(p)
 
-        responses = []
         response_text = entry["response"]["content"]["text"]
         response_params = json.loads(response_text)
         
+        p = None
         if "ok" not in response_params:
             obj_defs = typeChecker.Type.get_object_def(self.path_to_defs)
             for obj_name, obj in obj_defs.items():
@@ -97,16 +98,12 @@ class LogParser:
                 if obj_type.is_type_of(response_params):
                     p = log.ResponseParameter(
                         self.method, obj_name, self.func_name,
-                        self.path + [obj_name], self.value)
+                        self.path + [obj_name], True, obj_type, response_params)
                     break
+        if p is None:
+            p = log.ResponseParameter(method, "", endpoint, [], True, None, response_params)
 
-        for k, v in response_params.items():
-            # flatten the returned object
-            p = log.ResponseParameter(method, k, endpoint, [k], v)
-            if k not in skip_fields:
-                responses += p.flatten(self.path_to_defs, skip_fields)
-
-        return log.LogEntry(endpoint, method, parameters, responses)
+        return TraceEntry(endpoint, method, parameters, p)
 
     def _resolve_entries(self, entries, skips, skip_fields):
         '''
