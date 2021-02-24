@@ -8,7 +8,7 @@ import logging
 from graphviz import Digraph
 
 # analyze traces
-from analyzer import analyzer
+from analyzer import analyzer, dynamic
 from schemas.schema_type import SchemaType
 from openapi import defs
 from openapi.utils import read_doc, get_schema_forest
@@ -26,8 +26,11 @@ def build_cmd_parser():
     '''
     parser = argparse.ArgumentParser()
     parser.add_argument("config_file", nargs='?',
-                        help="Path to the configuration file")
-    parser.add_argument("--test", action="store_true", help="Run unit tests")
+        help="Path to the configuration file")
+    parser.add_argument("--test", action="store_true",
+        help="Run unit tests")
+    parser.add_argument("--dynamic", action="store_true",
+        help="Run dynamic analysis")
     return parser
 
 def main():
@@ -54,12 +57,18 @@ def main():
 
     print("Reading traces...")
     entries = []
-    with open(os.path.join("data/", "traces.pkl"), 'rb') as f:
+    with open(os.path.join("data/", "traces_update.pkl"), 'rb') as f:
         entries = pickle.load(f)
 
+    # for e in entries:
+    #     e.response.array_level = 0
+
+    # with open(os.path.join("data/", "traces_update.pkl"), 'wb') as f:
+    #     pickle.dump(entries, f)
     print("Analyzing provided traces...")
     log_analyzer = analyzer.LogAnalyzer()
     log_analyzer.analyze(
+        doc.get(defs.DOC_PATHS),
         entries, 
         configuration.get(keys.KEY_SKIP_FIELDS))
     groups = log_analyzer.analysis_result()
@@ -84,6 +93,13 @@ def main():
             raise Exception("Test suites need to be specified in configuration file")
 
         run_test(suites, doc, configuration, log_analyzer)
+    elif args.dynamic:
+        analysis = dynamic.DynamicAnalysis(
+            entries,
+            configuration.get(keys.KEY_SKIP_FIELDS)
+        )
+        seqs = analysis.get_sequences(endpoint="/users.lookupByEmail", limit=500)
+        print(seqs)
     else:
         # output the results to json file
         with open(os.path.join("webapp/src/data/", "data.json"), 'w') as f:
@@ -93,6 +109,8 @@ def main():
         with open(os.path.join("webapp/src/data/", "schema.json"), 'w') as f:
             json_schema = get_schema_forest(doc)
             json.dump(json_schema, f)
+
+        
 
 if __name__ == "__main__":
     main()

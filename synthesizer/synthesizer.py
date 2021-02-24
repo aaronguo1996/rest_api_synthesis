@@ -1,11 +1,16 @@
+from collections import defaultdict
 import re
+import time
+from graphviz import Digraph
 
 from synthesizer.encoder import Encoder
 from synthesizer.utils import make_entry_name
+from synthesizer.stats import Stats, STATS_GRAPH
 from synthesizer import params
 from openapi import defs
 from analyzer.entry import DocEntry, ResponseParameter, RequestParameter
 from schemas.schema_type import SchemaType
+from program.generator import ProgramGenerator
 import config_keys as keys
 
 DEFAULT_LENGTH_LIMIT = 10
@@ -16,27 +21,87 @@ class Synthesizer:
         self._config = config
         self._analyzer = analyzer
         self._encoder = Encoder({})
+        self._groups = {}
+        self._landmarks = []
+        self._program_generator = ProgramGenerator({})
 
+    @Stats(key=STATS_GRAPH)
     def init(self):
+        Stats.reset()
         self._add_transitions()
 
-    def run(self, inputs, outputs):
-        self._encoder.init(inputs, outputs)
+    def run(self, landmarks, inputs, outputs):
+        self._encoder.init(landmarks, inputs, outputs)
         result = self._encoder.solve()
         while result is None:
             limit = self._config.get(params.LENGTH_LIMIT, DEFAULT_LENGTH_LIMIT)
             if self._encoder._path_len >= limit:
                 break
 
-            self._encoder.increment(outputs)
+            self._encoder.increment(landmarks, outputs)
             # print(self._encoder._solver.assertions())
             result = self._encoder.solve()
             # print(self._encoder._solver.unsat_core())
 
         return result
 
-    def run_all(self, inputs, outputs):
-        self._encoder.init(inputs, outputs)
+    def run_n(self, landmarks, inputs, outputs, n):
+        dot = Digraph()
+        input_map = defaultdict(int)
+        for _, typ in inputs.items():
+            input_map[typ.name] += 1
+
+        output_map = defaultdict(int)
+        for typ in outputs:
+            output_map[typ.name] += 1
+
+        start = time.time()
+        self._encoder.init(landmarks, input_map, output_map)
+        results = []
+        result = self._encoder.solve()
+
+        while len(results) < n:
+            # find the correct path len
+            while result is None:
+                limit = self._config.get(params.LENGTH_LIMIT, DEFAULT_LENGTH_LIMIT)
+                if self._encoder._path_len >= limit:
+                    break
+
+                self._encoder.increment(landmarks, output_map)
+                result = self._encoder.solve()
+
+            
+            # find the solution for a given path len
+            while result is not None and len(results) < n:
+                # print(result)
+                # FIXME: better implementation latter
+                end = time.time()
+                with open("data/example_results.txt", "a+") as f:
+                    f.write(f"#{len(results)}")
+                    f.write("\n")
+                    f.write(f"time: {(end - start): .2f}")
+                    f.write("\n")
+                    f.write(f"time breakdown:\n{Stats._timing}\n")
+                    programs = self._program_generator.generate_program(
+                        result, inputs, outputs[0]
+                    )
+                    for p in programs:
+                        f.write(p.pretty(0))
+                        f.write("\n")
+
+                    if programs:
+                        programs[0].to_graph(dot)
+
+                if result not in results:
+                    results.append(result)
+                self._encoder.block_prev()
+                result = self._encoder.solve()
+                
+        dot.render(filename="output/programs")
+        return results
+
+    def run_all(self, landmarks, inputs, outputs):
+        self._encoder.init(landmarks, inputs, outputs)
         results = []
         result = self._encoder.solve()
         while result is None:
@@ -44,7 +109,7 @@ class Synthesizer:
             if self._encoder._path_len >= limit:
                 break
 
-            self._encoder.increment(outputs)
+            self._encoder.increment(landmarks, outputs)
             result = self._encoder.solve()
 
         while result is not None:
@@ -60,8 +125,13 @@ class Synthesizer:
         filters = self._create_filters()
         entries.update(projections)
         entries.update(filters)
-        for _, e in entries.items():
+        for name, e in entries.items():
+            # if e.endpoint == "/conversations.members":
+            #     print([(p.type.name, p.is_required) for p in e.parameters])
+            #     print([(p.type.name, p.is_required) for p in e.responses])
+
             self._encoder.add_transition(e)
+            self._program_generator.add_signature(name, e)
 
     def _create_entries(self):
         entries = {}
@@ -92,6 +162,9 @@ class Synthesizer:
                 entry_name = make_entry_name(endpoint, method)
                 entries[entry_name] = entry
 
+                # if endpoint == "/conversations.members":
+                #     print(entry)
+
         return entries
 
     def _create_entry(self, endpoint, method, entry_def):
@@ -111,7 +184,22 @@ class Synthesizer:
             projection_entries = self._create_projection(obj_name, obj_def)
             projections.update(projection_entries)
 
-        return projections
+        return self._group_transitions(projections)
+
+    def _group_transitions(self, transitions):
+        # group projections with the same input and output
+        results = {}
+        for proj, e in transitions.items():
+            param_typs = [p.type.name for p in e.parameters]
+            response_typs = [p.type.name for p in e.responses]
+            key = (tuple(param_typs), tuple(response_typs))
+            if key not in self._groups:
+                results[proj] = e
+                self._groups[key] = [proj]
+            else:
+                self._groups[key].append(proj)
+
+        return results
 
     def _create_projection(self, obj_name, obj_def):
         results = {}
@@ -134,12 +222,12 @@ class Synthesizer:
 
                 endpoint = f"projection({obj_name}, {name})"
                 proj_in = RequestParameter(
-                    "", "", endpoint, 
+                    "", "obj", endpoint, 
                     True, SchemaType(obj_name, None), None
                 )
                 proj_out = ResponseParameter(
-                    "", "", endpoint,
-                    [], True, SchemaType(f"{obj_name}.{name}", None), None
+                    "", "field", endpoint,
+                    [], True, 0, SchemaType(f"{obj_name}.{name}", None), None
                 )
                 proj_in = self._analyzer.find_same_type(proj_in)
                 proj_out = self._analyzer.find_same_type(proj_out)
@@ -147,7 +235,7 @@ class Synthesizer:
                 #     print(proj_in.type.name, proj_out.type.name)
                 #     raise Exception
                 entry = DocEntry(endpoint, "", [proj_in], [proj_out])
-                results[endpoint] = entry
+                results[endpoint+":"] = entry
 
         return results
 
@@ -162,7 +250,7 @@ class Synthesizer:
             filter_entries = self._create_filter(obj_name, obj_name, obj_def)
             filters.update(filter_entries)
 
-        return filters
+        return self._group_transitions(filters)
 
     def _create_filter(self, obj_name, field_name, field_def):
         results = {}
@@ -187,22 +275,22 @@ class Synthesizer:
                     endpoint = f"filter({obj_name}, {field_name}.{name})"
                     filter_in = [
                         RequestParameter(
-                            "", "", endpoint, 
+                            "", "obj", endpoint, 
                             True, SchemaType(obj_name, None), None
                         ),
                         RequestParameter(
-                            "", "", endpoint,
+                            "", "field", endpoint,
                             True, SchemaType(f"{field_name}.{name}", None), None
                         )
                     ]
                     filter_out = ResponseParameter(
-                        "", "", endpoint,
-                        [], True, SchemaType(obj_name, None), None
+                        "", "obj", endpoint,
+                        [], True, 1, SchemaType(obj_name, None), None
                     )
                     filter_in = [self._analyzer.find_same_type(fin) 
                         for fin in filter_in]
                     filter_out = self._analyzer.find_same_type(filter_out)
                     entry = DocEntry(endpoint, "", filter_in, [filter_out])
-                    results[endpoint] = entry
+                    results[endpoint+":"] = entry
 
         return results

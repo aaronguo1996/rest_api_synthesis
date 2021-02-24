@@ -46,7 +46,7 @@ class SynthesizerTestCase(unittest.TestCase):
                 ], [
                     ResponseParameter(
                         "", "", "projection(user, id)", 
-                        [], True, None, None
+                        [], True, 0, None, None
                     )
                 ]
             ),
@@ -59,7 +59,7 @@ class SynthesizerTestCase(unittest.TestCase):
                 ], [
                     ResponseParameter(
                         "", "", "projection(user, name)", 
-                        [], True, None, None
+                        [], True, 0, None, None
                     )
                 ]
             ),
@@ -72,7 +72,7 @@ class SynthesizerTestCase(unittest.TestCase):
                 ], [
                     ResponseParameter(
                         "", "", "projection(user, profile)", 
-                        [], True, None, None
+                        [], True, 0, None, None
                     )
                 ]
             ),
@@ -85,7 +85,7 @@ class SynthesizerTestCase(unittest.TestCase):
                 ], [
                     ResponseParameter(
                         "", "", "projection(user.profile, email)", 
-                        [], True, None, None
+                        [], True, 0, None, None
                     )
                 ]
             ),
@@ -124,7 +124,7 @@ class SynthesizerTestCase(unittest.TestCase):
                 ], [
                     ResponseParameter(
                         "", "", "filter(user, user.id)", 
-                        [], True, None, None
+                        [], True, 1, None, None
                     ),
                 ]
             ),
@@ -141,7 +141,7 @@ class SynthesizerTestCase(unittest.TestCase):
                 ], [
                     ResponseParameter(
                         "", "", "filter(user, user.name)", 
-                        [], True, None, None
+                        [], True, 1, None, None
                     ),
                 ]
             ),
@@ -158,7 +158,7 @@ class SynthesizerTestCase(unittest.TestCase):
                 ], [
                     ResponseParameter(
                         "", "", "filter(user, user.profile.email)", 
-                        [], True, None, None
+                        [], True, 1, None, None
                     ),
                 ]
             ),
@@ -210,27 +210,88 @@ class SynthesizerTestCase(unittest.TestCase):
     def test_nullary(self):
         self._synthesizer.init()
         result = self._synthesizer.run_all(
+            [],
             {}, 
             {"defs_group_id": 1}
         )
         self.assertEqual(result, ["/conversations.list:get"])
 
+    def test_example_b(self):
+        self._synthesizer.init()
+
+        result = self._synthesizer.run_n(
+            # ["/conversations.members:get"],
+            [],
+            {
+                "channel_name": SchemaType("objs_channel.name", None)
+            },
+            [
+                SchemaType("objs_user.profile.email", None)
+            ],
+            10
+        )
+        self.assertIn([
+            "/users.conversations:get",
+            "filter(objs_conversation, objs_conversation.name):",
+            "projection(objs_conversation, id):",
+            "/conversations.members:get",
+            "/users.info:get",
+            "projection(objs_user, profile):",
+            "projection(objs_user.profile, email):"
+        ], result)
+        # self.assertEqual(result, [])
+
+    def test_example_b_long(self):
+        self._synthesizer.init()
+
+        result = self._synthesizer.run_n(
+            # ["/conversations.members:get"],
+            [],
+            {
+                "channel_name": SchemaType("objs_channel.name", None)
+            },
+            [
+                SchemaType("objs_user.profile.email", None)
+            ],
+            50
+        )
+
+        # for i, r in enumerate(result):
+        #     print(i, r)
+
     def test_example_a(self):
         self._synthesizer.init()
 
-        result = self._synthesizer.run_all(
-            {}, 
-            {"objs_channel": 1}
+        result = self._synthesizer.run_n(
+            # ["/conversations.members:get"],
+            [],
+            {
+                "email": SchemaType("objs_user.profile.email", None)
+            }, 
+            [
+                SchemaType("objs_message", None), 
+                SchemaType("defs_group_id", None),
+                SchemaType("defs_ts", None),
+            ],
+            5
         )
-        self.assertEqual(result, [])
+
+        # self.assertIn([
+        #     "/users.lookupByEmail:get",
+        #     "projection(objs_user, id)",
+        #     "/conversations.open:post",
+        #     "projection(objs_conversation, id)",
+        #     "/chat.postMessage:post",
+        # ], result)
 
 def synthesizer_suite(doc, config, analyzer):
     SynthesizerTestCase._setUp(doc, config, analyzer)
     suite = unittest.TestSuite()
-    suite.addTest(SynthesizerTestCase('test_create_projection'))
-    suite.addTest(SynthesizerTestCase('test_create_filter'))
+    # suite.addTest(SynthesizerTestCase('test_create_projection'))
+    # suite.addTest(SynthesizerTestCase('test_create_filter'))
     # suite.addTest(SynthesizerTestCase('test_single_transition'))
     # suite.addTest(SynthesizerTestCase('test_two_transitions'))
-    suite.addTest(SynthesizerTestCase('test_nullary'))
+    # suite.addTest(SynthesizerTestCase('test_nullary'))
     # suite.addTest(SynthesizerTestCase('test_example_a'))
+    suite.addTest(SynthesizerTestCase('test_example_b'))
     return suite

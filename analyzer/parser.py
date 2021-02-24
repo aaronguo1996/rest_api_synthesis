@@ -98,10 +98,12 @@ class LogParser:
                 if obj_type.is_type_of(response_params):
                     p = log.ResponseParameter(
                         self.method, obj_name, self.func_name,
-                        self.path + [obj_name], True, obj_type, response_params)
+                        self.path + [obj_name], True, False,
+                        obj_type, response_params
+                    )
                     break
         if p is None:
-            p = log.ResponseParameter(method, "", endpoint, [], True, None, response_params)
+            p = log.ResponseParameter(method, "", endpoint, [], True, False, None, response_params)
 
         return TraceEntry(endpoint, method, parameters, p)
 

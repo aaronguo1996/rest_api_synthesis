@@ -17,9 +17,11 @@ class Parameter:
         return self.__str__()
 
 class ResponseParameter(Parameter):
-    def __init__(self, method, arg_name, func_name, path, is_required, typ, value):
+    def __init__(self, method, arg_name, func_name, 
+        path, is_required, array_level, typ, value):
         super().__init__(method, arg_name, func_name, is_required, typ, value)
         self.path = path
+        self.array_level = array_level
 
     def _assign_type(self, value):
         if isinstance(value, dict):
@@ -58,9 +60,9 @@ class ResponseParameter(Parameter):
                 self.type = SchemaType.infer_type_for(
                     path_to_defs, skip_fields, self.value)
 
-                # if self.func_name == "/conversations.info":
-                #     print(f"conversations.info has arg {self.arg_name} of response type", self.type)
-                #     print("type schema is", self.type.schema)
+                # if self.func_name == "/pins.list":
+                #     print(f"pins.list has arg {self.arg_name} of response type", self.type)
+                    # print("type schema is", self.type.schema)
             # if self.arg_name == "response_metadata":
             #     print(self.type.name)
 
@@ -86,7 +88,9 @@ class ResponseParameter(Parameter):
 
                 p = ResponseParameter(
                     self.method, k, self.func_name,
-                    self.path + [k], self.is_required, typ, v)
+                    self.path + [k], self.is_required, self.array_level, 
+                    typ, v
+                )
                 results += p.flatten(path_to_defs, skip_fields)
         elif isinstance(self.value, list):
             # infer type for each element in the array
@@ -108,11 +112,14 @@ class ResponseParameter(Parameter):
                 
                 p = ResponseParameter(
                     self.method, defs.INDEX_ANY, self.func_name,
-                    self.path + [defs.INDEX_ANY], self.is_required,
+                    self.path + [defs.INDEX_ANY], self.is_required, 
+                    self.array_level + 1,
                     item_type, self.value[i])
 
                 results += p.flatten(path_to_defs, skip_fields)
         else:
+            # if self.func_name == "/pins.list":
+            #     print(f"pins.list has arg {self.arg_name} of response type", self.type)
             if self.type is None:
                 self.type = SchemaType.infer_type_for(
                     path_to_defs, skip_fields, self.value)
@@ -149,10 +156,10 @@ class ResponseParameter(Parameter):
         ))
 
     @staticmethod
-    def from_openapi(endpoint, method, arg_name, is_required):
+    def from_openapi(endpoint, method, arg_name, is_required, array_level):
         return ResponseParameter(
-            method, arg_name, endpoint, 
-            [arg_name], is_required, None, None)
+            method, arg_name, endpoint,
+            [arg_name], is_required, array_level, None, None)
 
 class RequestParameter(Parameter):
     def __init__(self, method, arg_name, func_name, is_required, typ, value):
@@ -274,7 +281,7 @@ class DocEntry:
         requires = response_schema.get(defs.DOC_REQUIRED, [])
         response_params = response_schema.get(defs.DOC_PROPERTIES)
         # TODO: this is specific to Slack API, should modify this to fit other domains
-        for name in response_params.keys():
+        for name, rp in response_params.items():
             if name in skip_fields:
                 continue
 
@@ -284,7 +291,7 @@ class DocEntry:
 
             param = ResponseParameter.from_openapi(
                 endpoint, method, name,
-                name in requires)
+                name in requires, int(rp.get(defs.DOC_TYPE) == "array"))
             entry_responses.append(param)
 
         return DocEntry(endpoint, method, entry_params, entry_responses)

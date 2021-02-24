@@ -1,4 +1,5 @@
 from collections import defaultdict
+import time
 
 def group_types(types):
     type_dict = defaultdict(int)

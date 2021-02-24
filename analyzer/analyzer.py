@@ -1,9 +1,10 @@
 import re
 import logging
-from schemas.schema_type import SchemaType
 
+from schemas.schema_type import SchemaType
 from analyzer.entry import ResponseParameter, RequestParameter
 from analyzer.utils import get_representative
+from openapi import defs
 
 class DSU:
     def __init__(self):
@@ -51,6 +52,24 @@ class DSU:
         #     self._logger.debug(f"Arg names: {x.arg_name == y.arg_name}")
         #     self._logger.debug(f"Methods: {x.method.upper() == y.method.upper()}")
         #     self._logger.debug(f"Paths: {tuple(x.path) == tuple(y.path)}")
+        group = self.get_group(xr)
+        rep1, _ = get_representative(group)
+        group = self.get_group(yr)
+        rep2, _ = get_representative(group)
+        
+            
+        if ((rep1 == "defs_group_id" and y.arg_name == "name") or 
+            (rep2 == "defs_group_id" and x.arg_name == "name")):
+            # print(x, y)
+            return
+
+        # if rep1 == "defs_group_id": 
+        #     print("left id:", x, y)
+
+        # if rep2 == "defs_group_id":
+        #     print("right id:", x, y)
+        # if isinstance(y, ResponseParameter) and y.path == ["channels", "[?]", "name"]:
+        # print(rep1, x, x.value, rep2, y, y.value)
 
         # self._logger.debug(f"Union roots {xr} and {yr} in DSU")
         if self._sizes[xr] < self._sizes[yr]:
@@ -98,31 +117,115 @@ class LogAnalyzer:
         self.value_to_param = {}
         self.dsu = DSU()
 
-    def analyze(self, entries, skip_fields, path_to_defs = "#/components/schemas"):
+    def analyze(self, paths, entries, skip_fields, path_to_defs = "#/components/schemas"):
         '''
             Match the value of each request argument or response parameter
             in a log entry and union the common ones
         '''
+        blacklist = [
+            '/apps.actions.v2.list'
+        ]
         for entry in entries:
+            # match docs to correct integers and booleans
+            entry_def = paths.get(entry.endpoint)
+            if entry.endpoint in blacklist:
+                continue
+
+            if entry_def:
+                entry_def = entry_def.get(entry.method.lower())
+
+            entry_requests = {}
+            entry_params = []
+            if entry_def:
+                entry_params = entry_def.get(defs.DOC_PARAMS, [])
+                entry_requests = entry_def.get(defs.DOC_REQUEST, {})
+                if entry_requests:
+                    entry_requests = entry_requests.get(defs.DOC_CONTENT, {})
+                    if defs.HEADER_FORM in entry_requests:
+                        entry_requests = entry_requests.get(defs.HEADER_FORM)
+                    else:
+                        entry_requests = entry_requests.get(defs.HEADER_JSON)
+                    entry_requests = entry_requests \
+                        .get(defs.DOC_SCHEMA) \
+                        .get(defs.DOC_PROPERTIES)
+
             responses = entry.response.flatten(path_to_defs, skip_fields)
 
+            def correct_value(p, typ):
+                if typ == "integer":
+                    p.value = int(p.value)
+                elif typ == "boolean":
+                    p.value = bool(p.value)
+
             for p in entry.parameters:
+                for param in entry_params:
+                    if param.get(defs.DOC_NAME) == p.arg_name:
+                        typ = param.get(defs.DOC_SCHEMA).get(defs.DOC_TYPE)
+                        correct_value(p, typ)
+                    
+                    break
+                
+                if p.arg_name in entry_requests:
+                    param = entry_requests.get(p.arg_name)
+                    typ = param.get(defs.DOC_TYPE)
+                    correct_value(p, typ)
+
                 self.insert(p)
+                
             for r in responses:
                 self.insert(r)
 
     def insert(self, param):
-        value = str(param.value)
-        
-        # skip empty values for merge, but add them as separate nodes, they are meaningless
-        if not value:
+        # if param.arg_name == "fields":
+        #     print("fields:", value)
+
+        if param.value is None:
+            return
+
+        # skip empty values, integers and booleans for merge, 
+        # but add them as separate nodes, they are meaningless
+        if not param.value or isinstance(param.value, int) or isinstance(param.value, bool):
             self.dsu.union(param, param)
             return
 
+        value = str(param.value)
         if value not in self.value_to_param:
+            # print("adding", value)
             self.value_to_param[value] = param
 
         root = self.value_to_param[value]
+
+        # if ((root.arg_name == "value" or param.arg_name == "topic") or
+        #     (root.arg_name == "topic" or param.arg_name == "value")):
+
+        #     return
+        # if root.arg_name == 'topic' or param.arg_name == 'topic' or root.arg_name == "value" or param.arg_name == "value":
+            # return
+
+        # if root.arg_name == 'name' or param.arg_name == 'name' or (param.type and param.type.name == "defs_group_id"):
+        #     if param.type:
+        #         print(param.type.name)
+        #     else:
+        #         print(None)
+        #     print(value)
+        # print(self.value_to_param)
+        group = self.dsu.get_group(root)
+        rep, _ = get_representative(group)
+        # group = self.dsu.get_group(param)
+        # rep2, _ = get_representative(group)
+        if rep == "defs_group_id" and (param.arg_name == "topic" or param.arg_name == "value"):
+            self.dsu.union(param, param)
+            return
+
+
+        # if rep == "defs_group_id":
+        #     print("before union")
+        # # if rep == "objs_channel.name":
+        #     print(root, param)
+        #     print(value)
+
+        # if rep == "defs_group_id":
+        #     print(root, param)
         self.dsu.union(root, param)
 
     def analysis_result(self):
@@ -294,9 +397,10 @@ class LogAnalyzer:
             #     print("find descendent", p)
             if (isinstance(p, ResponseParameter) and
                 p.func_name == param.func_name and
+                # p.arg_name == param.arg_name and
                 p.method.upper() == param.method.upper() and
                 param.path == p.path[:len(param.path)]):
-                
+
                 return p
                 # else:
                 #     group = self.dsu.get_group(p)
@@ -312,7 +416,10 @@ class LogAnalyzer:
         params = self.dsu._parents.keys()
         for p in params:
             if p.type and p.type.name == param.type.name:
+                # print(p)
                 group = self.dsu.get_group(p)
+                # print(group)
+                # print([(p, p.value) for p in group])
                 _, rep_type = get_representative(group)
                 # TODO: we do not want to find the parent of this type, correct?
                 param.type = rep_type
@@ -332,7 +439,11 @@ class LogAnalyzer:
                 # group = self.dsu.get_group(descendant)
                 # _, rep_type = get_representative(group)
                 if descendant.type:
+                    # if param.func_name == "/conversations.members":
+                    #     print(descendant.type.name)
                     param.type = descendant.type.get_oldest_parent()
+                    # if param.func_name == "/conversations.members":
+                    #     print(param.type.name)
                 else:
                     # print(f"{param} does not have a descendant type {descendant}")
                     param.type = descendant.type

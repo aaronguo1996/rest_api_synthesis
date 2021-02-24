@@ -41,11 +41,11 @@
         "_x_gantry",
         "_x_mode",
         "token",
-        "ok"
+        "ok",
+        "response_metadata",
+        "cache_ts"
     ],
     "test_suites": [
-        "encoder",
-        "analyzer",
         "synthesizer"
     ]
 }

@@ -9,7 +9,7 @@ class EncoderTestCase(unittest.TestCase):
             DocEntry("/users.list", "GET", [], [
                 ResponseParameter(
                     "GET", "users", "/users.list", 
-                    [], True, "user", [])
+                    [], True, 1, "user", [])
             ]),
             DocEntry("/conversations.members", "GET", [
                 RequestParameter(
@@ -18,7 +18,7 @@ class EncoderTestCase(unittest.TestCase):
             ], [
                 ResponseParameter(
                     "GET", "members", "/conversations.members", 
-                    [], True, "user.id", [])
+                    [], True, 1, "user.id", [])
             ]),
             DocEntry("/conversations.info", "GET", [
                 RequestParameter(
@@ -27,21 +27,21 @@ class EncoderTestCase(unittest.TestCase):
             ], [
                 ResponseParameter(
                     "GET", "channel", "/conversations.info", 
-                    [], True, "channel", [])
+                    [], True, 0, "channel", [])
             ]),
             DocEntry("/conversations.list", "GET", [], [
                 ResponseParameter(
                     "GET", "channel", "/conversations.list", 
-                    [], True, "channel", [])
+                    [], True, 1, "channel", [])
             ]),
             DocEntry("/users.lookupByEmail", "GET", [
                 RequestParameter(
                     "GET", "email", "/users.lookupByEmail", 
-                    True, "user.profile.email", None)
+                    True, 0, "user.profile.email", None)
             ], [
                 ResponseParameter(
                     "GET", "user", "/users.lookupByEmail", 
-                    [], True, "user", None)
+                    [], True, 0, "user", None)
             ]),
             DocEntry("/users.info", "GET", [
                 RequestParameter(
@@ -50,7 +50,7 @@ class EncoderTestCase(unittest.TestCase):
             ], [
                 ResponseParameter(
                     "GET", "user", "/users.info", 
-                    [], True, "user", [])
+                    [], True, 0, "user", [])
             ]),
             DocEntry("projection_channel_id", "", [
                 RequestParameter(
@@ -59,7 +59,7 @@ class EncoderTestCase(unittest.TestCase):
             ], [
                 ResponseParameter(
                     "", "", "projection_channel_id", 
-                    [], True, "channel.id", None)
+                    [], True, 0, "channel.id", None)
             ]),
             DocEntry("projection_user_email", "", [
                 RequestParameter(
@@ -68,13 +68,13 @@ class EncoderTestCase(unittest.TestCase):
             ], [
                 ResponseParameter(
                     "", "", "projection_user_email", 
-                    [], True, "user.profile.email", None)
+                    [], True, 0, "user.profile.email", None)
             ]),
             DocEntry("join_1_1", "", [ # this works like clone transitions, but allow produce tokens to be leaked
                 RequestParameter("", "", "join_1", True, "channel.name", None),
                 RequestParameter("", "", "join_1", True, "channel", None),
             ], [
-                ResponseParameter("", "", "join_1", [], True, "channel", None),
+                ResponseParameter("", "", "join_1", [], True, 1, "channel", None),
             ]),
             DocEntry("join_1_2", "", [ # this works like clone transitions, but allow produce tokens to be leaked
                 RequestParameter("", "", "join_1", True, "channel.name", None),
@@ -82,19 +82,19 @@ class EncoderTestCase(unittest.TestCase):
             ], [
                 ResponseParameter(
                     "", "", "join_1", 
-                    [], True, "channel.name", None),
+                    [], True, 1, "channel.name", None),
             ]),
             DocEntry("join_2_1", "", [ # this works like clone transitions, but allow produce tokens to be leaked
                 RequestParameter("", "", "join_2", True, "user.id", None),
                 RequestParameter("", "", "join_2", True, "user", None),
             ], [
-                ResponseParameter("", "", "join_2", [], True, "user.id", None),
+                ResponseParameter("", "", "join_2", [], True, 1, "user.id", None),
             ]),
             DocEntry("join_2_2", "", [ # this works like clone transitions, but allow produce tokens to be leaked
                 RequestParameter("", "", "join_2", True, "user.id", None),
                 RequestParameter("", "", "join_2", True, "user", None),
             ], [
-                ResponseParameter("", "", "join_2", [], True, "user", None),
+                ResponseParameter("", "", "join_2", [], True, 1, "user", None),
             ]),
             DocEntry("/conversations.history", "GET", [
                 RequestParameter(
@@ -106,7 +106,7 @@ class EncoderTestCase(unittest.TestCase):
             ], [
                 ResponseParameter(
                     "GET", "messages", "/conversations.history", 
-                    [], True, "message", [])
+                    [], True, 1, "message", [])
             ]),
         ]
 
@@ -237,14 +237,18 @@ class EncoderTestCase(unittest.TestCase):
 
     def test_solve_single_transition(self):
         self._encoder.add_transition(self._entries[4])
-        self._encoder.init({"user.profile.email": 1}, {"user": 1})
+        self._encoder.init(
+            [], 
+            {"user.profile.email": 1}, 
+            {"user": 1}
+        )
 
         result = self._encoder.solve()
         while result is None:
             if self._encoder._path_len > 1:
                 break
 
-            self._encoder.increment({"user": 1})
+            self._encoder.increment([], {"user": 1})
             # print(self._encoder._solver.assertions())
             result = self._encoder.solve()
 
@@ -260,14 +264,14 @@ class EncoderTestCase(unittest.TestCase):
         outputs = {
             "user.profile.email": 1,
         }
-        self._encoder.init(inputs, outputs)
+        self._encoder.init([], inputs, outputs)
         
         result = self._encoder.solve()
         while result is None:
             if self._encoder._path_len >= 10:
                 break
 
-            self._encoder.increment(outputs)
+            self._encoder.increment([], outputs)
             # print(self._encoder._solver.assertions())
             result = self._encoder.solve()
             # print(self._encoder._solver.unsat_core())
@@ -291,14 +295,14 @@ class EncoderTestCase(unittest.TestCase):
         outputs = {
             "message": 1,
         }
-        self._encoder.init(inputs, outputs)
+        self._encoder.init([], inputs, outputs)
         
         result = self._encoder.solve()
         while result is None:
             if self._encoder._path_len >= 1:
                 break
 
-            self._encoder.increment(outputs)
+            self._encoder.increment([], outputs)
             # print(self._encoder._solver.assertions())
             result = self._encoder.solve()
             # print(self._encoder._solver.unsat_core())
@@ -309,14 +313,14 @@ class EncoderTestCase(unittest.TestCase):
 
         # case II: optional argument is provided
         inputs["ts"] = 1
-        self._encoder.init(inputs, outputs)
+        self._encoder.init([], inputs, outputs)
         
         result = self._encoder.solve()
         while result is None:
             if self._encoder._path_len >= 1:
                 break
 
-            self._encoder.increment(outputs)
+            self._encoder.increment([], outputs)
             # print(self._encoder._solver.assertions())
             result = self._encoder.solve()
             # print(self._encoder._solver.unsat_core())

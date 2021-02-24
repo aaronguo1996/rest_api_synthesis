@@ -1,7 +1,8 @@
 import z3
 from z3 import Int, Solver
 from snakes.nets import *
-from synthesizer.utils import group_params
+from synthesizer.utils import group_params, make_entry_name
+from synthesizer.stats import Stats, STATS_ENCODE, STATS_SEARCH
 
 # preprocess the spec file and canonicalize the parameters and responses
 class Encoder:
@@ -19,7 +20,8 @@ class Encoder:
 
         self.create_petrinet()
 
-    def init(self, inputs, outputs):
+    @Stats(key=STATS_ENCODE)
+    def init(self, landmarks, inputs, outputs):
         self._solver.reset()
         self._path_len = 0
         self._targets = []
@@ -32,31 +34,32 @@ class Encoder:
         # for t in range(self._path_len):
         #     self._fire_transitions(t)
         #     self._no_transition_fire(t)
-
+        self._add_landmarks(landmarks)
         self._set_initial(inputs)
         self._set_final(outputs)
 
-    def increment(self, outputs):
+    @Stats(key=STATS_ENCODE)
+    def increment(self, landmarks, outputs):
         self._path_len += 1
         self._add_variables(self._path_len)
         self._fire_transitions(self._path_len - 1)
         self._no_transition_fire(self._path_len - 1)
+        self._add_landmarks(landmarks)
         self._set_final(outputs)
 
+    @Stats(key=STATS_SEARCH)
     def solve(self):
         # print(self._targets)
         result = self._solver.check(self._targets)
         if self._path_len > 0 and result == z3.sat:
             m = self._solver.model()
-            print(m[Int(2)])
-            print(m[Int(978)])
-            print(m[Int(1954)])
-            print(m[Int(31)])
-            print(m[Int(37)])
-            print(m[Int(1007)])
-            print(m[Int(1983)])
-            print(m[Int(1013)])
-            print(m[Int(1989)])
+            # print(m)
+            # print(m[Int(31)]) # 0
+            # print(m[Int(37)]) # 0
+            # print(m[Int(1007)]) # 1
+            # print(m[Int(1983)]) # 0
+            # print(m[Int(1013)]) # 0
+            # print(m[Int(1989)]) # 1
             results = []
             for i in range(self._path_len):
                 tr = m[Int(f"t{i}")].as_long()
@@ -68,17 +71,26 @@ class Encoder:
             return None
 
     def block_prev(self):
-        self._solver.add(
+        self._targets.append(
             z3.Not(z3.And(self._prev_result))
         )
-        print(z3.Not(z3.And(self._prev_result)))
+        # print(z3.Not(z3.And(self._prev_result)))
         self._prev_result = []
+
+    def _add_landmarks(self, landmarks):
+        for landmark in landmarks:
+            idx = self._trans_to_variable.get(landmark)
+            fires = [Int(f"t{i}") == idx for i in range(self._path_len)]
+            self._targets.append(
+                z3.Or(fires)
+            )
 
     def _add_variables(self, t):
         places = self._net.place()
         for place in places:
             key = (place.name, t)
             if key not in self._place_to_variable:
+                # if t==0: print(key)
                 i = len(self._place_to_variable)
                 self._place_to_variable[key] = i
                 self._solver.add(Int(i) >= 0)
@@ -136,9 +148,12 @@ class Encoder:
             self._solver.add(
                 z3.Implies(Int(f"t{t}") == tr_idx, z3.And(pre + post)))
 
-            if (trans.name == "projection(objs_conversation, priority):"
-                or trans.name == "projection(objs_conversation, id):"):
-                print(z3.Implies(Int(f"t{t}") == tr_idx, z3.And(pre + post)))
+            # if (trans.name == "projection(objs_conversation, priority):"
+            #     or trans.name == "projection(objs_conversation, id):"):
+            # if (trans.name == 'projection(objs_conversation, num_members):'
+            #     or trans.name == '/conversations.open:post'):
+            #     print(tokens)
+            #     print(z3.Implies(Int(f"t{t}") == tr_idx, z3.And(pre + post)))
 
     def _no_transition_fire(self, t):
         places = self._net.place()
@@ -157,6 +172,7 @@ class Encoder:
     def _set_initial(self, typs):
         for t, c in typs.items():
             tv = self._place_to_variable.get((t, 0))
+            # print(tv)
             self._solver.add(Int(tv) == c)
 
         for (k, t), v in self._place_to_variable.items():
@@ -177,7 +193,7 @@ class Encoder:
             self._targets.append(Int(f"t{t}") < len(self._trans_to_variable))
 
     def add_transition(self, entry):
-        trans_name = entry.endpoint + ":" + entry.method
+        trans_name = make_entry_name(entry.endpoint, entry.method)
         self._entries[trans_name] = entry
         trans_idx = len(self._trans_to_variable)
         self._trans_to_variable[trans_name] = trans_idx
