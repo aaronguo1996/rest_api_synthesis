@@ -95,8 +95,9 @@ class VarExpr(Expression):
     def apply_subst(self, subst):
         ret = subst.get(self._var, self)
         ret.type = self.type
+        # propagate type into each return statement of Map
         if isinstance(ret, MapExpr):
-            ret._prog._expressions[-1].type = self.type
+            ret._prog.assign_type(self.type)
 
         return ret
 
@@ -185,19 +186,28 @@ class ProjectionExpr(Expression):
         )
 
     def apply_subst(self, subst):
-        return AppExpr(
-            "projection",
-            [
-                ("obj", self._obj.apply_subst(subst)),
-                ("field", VarExpr("@@" + self._field)),
-            ],
-            self.type
+        # return AppExpr(
+        #     "projection",
+        #     [
+        #         ("obj", self._obj.apply_subst(subst)),
+        #         ("field", VarExpr("@@" + self._field)),
+        #     ],
+        #     self.type
+        # )
+        return ProjectionExpr(
+            self._obj.apply_subst(subst),
+            self._field,
+            self.type,
         )
 
     def to_graph(self, dot):
         # print(self)
-        # return self._obj.to_graph(dot)
-        raise NotImplementedError
+        n1 = self._obj.to_graph(dot)
+        v = f"n{Expression.counter}"
+        Expression.counter += 1
+        dot.node(v, label=self.type.name)
+        dot.edge(n1, v)
+        return v
 
     def get_vars(self):
         obj_vars = self._obj.get_vars()
@@ -231,22 +241,33 @@ class FilterExpr(Expression):
         )
 
     def apply_subst(self, subst):
-        return AppExpr(
-            "filter",
-            [
-                ("obj1", self._obj.apply_subst(subst)),
-                ("field", VarExpr("@@" + self._field)),
-                ("obj2", self._val.apply_subst(subst)),
-            ],
-            self.type
+        # return AppExpr(
+        #     "filter",
+        #     [
+        #         ("obj1", self._obj.apply_subst(subst)),
+        #         ("field", VarExpr("@@" + self._field)),
+        #         ("obj2", self._val.apply_subst(subst)),
+        #     ],
+        #     self.type
+        # )
+        return FilterExpr(
+            self._obj.apply_subst(subst),
+            self._field,
+            self._val.apply_subst(subst),
+            self._is_val_list,
+            self.type,
         )
 
     def to_graph(self, dot):
         # print(self)
-        # n1 = self._obj.to_graph(dot)
-        # n2 = self._val.to_graph(dot)
-        # return [n1, n2]
-        raise NotImplementedError
+        n1 = self._obj.to_graph(dot)
+        n2 = self._val.to_graph(dot)
+        v = f"n{Expression.counter}"
+        Expression.counter += 1
+        dot.node(v, label=self.type.name)
+        dot.edge(n1, v)
+        dot.edge(n2, v)
+        return v
 
     def get_vars(self):
         obj_vars = self._obj.get_vars()
@@ -277,8 +298,8 @@ class MapExpr(Expression):
     def apply_subst(self, subst):
         # print(self._prog._inputs)
         # print(type(self._prog._inputs[0]))
-        expr = self._prog.to_expression({self._prog._inputs[0]: self._obj})
-        return expr.apply_subst(subst)
+        # expr = self._prog.to_expression({self._prog._inputs[0]: self._obj})
+        # return expr.apply_subst(subst)
         # f = self._prog.to_expression(subst)
         # f.type = self.type
         # return AppExpr(
@@ -288,15 +309,25 @@ class MapExpr(Expression):
         #         ("f", f),
         #     ],
         # )
+        return MapExpr(
+            self._obj.apply_subst(subst),
+            self._prog.apply_subst(subst),
+            self.type,
+        )
+
+    def body(self):
+        expr = self._prog.to_expression({self._prog._inputs[0]: self._obj})
+        return expr
 
     def to_graph(self, dot):
         # print(self)
         # n1 = self._obj.to_graph(dot)
-        # expr = self._prog.to_expression({self._prog._inputs[0], self._obj})
+        expr = self.body()
         # expr.type = self.type
-        # n2 = expr.to_graph(dot)
+        n2 = expr.to_graph(dot)
         # return [n1, n2]
-        raise NotImplementedError
+        # raise NotImplementedError
+        return n2
 
     def get_vars(self):
         obj_vars = self._obj.get_vars()
@@ -318,10 +349,9 @@ class Program:
     def __str__(self):
         expr_strs = [str(expr) + '    \n' for expr in self._expressions[:-1]]
         return (
-            f"({','.join(self._inputs)}) => {{\n    " +
-            ''.join(expr_strs) + 
-            f"    return {self._expressions[-1]};" +
-            "\n}"
+            f"({','.join(self._inputs)}) => {{"
+            f"{' '.join(expr_strs)}"
+            f" return {self._expressions[-1]};}}"
         )
 
     def __eq__(self, other):
@@ -343,9 +373,20 @@ class Program:
             expr = expr.apply_subst(subst)
             if isinstance(expr, AssignExpr):
                 # expr.expr.type = expr.type
-                subst[expr.var] = expr.expr
+                if isinstance(expr.expr, MapExpr):
+                    subst[expr.var] = expr.expr.body()
+                else:
+                    subst[expr.var] = expr.expr
 
         return expr
+
+    def apply_subst(self, subst={}):
+        exprs = []
+        for expr in self._expressions:
+            expr = expr.apply_subst(subst)
+            exprs.append(expr)
+
+        return Program(self._inputs, exprs)
 
     def get_vars(self):
         all_vars = set()
@@ -376,7 +417,7 @@ class Program:
 
     def to_graph(self, dot):
         # print("program, to_graph", self)
-        expr = self.to_expression()
+        expr = self.to_expression({})
         return expr.to_graph(dot)
 
     def merge_maps(self):
@@ -410,15 +451,46 @@ class Program:
         ]
         # print("After filtering", self._expressions)
 
+    def merge_projections(self, subst={}):
+        mark_delete = set()
+        exprs = []
+        for expr in self._expressions:
+            before_vars = expr.get_vars()
+            expr = expr.apply_subst(subst)
+            after_vars = expr.get_vars()
+            # print("before", before_vars, "after", after_vars)
+            mark_delete = mark_delete.union(before_vars.difference(after_vars))
+            if isinstance(expr, AssignExpr): 
+                if isinstance(expr._rhs, ProjectionExpr):
+                    subst[expr.var] = expr._rhs
+                elif isinstance(expr._rhs, MapExpr):
+                    # print("find a map expression")
+                    # print("map expressions", expr._rhs._prog._expressions)
+                    expr._rhs._prog.merge_projections(subst)
+                    # print("after map expressions", expr._rhs._prog._expressions)
+
+            exprs.append(expr)
+
+        # print("delete", mark_delete)
+        self._expressions = [e for e in exprs
+            if not isinstance(e, AssignExpr) or e.var not in mark_delete
+        ]
+
+    def assign_type(self, t):
+        self._expressions[-1].type = t
+        if (len(self._expressions) > 1 and 
+            isinstance(self._expressions[-2], MapExpr)):
+            expr = self._expressions[-2]
+            expr._prog.assign_type(t)
 
     def pretty(self, hang):
         indent = SPACE * (hang + 1)
         newline = '\n'
-        expr_strs = [expr.pretty(hang + 1) + newline for expr in self._expressions[:-1]]
+        expr_strs = [expr.pretty(hang + 1) + newline for expr in self._expressions]
         
         return (
             f"({','.join(self._inputs)}) => {{{newline}"
-            f"{''.join(expr_strs)}"
-            f"{indent}return {self._expressions[-1]};{newline}"
+            f"{''.join(expr_strs[:-1])}"
+            f"{indent}return {expr_strs[-1][:-1]};{newline}"
             f"{SPACE * hang}}}"
         )

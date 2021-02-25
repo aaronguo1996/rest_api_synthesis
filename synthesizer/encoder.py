@@ -20,7 +20,7 @@ class Encoder:
 
         self.create_petrinet()
 
-    @Stats(key=STATS_ENCODE)
+    @TimeStats(key=STATS_ENCODE)
     def init(self, landmarks, inputs, outputs):
         self._solver.reset()
         self._path_len = 0
@@ -38,7 +38,7 @@ class Encoder:
         self._set_initial(inputs)
         self._set_final(outputs)
 
-    @Stats(key=STATS_ENCODE)
+    @TimeStats(key=STATS_ENCODE)
     def increment(self, landmarks, outputs):
         self._path_len += 1
         self._add_variables(self._path_len)
@@ -47,7 +47,7 @@ class Encoder:
         self._add_landmarks(landmarks)
         self._set_final(outputs)
 
-    @Stats(key=STATS_SEARCH)
+    @TimeStats(key=STATS_SEARCH)
     def solve(self):
         # print(self._targets)
         result = self._solver.check(self._targets)

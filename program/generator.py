@@ -1,5 +1,6 @@
 from collections import defaultdict
 import itertools
+import functools
 import re
 
 from program.program import *
@@ -54,8 +55,10 @@ class ProgramGenerator:
             p = Program(list(inputs.keys()), list(exprs))
             # print(p)
             if self._filter_by_names(transitions, p):
-                p.merge_maps()
+                # p.merge_maps()
+                # p.merge_projections({})
                 programs.append(p)
+                print(p.to_expression({}))
 
         # raise Exception
         return programs
@@ -94,6 +97,9 @@ class ProgramGenerator:
                 return [e] + obj_subexprs + val_subexprs
             elif isinstance(e, VarExpr):
                 return []
+            elif isinstance(e, AppExpr):
+                arg_subexprs = [get_subexprs(arg) for _, arg in e._args]
+                return functools.reduce(lambda x, y: x + y, arg_subexprs, [e])
             else:
                 return [e]
 
@@ -154,13 +160,23 @@ class ProgramGenerator:
             obj_is_list = params[0][2]
             field = re.search(r"projection\(.*, (.*)\)", sig.endpoint).group(1)
             typ = sig.responses[0].type
-            if obj_is_list:
+
+            if obj_is_list:   
                 map_x = self._fresh_var("x")
                 proj_expr = ProjectionExpr(VarExpr(map_x, obj.type), field, typ)
-                map_expr = MapExpr(obj, Program([map_x], [proj_expr]))
+                map_body = proj_expr
+                for i in range(obj_is_list - 1):
+                    next_x = self._fresh_var("x")
+                    map_body = MapExpr(
+                        VarExpr(next_x),
+                        Program([map_x], [map_body])
+                    )
+                    map_x = next_x
+
+                map_body = MapExpr(obj, Program([map_x], [map_body]))
 
                 let_x = self._fresh_var("x")
-                let_expr = AssignExpr(let_x, map_expr)
+                let_expr = AssignExpr(let_x, map_body)
                 results.append(let_expr)
 
                 for r in sig.responses:
@@ -222,18 +238,29 @@ class ProgramGenerator:
                 if is_list:
                     map_x = self._fresh_var("x")
                     map_pairs.append((arg, map_x))
+                    for _ in range(is_list - 1):
+                        next_x = self._fresh_var("x")
+                        map_pairs.append((VarExpr(map_x, arg.type), next_x))
+                        map_x = next_x
                     named_args.append((arg_name, VarExpr(map_x, arg.type)))
                 else:
                     named_args.append((arg_name, arg))
 
             expr = AppExpr(sig.endpoint, named_args)
+            if len(map_pairs) > 0:
+                let_x = self._fresh_var("x")
+                expr = [AssignExpr(let_x, expr), VarExpr(let_x)]
+            
             map_pairs.reverse()
             for arg, xx in map_pairs:
-                expr = MapExpr(arg, Program([xx], [expr]))
+                if isinstance(expr, list):
+                    expr = MapExpr(arg, Program([xx], expr))
+                else:
+                    expr = MapExpr(arg, Program([xx], [expr]))
             results.append(AssignExpr(x, expr))
 
         for r in sig.responses:
             typ = r.type
-            self._add_typed_var(typ_subst, x, typ, r.array_level)
+            self._add_typed_var(typ_subst, x, typ, r.array_level + len(map_pairs))
 
         return results

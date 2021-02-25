@@ -5,7 +5,7 @@ from graphviz import Digraph
 
 from synthesizer.encoder import Encoder
 from synthesizer.utils import make_entry_name
-from synthesizer.stats import Stats, STATS_GRAPH
+from stats.time_stats import TimeStats, STATS_GRAPH
 from synthesizer import params
 from openapi import defs
 from analyzer.entry import DocEntry, ResponseParameter, RequestParameter
@@ -25,7 +25,7 @@ class Synthesizer:
         self._landmarks = []
         self._program_generator = ProgramGenerator({})
 
-    @Stats(key=STATS_GRAPH)
+    @TimeStats(key=STATS_GRAPH)
     def init(self):
         Stats.reset()
         self._add_transitions()
@@ -77,7 +77,7 @@ class Synthesizer:
                 # FIXME: better implementation latter
                 end = time.time()
                 with open("data/example_results.txt", "a+") as f:
-                    f.write(f"#{len(results)}")
+                    f.write(f"#{len(results)+1}")
                     f.write("\n")
                     f.write(f"time: {(end - start): .2f}")
                     f.write("\n")

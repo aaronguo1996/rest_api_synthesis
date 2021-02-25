@@ -6,7 +6,7 @@ STATS_SEARCH = "search"
 STATS_ENCODE = "encode"
 STATS_GRAPH = "graph"
 
-class Stats:
+class TimeStats:
     _timing = defaultdict(float)
 
     def __init__(self, key):
