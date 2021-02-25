@@ -1,11 +1,11 @@
 from collections import defaultdict
 import re
 import time
-from graphviz import Digraph
 
 from synthesizer.encoder import Encoder
 from synthesizer.utils import make_entry_name
 from stats.time_stats import TimeStats, STATS_GRAPH
+from stats.graph_stats import GraphStats
 from synthesizer import params
 from openapi import defs
 from analyzer.entry import DocEntry, ResponseParameter, RequestParameter
@@ -27,7 +27,7 @@ class Synthesizer:
 
     @TimeStats(key=STATS_GRAPH)
     def init(self):
-        Stats.reset()
+        TimeStats.reset()
         self._add_transitions()
 
     def run(self, landmarks, inputs, outputs):
@@ -46,7 +46,8 @@ class Synthesizer:
         return result
 
     def run_n(self, landmarks, inputs, outputs, n):
-        dot = Digraph()
+        solutions = set()
+        graph = GraphStats()
         input_map = defaultdict(int)
         for _, typ in inputs.items():
             input_map[typ.name] += 1
@@ -60,7 +61,7 @@ class Synthesizer:
         results = []
         result = self._encoder.solve()
 
-        while len(results) < n:
+        while len(solutions) < n:
             # find the correct path len
             while result is None:
                 limit = self._config.get(params.LENGTH_LIMIT, DEFAULT_LENGTH_LIMIT)
@@ -72,32 +73,37 @@ class Synthesizer:
 
             
             # find the solution for a given path len
-            while result is not None and len(results) < n:
+            while result is not None and len(solutions) < n:
                 # print(result)
                 # FIXME: better implementation latter
+                
                 end = time.time()
-                with open("data/example_results.txt", "a+") as f:
-                    f.write(f"#{len(results)+1}")
-                    f.write("\n")
-                    f.write(f"time: {(end - start): .2f}")
-                    f.write("\n")
-                    f.write(f"time breakdown:\n{Stats._timing}\n")
-                    programs = self._program_generator.generate_program(
-                        result, inputs, outputs[0]
-                    )
-                    for p in programs:
+                programs = self._program_generator.generate_program(
+                    result, inputs, outputs[0]
+                )
+                for p in programs:
+                    if p in solutions:
+                        continue
+
+                    p.to_graph(graph)
+                    solutions.add(p)
+                    with open("data/example_results.txt", "a+") as f:
+                        f.write(f"#{len(solutions)+1}")
+                        f.write("\n")
+                        f.write(f"time: {(end - start): .2f}")
+                        f.write("\n")
+                        f.write(f"time breakdown:\n{TimeStats._timing}\n")
                         f.write(p.pretty(0))
                         f.write("\n")
 
-                    if programs:
-                        programs[0].to_graph(dot)
+                results.append(result)
+                if len(solutions) > n:
+                    break
 
-                if result not in results:
-                    results.append(result)
                 self._encoder.block_prev()
                 result = self._encoder.solve()
                 
-        dot.render(filename="output/programs")
+        graph.render(filename="output/programs")
         return results
 
     def run_all(self, landmarks, inputs, outputs):

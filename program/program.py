@@ -1,8 +1,6 @@
 SPACE = '    '
 
 class Expression:
-    counter = 0
-
     def __init__(self, typ):
         self.type = typ
 
@@ -55,16 +53,14 @@ class AppExpr(Expression):
         args = [(x, arg.apply_subst(subst)) for x, arg in self._args]
         return AppExpr(self._fun, args, self.type)
 
-    def to_graph(self, dot):
+    def to_graph(self, graph):
         # print(self)
-        nodes = [arg.to_graph(dot) for _, arg in self._args]
-        v = f"n{Expression.counter}"
-        Expression.counter += 1
-        # print(self._fun)
-        dot.node(v, label=self.type.name)
+        nodes = [arg.to_graph(graph) for _, arg in self._args]
+        v = self.type.name
+        graph.add_node(v)
         for node in nodes:
             if node:
-                dot.edge(node, v)
+                graph.add_edge(node, v)
         return v
 
     def get_vars(self):
@@ -101,14 +97,12 @@ class VarExpr(Expression):
 
         return ret
 
-    def to_graph(self, dot):
+    def to_graph(self, graph):
         # print(self)
         if self.type:
-            node = f"n{Expression.counter}"
-            Expression.counter += 1
-            # print(self._var)
-            dot.node(node, label=self.type.name)
-            return node
+            v = self.type.name
+            graph.add_node(v)
+            return v
 
     def get_vars(self):
         return set([self._var])
@@ -155,9 +149,9 @@ class AssignExpr(Expression):
             self._rhs.apply_subst(subst),
         )
 
-    def to_graph(self, dot):
+    def to_graph(self, graph):
         # print(self)
-        return self._rhs.to_graph(dot)
+        return self._rhs.to_graph(graph)
 
     def get_vars(self):
         rhs_vars = self._rhs.get_vars()
@@ -200,13 +194,12 @@ class ProjectionExpr(Expression):
             self.type,
         )
 
-    def to_graph(self, dot):
+    def to_graph(self, graph):
         # print(self)
-        n1 = self._obj.to_graph(dot)
-        v = f"n{Expression.counter}"
-        Expression.counter += 1
-        dot.node(v, label=self.type.name)
-        dot.edge(n1, v)
+        n1 = self._obj.to_graph(graph)
+        v = self.type.name
+        graph.add_node(v)
+        graph.add_edge(n1, v)
         return v
 
     def get_vars(self):
@@ -258,15 +251,14 @@ class FilterExpr(Expression):
             self.type,
         )
 
-    def to_graph(self, dot):
+    def to_graph(self, graph):
         # print(self)
-        n1 = self._obj.to_graph(dot)
-        n2 = self._val.to_graph(dot)
-        v = f"n{Expression.counter}"
-        Expression.counter += 1
-        dot.node(v, label=self.type.name)
-        dot.edge(n1, v)
-        dot.edge(n2, v)
+        n1 = self._obj.to_graph(graph)
+        n2 = self._val.to_graph(graph)
+        v = self.type.name
+        graph.add_node(v)
+        graph.add_edge(n1, v)
+        graph.add_edge(n2, v)
         return v
 
     def get_vars(self):
@@ -319,12 +311,12 @@ class MapExpr(Expression):
         expr = self._prog.to_expression({self._prog._inputs[0]: self._obj})
         return expr
 
-    def to_graph(self, dot):
+    def to_graph(self, graph):
         # print(self)
         # n1 = self._obj.to_graph(dot)
         expr = self.body()
         # expr.type = self.type
-        n2 = expr.to_graph(dot)
+        n2 = expr.to_graph(graph)
         # return [n1, n2]
         # raise NotImplementedError
         return n2
@@ -359,9 +351,12 @@ class Program:
             return NotImplemented
 
         return (
-            self.to_expression() == other.to_expression() and
+            self.to_expression({}) == other.to_expression({}) and
             self._inputs == other._inputs
         )
+
+    def __hash__(self):
+        return hash((tuple(self._inputs), str(self.to_expression({}))))
 
     def __repr__(self):
         return self.__str__()
@@ -415,10 +410,10 @@ class Program:
 
         return reachable_exprs
 
-    def to_graph(self, dot):
+    def to_graph(self, graph):
         # print("program, to_graph", self)
         expr = self.to_expression({})
-        return expr.to_graph(dot)
+        return expr.to_graph(graph)
 
     def merge_maps(self):
         maps = {}

@@ -15,7 +15,6 @@ class DSU:
         self._logger = logging.getLogger(__name__)
 
     def find(self, x):
-        # self._logger.debug(f"Finding {x} in DSU")
         if x not in self._parents:
             return None
 
@@ -37,41 +36,16 @@ class DSU:
             self._nexts[y] = y
             self._values[y] = set([y.value])
 
-        # if x != y and str(x) == str(y):
-        #     self._logger.debug(f"Weird unequal for {x} and {y}")
-        #     self._logger.debug(f"Func names: {x.func_name == y.func_name}")
-        #     self._logger.debug(f"Arg names: {x.arg_name == y.arg_name}")
-        #     self._logger.debug(f"Methods: {x.method.upper() == y.method.upper()}")
-        #     self._logger.debug(f"Paths: {x.path == y.path}")
-
-        # self._logger.debug(f"Union {x} and {y} in DSU")
         xr, yr = self.find(x), self.find(y)
-        # if x == y and xr != yr:
-        #     self._logger.debug(f"Weird unequal for {x} and {y}")
-        #     self._logger.debug(f"Func names: {x.func_name == y.func_name}")
-        #     self._logger.debug(f"Arg names: {x.arg_name == y.arg_name}")
-        #     self._logger.debug(f"Methods: {x.method.upper() == y.method.upper()}")
-        #     self._logger.debug(f"Paths: {tuple(x.path) == tuple(y.path)}")
         group = self.get_group(xr)
         rep1, _ = get_representative(group)
         group = self.get_group(yr)
         rep2, _ = get_representative(group)
-        
-            
+
         if ((rep1 == "defs_group_id" and y.arg_name == "name") or 
             (rep2 == "defs_group_id" and x.arg_name == "name")):
-            # print(x, y)
             return
 
-        # if rep1 == "defs_group_id": 
-        #     print("left id:", x, y)
-
-        # if rep2 == "defs_group_id":
-        #     print("right id:", x, y)
-        # if isinstance(y, ResponseParameter) and y.path == ["channels", "[?]", "name"]:
-        # print(rep1, x, x.value, rep2, y, y.value)
-
-        # self._logger.debug(f"Union roots {xr} and {yr} in DSU")
         if self._sizes[xr] < self._sizes[yr]:
             self._parents[yr] = xr
             # swap the next pointer of xr and yr
@@ -190,25 +164,9 @@ class LogAnalyzer:
 
         value = str(param.value)
         if value not in self.value_to_param:
-            # print("adding", value)
             self.value_to_param[value] = param
 
         root = self.value_to_param[value]
-
-        # if ((root.arg_name == "value" or param.arg_name == "topic") or
-        #     (root.arg_name == "topic" or param.arg_name == "value")):
-
-        #     return
-        # if root.arg_name == 'topic' or param.arg_name == 'topic' or root.arg_name == "value" or param.arg_name == "value":
-            # return
-
-        # if root.arg_name == 'name' or param.arg_name == 'name' or (param.type and param.type.name == "defs_group_id"):
-        #     if param.type:
-        #         print(param.type.name)
-        #     else:
-        #         print(None)
-        #     print(value)
-        # print(self.value_to_param)
         group = self.dsu.get_group(root)
         rep, _ = get_representative(group)
         # group = self.dsu.get_group(param)
@@ -217,15 +175,6 @@ class LogAnalyzer:
             self.dsu.union(param, param)
             return
 
-
-        # if rep == "defs_group_id":
-        #     print("before union")
-        # # if rep == "objs_channel.name":
-        #     print(root, param)
-        #     print(value)
-
-        # if rep == "defs_group_id":
-        #     print(root, param)
         self.dsu.union(root, param)
 
     def analysis_result(self):
@@ -261,13 +210,6 @@ class LogAnalyzer:
                 dot.node(param.func_name, label=param.func_name, shape='rectangle')
                 if isinstance(param, ResponseParameter):
                     # add an edge between the method and its return type
-                    # TODO: modify the rep for array here
-                    # l, s = param.path_to_str(rep)
-                    # if param.func_name == "/conversations.members":
-                    #     print("conversations.members has")
-                    #     print(param)
-                    #     print(param.type)
-                    #     print(param.type.get_oldest_parent())
 
                     if '[' not in rep and not re.search("image_.*", rep):
                         if param.type:
@@ -282,9 +224,6 @@ class LogAnalyzer:
                                 edges.add((param.func_name, p.name))
                         else:
                             edges.add((param.func_name, rep))
-
-                    # if l > 0:
-                    #     edges.add((s, rep))
                 else:
                     # add an edge between parameter name and the method
                     if '[' not in rep and not re.search("image_.*", rep):
@@ -402,14 +341,6 @@ class LogAnalyzer:
                 param.path == p.path[:len(param.path)]):
 
                 return p
-                # else:
-                #     group = self.dsu.get_group(p)
-                #     _, rep_type = get_representative(group)
-                #     param.type = rep_type
-                #     return param
-
-        # if "response_metadata" in param.path:
-        #     print("Not find descendent")
         return None
 
     def find_same_type(self, param):

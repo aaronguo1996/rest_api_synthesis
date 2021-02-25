@@ -2,7 +2,7 @@ import z3
 from z3 import Int, Solver
 from snakes.nets import *
 from synthesizer.utils import group_params, make_entry_name
-from synthesizer.stats import Stats, STATS_ENCODE, STATS_SEARCH
+from stats.time_stats import TimeStats, STATS_ENCODE, STATS_SEARCH
 
 # preprocess the spec file and canonicalize the parameters and responses
 class Encoder:

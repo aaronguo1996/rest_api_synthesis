@@ -228,7 +228,7 @@ class SynthesizerTestCase(unittest.TestCase):
             [
                 SchemaType("objs_user.profile.email", None)
             ],
-            10
+            50
         )
         self.assertIn([
             "/conversations.list:GET",
@@ -256,11 +256,13 @@ class SynthesizerTestCase(unittest.TestCase):
             50
         )
         self.assertIn([
-            "/users.lookupByEmail:GET",
-            "projection(objs_user, id):",
-            "/conversations.open:GET",
+            "/conversations.list:GET",
+            "filter(objs_conversation, objs_conversation.name):",
             "projection(objs_conversation, id):",
-            "/chat.postMessage:POST",
+            "/conversations.members:GET",
+            "/users.info:GET",
+            "projection(objs_user, profile):",
+            "projection(objs_user.profile, email):"
         ], result)
 
     def test_example_a(self):
@@ -277,7 +279,7 @@ class SynthesizerTestCase(unittest.TestCase):
                 SchemaType("defs_group_id", None),
                 SchemaType("defs_ts", None),
             ],
-            10
+            50
         )
 
         # self.assertIn([
@@ -296,6 +298,6 @@ def synthesizer_suite(doc, config, analyzer):
     # suite.addTest(SynthesizerTestCase('test_single_transition'))
     # suite.addTest(SynthesizerTestCase('test_two_transitions'))
     # suite.addTest(SynthesizerTestCase('test_nullary'))
-    suite.addTest(SynthesizerTestCase('test_example_a'))
-    # suite.addTest(SynthesizerTestCase('test_example_b'))
+    # suite.addTest(SynthesizerTestCase('test_example_a'))
+    suite.addTest(SynthesizerTestCase('test_example_b'))
     return suite

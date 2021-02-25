@@ -55,8 +55,8 @@ class ProgramGenerator:
             p = Program(list(inputs.keys()), list(exprs))
             # print(p)
             if self._filter_by_names(transitions, p):
-                # p.merge_maps()
-                # p.merge_projections({})
+                p.merge_maps()
+                p.merge_projections({})
                 programs.append(p)
                 print(p.to_expression({}))
 
@@ -165,15 +165,32 @@ class ProgramGenerator:
                 map_x = self._fresh_var("x")
                 proj_expr = ProjectionExpr(VarExpr(map_x, obj.type), field, typ)
                 map_body = proj_expr
-                for i in range(obj_is_list - 1):
-                    next_x = self._fresh_var("x")
+                for i in range(obj_is_list):
+                    if i == obj_is_list - 1:
+                        next_x = None
+                        map_obj = obj
+                    else:
+                        next_x = self._fresh_var("x")
+                        map_obj = VarExpr(next_x)
+
+                    let_x = self._fresh_var("x")
                     map_body = MapExpr(
-                        VarExpr(next_x),
-                        Program([map_x], [map_body])
+                        map_obj,
+                        Program(
+                            [map_x],
+                            [AssignExpr(let_x, map_body), VarExpr(let_x)]
+                        )
                     )
                     map_x = next_x
 
-                map_body = MapExpr(obj, Program([map_x], [map_body]))
+                # let_x = self._fresh_var("x")
+                # map_body = MapExpr(
+                #     obj,
+                #     Program(
+                #         [map_x],
+                #         [AssignExpr(let_x, map_body), VarExpr(let_x)]
+                #     )
+                # )
 
                 let_x = self._fresh_var("x")
                 let_expr = AssignExpr(let_x, map_body)
@@ -227,7 +244,7 @@ class ProgramGenerator:
 
     def _generate_let(self, typ_subst, sig):
         # get a fresh type variable
-        x = self._fresh_var("x")
+        # x = self._fresh_var("x")
 
         results = []
         args = self._generate_args(typ_subst, sig)
@@ -247,20 +264,25 @@ class ProgramGenerator:
                     named_args.append((arg_name, arg))
 
             expr = AppExpr(sig.endpoint, named_args)
-            if len(map_pairs) > 0:
-                let_x = self._fresh_var("x")
-                expr = [AssignExpr(let_x, expr), VarExpr(let_x)]
+            # if len(map_pairs) > 0:
+            let_x = self._fresh_var("x")
+            expr = [AssignExpr(let_x, expr), VarExpr(let_x)]
             
             map_pairs.reverse()
             for arg, xx in map_pairs:
-                if isinstance(expr, list):
-                    expr = MapExpr(arg, Program([xx], expr))
-                else:
-                    expr = MapExpr(arg, Program([xx], [expr]))
-            results.append(AssignExpr(x, expr))
+                let_x = self._fresh_var("x")
+                expr = [
+                    AssignExpr(let_x, MapExpr(arg, Program([xx], expr))),
+                    VarExpr(let_x),
+                ]
+
+            results.append(expr[0])
 
         for r in sig.responses:
             typ = r.type
-            self._add_typed_var(typ_subst, x, typ, r.array_level + len(map_pairs))
+            self._add_typed_var(
+                typ_subst, let_x, typ, 
+                r.array_level + len(map_pairs)
+            )
 
         return results
