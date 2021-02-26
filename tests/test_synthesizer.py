@@ -228,7 +228,7 @@ class SynthesizerTestCase(unittest.TestCase):
             [
                 SchemaType("objs_user.profile.email", None)
             ],
-            50
+            10
         )
         self.assertIn([
             "/conversations.list:GET",
@@ -253,7 +253,7 @@ class SynthesizerTestCase(unittest.TestCase):
             [
                 SchemaType("objs_user.profile.email", None)
             ],
-            50
+            10
         )
         self.assertIn([
             "/conversations.list:GET",

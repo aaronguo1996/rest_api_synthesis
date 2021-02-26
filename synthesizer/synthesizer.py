@@ -88,7 +88,7 @@ class Synthesizer:
                     p.to_graph(graph)
                     solutions.add(p)
                     with open("data/example_results.txt", "a+") as f:
-                        f.write(f"#{len(solutions)+1}")
+                        f.write(f"#{len(solutions)}")
                         f.write("\n")
                         f.write(f"time: {(end - start): .2f}")
                         f.write("\n")

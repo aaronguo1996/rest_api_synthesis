@@ -11,6 +11,8 @@ class Encoder:
         self._net = PetriNet('net')
         self._place_to_variable = {}
         self._trans_to_variable = {}
+        self._edge_to_variable = {}
+        self._variable_to_edge = []
         self._variable_to_trans = []
         self._path_len = 0
         self._solver = Solver()
@@ -46,6 +48,8 @@ class Encoder:
         self._no_transition_fire(self._path_len - 1)
         self._add_landmarks(landmarks)
         self._set_final(outputs)
+
+        print("Current length", self._path_len)
 
     @TimeStats(key=STATS_SEARCH)
     def solve(self):
@@ -105,9 +109,8 @@ class Encoder:
             pre = []
             # postcondition: token number changes
             post = []
+            # all places connected to the transition
 
-            # maps from place name to a triple (required cnts, optional in, optional out)
-            tokens = {}
             inputs = trans.input()
             for place, _ in inputs:
                 # count required and optional arguments
@@ -117,16 +120,20 @@ class Encoder:
                     required += int(str(param.type) == place.name and param.is_required)
                     optional += int(str(param.type) == place.name and not param.is_required)
 
+                # has enough tokens to be consumed
                 cur = self._place_to_variable.get((place.name, t))
                 pre.append(Int(cur) >= required)
-                tokens[place.name] = (required, optional, 0)
+
+                key = (place.name, trans.name, t)
+                idx = len(self._edge_to_variable)
+                self._edge_to_variable[key] = idx
+                self._variable_to_edge.append(key)
+                self._solver.add(Int(f"e{idx}") >= required)
+                self._solver.add(Int(f"e{idx}") <= required + optional)
 
             outputs = trans.output()
-            # if trans.name == "/conversations.list:get":
-            #     print(outputs)
+            out_sum = None
             for place, _ in outputs:
-                # count required and optional responses
-                input_req, input_opt, _ = tokens.get(place.name, (0, 0, 0))
                 # count required and optional arguments
                 required = 0
                 optional = 0
@@ -134,16 +141,36 @@ class Encoder:
                     required += int(str(param.type) == place.name and param.is_required)
                     optional += int(str(param.type) == place.name and not param.is_required)
 
-                tokens[place.name] = (input_req - required, input_opt, optional)
+                key = (trans.name, place.name, t)
+                idx = len(self._edge_to_variable)
+                self._edge_to_variable[key] = idx
+                self._variable_to_edge.append(key)
+                self._solver.add(Int(f"e{idx}") >= required)
+                self._solver.add(Int(f"e{idx}") <= required + optional)
+                
+                if out_sum is None:
+                    out_sum = Int(f"e{idx}")
+                else:
+                    out_sum = out_sum + Int(f"e{idx}")
+            
+            post.append(out_sum >= 1)
 
-            # if trans.name == "/conversations.list:get":
-            #     print(tokens)
+            def get_edge_var(k):
+                if k in self._edge_to_variable:
+                    idx = self._edge_to_variable[k]
+                    return Int(f"e{idx}")
+                else:
+                    return 0
 
-            for place, (required, opt_in, opt_out) in tokens.items():
-                cur = self._place_to_variable.get((place, t))
-                nxt = self._place_to_variable.get((place, t+1))
-                post.append(Int(nxt) <= Int(cur) - required + opt_out)
-                post.append(Int(nxt) >= Int(cur) - required - opt_in)
+            for place, _ in inputs + outputs:
+                cur = self._place_to_variable.get((place.name, t))
+                nxt = self._place_to_variable.get((place.name, t+1))
+                key_in = (place.name, trans.name, t)
+                var_in = get_edge_var(key_in)
+                key_out = (trans.name, place.name, t)
+                var_out = get_edge_var(key_out)
+
+                post.append(Int(nxt) == Int(cur) - var_in + var_out)
 
             self._solver.add(
                 z3.Implies(Int(f"t{t}") == tr_idx, z3.And(pre + post)))
