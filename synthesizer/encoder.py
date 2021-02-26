@@ -47,6 +47,8 @@ class Encoder:
         self._add_landmarks(landmarks)
         self._set_final(outputs)
 
+        print("Current len:", self._path_len)
+
     @TimeStats(key=STATS_SEARCH)
     def solve(self):
         # print(self._targets)
@@ -119,40 +121,26 @@ class Encoder:
 
                 cur = self._place_to_variable.get((place.name, t))
                 pre.append(Int(cur) >= required)
-                tokens[place.name] = (required, optional, 0)
+                tokens[place.name] = (required, optional)
 
             outputs = trans.output()
-            # if trans.name == "/conversations.list:get":
-            #     print(outputs)
             for place, _ in outputs:
-                # count required and optional responses
-                input_req, input_opt, _ = tokens.get(place.name, (0, 0, 0))
-                # count required and optional arguments
-                required = 0
-                optional = 0
-                for param in entry.responses:
-                    required += int(str(param.type) == place.name and param.is_required)
-                    optional += int(str(param.type) == place.name and not param.is_required)
+                input_req, input_opt = tokens.get(place.name, (0, 0))
+                # output number is always 1
+                tokens[place.name] = (input_req - 1, input_opt)
 
-                tokens[place.name] = (input_req - required, input_opt, optional)
-
-            # if trans.name == "/conversations.list:get":
-            #     print(tokens)
-
-            for place, (required, opt_in, opt_out) in tokens.items():
+            for place, (required, opt_in) in tokens.items():
                 cur = self._place_to_variable.get((place, t))
                 nxt = self._place_to_variable.get((place, t+1))
-                post.append(Int(nxt) <= Int(cur) - required + opt_out)
+                post.append(Int(nxt) <= Int(cur) - required)
                 post.append(Int(nxt) >= Int(cur) - required - opt_in)
 
             self._solver.add(
                 z3.Implies(Int(f"t{t}") == tr_idx, z3.And(pre + post)))
 
-            # if (trans.name == "projection(objs_conversation, priority):"
-            #     or trans.name == "projection(objs_conversation, id):"):
-            # if (trans.name == 'projection(objs_conversation, num_members):'
-            #     or trans.name == '/conversations.open:post'):
-            #     print(tokens)
+            # if trans.name == "/conversations.members:GET":
+            #     print(inputs)
+            #     print(outputs)
             #     print(z3.Implies(Int(f"t{t}") == tr_idx, z3.And(pre + post)))
 
     def _no_transition_fire(self, t):
@@ -172,8 +160,8 @@ class Encoder:
     def _set_initial(self, typs):
         for t, c in typs.items():
             tv = self._place_to_variable.get((t, 0))
-            # print(tv)
             self._solver.add(Int(tv) == c)
+            # print(tv)
 
         for (k, t), v in self._place_to_variable.items():
             if t == 0 and k not in typs:
@@ -183,6 +171,7 @@ class Encoder:
         for t, c in typs.items():
             tv = self._place_to_variable.get((t, self._path_len))
             self._targets.append(Int(tv) == c)
+            # print(tv)
 
         for (k, t), v in self._place_to_variable.items():
             if t == self._path_len and k not in typs:
@@ -206,11 +195,10 @@ class Encoder:
                 self._net.add_place(Place(param))    
             self._net.add_input(param, trans_name, Value(token))
 
-        params = group_params(entry.responses)
-        for param, token in params.items():
-            if not self._net.has_place(param):
-                self._net.add_place(Place(param))
-            self._net.add_output(param, trans_name, Value(token))
+        param = entry.response.type.name
+        if not self._net.has_place(param):
+            self._net.add_place(Place(param))
+        self._net.add_output(param, trans_name, Value(1))
 
     def create_petrinet(self):
         for entry in self._entries:

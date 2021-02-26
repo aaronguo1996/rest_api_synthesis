@@ -471,6 +471,29 @@ class Program:
             if not isinstance(e, AssignExpr) or e.var not in mark_delete
         ]
 
+    def merge_direct_eqs(self, subst={}):
+        mark_delete = set()
+        exprs = []
+        for expr in self._expressions:
+            expr = expr.apply_subst(subst)
+            if isinstance(expr, AssignExpr):
+                if isinstance(expr.expr, VarExpr):
+                    subst[expr.var] = expr.expr
+                    mark_delete.add(expr.var)
+                elif isinstance(expr.expr, MapExpr):
+                    expr.expr._prog.merge_direct_eqs(subst)
+
+            exprs.append(expr)
+
+        self._expressions = [e for e in exprs
+            if not isinstance(e, AssignExpr) or e.var not in mark_delete
+        ]
+
+    def simplify(self):
+        self.merge_direct_eqs()
+        self.merge_maps()
+        self.merge_projections(subst={})
+
     def assign_type(self, t):
         self._expressions[-1].type = t
         if (len(self._expressions) > 1 and 

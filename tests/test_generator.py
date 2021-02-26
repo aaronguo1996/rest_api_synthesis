@@ -1,6 +1,6 @@
 import unittest
 from program.generator import *
-from analyzer.entry import DocEntry, RequestParameter, ResponseParameter
+from analyzer.entry import TraceEntry, RequestParameter, ResponseParameter
 from schemas.schema_type import SchemaType
 
 class GeneratorTestCase(unittest.TestCase):
@@ -9,19 +9,18 @@ class GeneratorTestCase(unittest.TestCase):
         self._generator = ProgramGenerator({})
 
     def test_generate_projection(self):
-        sig = DocEntry("projection(user, id)", "", 
+        sig = TraceEntry("projection(user, id)", "", 
             [
                 RequestParameter(
                     "", "id", "projection(user, id)", 
                     True, SchemaType("user", None), None
                 ),
             ],
-            [
-                ResponseParameter(
-                    "", "user.id", "projection(user, id)",
-                    [], True, 0, SchemaType("user.id", None), None
-                ),
-            ])
+            ResponseParameter(
+                "", "user.id", "projection(user, id)",
+                [], True, 0, SchemaType("user.id", None), None
+            ),
+            )
         subst = {
             "user": [VarExpr("x1")],
         }
@@ -34,7 +33,7 @@ class GeneratorTestCase(unittest.TestCase):
         })
 
     def test_generate_filter(self):
-        sig = DocEntry("filter(user, user.id)", "", 
+        sig = TraceEntry("filter(user, user.id)", "", 
             [
                 RequestParameter(
                     "", "id", "filter(user, user.id)", 
@@ -45,12 +44,11 @@ class GeneratorTestCase(unittest.TestCase):
                     True, SchemaType("user.id", None), None
                 ),
             ],
-            [
-                ResponseParameter(
-                    "", "user.id", "filter(user, user.id)",
-                    [], True, 0, SchemaType("user", None), None
-                ),
-            ])
+            ResponseParameter(
+                "", "user.id", "filter(user, user.id)",
+                [], True, 0, SchemaType("user", None), None
+            ),
+            )
         subst = {
             "user": [VarExpr("x1")],
             "user.id": [VarExpr("x2")]
@@ -66,19 +64,18 @@ class GeneratorTestCase(unittest.TestCase):
         })
 
     def test_generate_let(self):
-        sig = DocEntry("/users.lookupByEmail", "", 
+        sig = TraceEntry("/users.lookupByEmail", "", 
             [
                 RequestParameter(
                     "get", "email", "/users.lookupByEmail", 
                     True, SchemaType("user.profile.email", None), None
                 ),
             ],
-            [
-                ResponseParameter(
-                    "get", "user", "/users.lookupByEmail",
-                    ["user"], True, 0, SchemaType("user", None), None
-                ),
-            ])
+            ResponseParameter(
+                "get", "user", "/users.lookupByEmail",
+                ["user"], True, 0, SchemaType("user", None), None
+            ),
+            )
         subst = {
             "user.profile.email": [VarExpr("email")],
         }
@@ -98,50 +95,44 @@ class GeneratorTestCase(unittest.TestCase):
     def test_generate_program(self):
         sigs = {
             "/conversations.list:get": 
-                DocEntry("/conversations.list", "", 
+                TraceEntry("/conversations.list", "", 
                     [],
-                    [
-                        ResponseParameter(
-                            "get", "channels", "/conversations.list",
-                            ["channels"], True, 1,
-                            SchemaType("objs_conversation", None), None
-                        ),
-                    ]
+                    ResponseParameter(
+                        "get", "channels", "/conversations.list",
+                        ["channels"], True, 1,
+                        SchemaType("objs_conversation", None), None
+                    ),
                 ),
             "/conversations.members:get":
-                DocEntry("/conversations.members", "get",
+                TraceEntry("/conversations.members", "get",
                     [
                         RequestParameter(
                             "get", "channel", "/conversations.members",
                             True, SchemaType("objs_channel.id", None), None
                         ),
                     ],
-                    [
-                        ResponseParameter(
-                            "get", "users", "/conversations.members",
-                            ["users"], True, 1,
-                            SchemaType("defs_user_id", None), None
-                        )
-                    ]
+                    ResponseParameter(
+                        "get", "users", "/conversations.members",
+                        ["users"], True, 1,
+                        SchemaType("defs_user_id", None), None
+                    )
                 ),
             "/users.info:get":
-                DocEntry("/users.info", "get",
+                TraceEntry("/users.info", "get",
                     [
                         RequestParameter(
                             "get", "user", "/users.info",
                             True, SchemaType("defs_user_id", None), None
                         ),
-                    ], 
-                    [
-                        ResponseParameter(
-                            "get", "user", "/users.info",
-                            ["user"], True, 1,
-                            SchemaType("objs_user", None), None
-                        ),
-                    ]
+                    ],
+                    ResponseParameter(
+                        "get", "user", "/users.info",
+                        ["user"], True, 1,
+                        SchemaType("objs_user", None), None
+                    ),
                 ),
             "filter(objs_conversation, objs_channel.name):":
-                DocEntry("filter(objs_conversation, objs_channel.name)", "",
+                TraceEntry("filter(objs_conversation, objs_channel.name)", "",
                     [
                         RequestParameter(
                             "", "", "filter(objs_conversation, objs_channel.name)",
@@ -152,61 +143,53 @@ class GeneratorTestCase(unittest.TestCase):
                             True, SchemaType("objs_channel.name", None), None
                         ),
                     ],
-                    [
-                        ResponseParameter(
-                            "", "", "filter(objs_conversation, objs_channel.name)",
-                            [], True, 1,
-                            SchemaType("objs_conversation", None), None
-                        ),
-                    ]
+                    ResponseParameter(
+                        "", "", "filter(objs_conversation, objs_channel.name)",
+                        [], True, 1,
+                        SchemaType("objs_conversation", None), None
+                    ),
                 ),
             "projection(objs_conversation, id):":
-                DocEntry("projection(objs_conversation, id)", "",
+                TraceEntry("projection(objs_conversation, id)", "",
                     [
                         RequestParameter(
                             "", "", "projection(objs_conversation, id)",
                             True, SchemaType("objs_conversation", None), None
                         ),
                     ],
-                    [
-                        ResponseParameter(
-                            "", "", "projection(objs_conversation, id)",
-                            [], True, 0,
-                            SchemaType("objs_channel.id", None), None
-                        )
-                    ]
+                    ResponseParameter(
+                        "", "", "projection(objs_conversation, id)",
+                        [], True, 0,
+                        SchemaType("objs_channel.id", None), None
+                    )
                 ),
             "projection(objs_user, profile):":
-                DocEntry("projection(objs_user, profile)", "",
+                TraceEntry("projection(objs_user, profile)", "",
                     [
                         RequestParameter(
                             "", "", "projection(objs_user, profile)",
                             True, SchemaType("objs_user", None), None
                         ),
                     ],
-                    [
-                        ResponseParameter(
-                            "", "", "projection(objs_user, profile)",
-                            [], True, 0,
-                            SchemaType("objs_user.profile", None), None
-                        )
-                    ]
+                    ResponseParameter(
+                        "", "", "projection(objs_user, profile)",
+                        [], True, 0,
+                        SchemaType("objs_user.profile", None), None
+                    )
                 ),
             "projection(objs_user.profile, email):":
-                DocEntry("projection(objs_user.profile, email)", "",
+                TraceEntry("projection(objs_user.profile, email)", "",
                     [
                         RequestParameter(
                             "", "", "projection(objs_user.profile, email)",
                             True, SchemaType("objs_user.profile", None), None
                         ),
                     ],
-                    [
-                        ResponseParameter(
-                            "", "", "projection(objs_user.profile, email)",
-                            [], True, 0,
-                            SchemaType("objs_user.profile.email", None), None
-                        )
-                    ]
+                    ResponseParameter(
+                        "", "", "projection(objs_user.profile, email)",
+                        [], True, 0,
+                        SchemaType("objs_user.profile.email", None), None
+                    )
                 ),
         }
 

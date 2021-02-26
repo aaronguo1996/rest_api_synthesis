@@ -360,10 +360,13 @@ class LogAnalyzer:
         return param
 
     def set_type(self, param):
+        if param.type and re.search('^/.*_response$', param.type.name):
+            return
+
         if isinstance(param, ResponseParameter):
             descendant = self._find_descendant(param)
             # if param does not belong to any group, create a new type
-            if descendant is None:
+            if descendant is None or descendant.type is None:
                 # print(f"{param} does not belong to any group")
                 param.type = SchemaType(str(param), None)
             else:

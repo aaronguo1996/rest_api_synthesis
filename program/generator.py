@@ -55,8 +55,7 @@ class ProgramGenerator:
             p = Program(list(inputs.keys()), list(exprs))
             # print(p)
             if self._filter_by_names(transitions, p):
-                p.merge_maps()
-                p.merge_projections({})
+                p.simplify()
                 programs.append(p)
                 print(p.to_expression({}))
 
@@ -159,7 +158,7 @@ class ProgramGenerator:
             obj = params[0][1]
             obj_is_list = params[0][2]
             field = re.search(r"projection\(.*, (.*)\)", sig.endpoint).group(1)
-            typ = sig.responses[0].type
+            typ = sig.response.type
 
             if obj_is_list:   
                 map_x = self._fresh_var("x")
@@ -183,31 +182,20 @@ class ProgramGenerator:
                     )
                     map_x = next_x
 
-                # let_x = self._fresh_var("x")
-                # map_body = MapExpr(
-                #     obj,
-                #     Program(
-                #         [map_x],
-                #         [AssignExpr(let_x, map_body), VarExpr(let_x)]
-                #     )
-                # )
-
                 let_x = self._fresh_var("x")
                 let_expr = AssignExpr(let_x, map_body)
                 results.append(let_expr)
 
-                for r in sig.responses:
-                    typ = r.type
-                    self._add_typed_var(typ_subst, let_x, typ, obj_is_list)
+                typ = sig.response.type
+                self._add_typed_var(typ_subst, let_x, typ, obj_is_list)
             else:
                 proj_expr = ProjectionExpr(obj, field, typ)
 
-                for r in sig.responses:
-                    typ = r.type.name
-                    if typ in typ_subst:
-                        typ_subst[typ].append((proj_expr, 0))
-                    else:
-                        typ_subst[typ] = [(proj_expr, 0)]
+                typ = sig.response.type.name
+                if typ in typ_subst:
+                    typ_subst[typ].append((proj_expr, 0))
+                else:
+                    typ_subst[typ] = [(proj_expr, 0)]
 
         return results
 
@@ -223,7 +211,7 @@ class ProgramGenerator:
             val_is_list = params[1][2]
             field = re.search(r"filter\(.*, (.*)\)", sig.endpoint).group(1)
             field = '.'.join(field.split('.')[1:])
-            typ = sig.responses[0].type
+            typ = sig.response.type
             if obj_is_list > 1:
                 map_x = self._fresh_var("x")
                 filter_expr = FilterExpr(
@@ -236,9 +224,8 @@ class ProgramGenerator:
                 filter_expr = FilterExpr(obj, field, val, val_is_list, typ)
                 results.append(AssignExpr(x, filter_expr))
 
-        for r in sig.responses:
-            typ = r.type
-            self._add_typed_var(typ_subst, x, typ, r.array_level)
+            typ = sig.response.type
+            self._add_typed_var(typ_subst, x, typ, sig.response.array_level)
 
         return results
 
@@ -278,11 +265,9 @@ class ProgramGenerator:
 
             results.append(expr[0])
 
-        for r in sig.responses:
-            typ = r.type
             self._add_typed_var(
-                typ_subst, let_x, typ, 
-                r.array_level + len(map_pairs)
+                typ_subst, let_x, sig.response.type, 
+                sig.response.array_level + len(map_pairs)
             )
 
         return results

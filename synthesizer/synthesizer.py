@@ -8,7 +8,7 @@ from stats.time_stats import TimeStats, STATS_GRAPH
 from stats.graph_stats import GraphStats
 from synthesizer import params
 from openapi import defs
-from analyzer.entry import DocEntry, ResponseParameter, RequestParameter
+from analyzer.entry import TraceEntry, ResponseParameter, RequestParameter
 from schemas.schema_type import SchemaType
 from program.generator import ProgramGenerator
 import config_keys as keys
@@ -88,7 +88,7 @@ class Synthesizer:
                     p.to_graph(graph)
                     solutions.add(p)
                     with open("data/example_results.txt", "a+") as f:
-                        f.write(f"#{len(solutions)+1}")
+                        f.write(f"#{len(solutions)}")
                         f.write("\n")
                         f.write(f"time: {(end - start): .2f}")
                         f.write("\n")
@@ -152,29 +152,27 @@ class Synthesizer:
                 continue
 
             for method, method_def in ep_def.items():
-                entry = self._create_entry(endpoint, method, method_def)
-                
-                # set parameter and response types
-                for p in entry.parameters:
-                    self._analyzer.set_type(p)
-                for p in entry.responses:
-                    # if p.arg_name == "response_metadata" and p.func_name == "/conversations.list":
-                    #     print(p.type)
-                    self._analyzer.set_type(p)
-                    # if p.arg_name == "response_metadata" and p.func_name == "/conversations.list":
-                    #     print(p.type)
+                results = self._create_entry(endpoint, method, method_def)
+                # print("Endpoint:", endpoint, "Results:", results)
+                for entry in results:
+                    # set parameter and response types
+                    for p in entry.parameters:
+                        self._analyzer.set_type(p)
+                    
+                    if endpoint == "/conversations.history":
+                        print(entry.response.type)
+                    self._analyzer.set_type(entry.response)
+                    if endpoint == "/conversations.history":
+                        print(entry.response.type)
 
-                # store results
-                entry_name = make_entry_name(endpoint, method)
-                entries[entry_name] = entry
-
-                # if endpoint == "/conversations.members":
-                #     print(entry)
+                    # store results
+                    entry_name = make_entry_name(entry.endpoint, entry.method)
+                    entries[entry_name] = entry
 
         return entries
 
     def _create_entry(self, endpoint, method, entry_def):
-        return DocEntry.from_openapi(
+        return TraceEntry.from_openapi(
             self._config.get(keys.KEY_SKIP_FIELDS),
             endpoint, method, entry_def,
         )
@@ -197,8 +195,8 @@ class Synthesizer:
         results = {}
         for proj, e in transitions.items():
             param_typs = [p.type.name for p in e.parameters]
-            response_typs = [p.type.name for p in e.responses]
-            key = (tuple(param_typs), tuple(response_typs))
+            response_typ = e.response.type.name
+            key = (tuple(param_typs), response_typ)
             if key not in self._groups:
                 results[proj] = e
                 self._groups[key] = [proj]
@@ -240,7 +238,7 @@ class Synthesizer:
                 # if obj_name == "objs_conversation" and name == "priority":
                 #     print(proj_in.type.name, proj_out.type.name)
                 #     raise Exception
-                entry = DocEntry(endpoint, "", [proj_in], [proj_out])
+                entry = TraceEntry(endpoint, "", [proj_in], proj_out)
                 results[endpoint+":"] = entry
 
         return results
@@ -296,7 +294,7 @@ class Synthesizer:
                     filter_in = [self._analyzer.find_same_type(fin) 
                         for fin in filter_in]
                     filter_out = self._analyzer.find_same_type(filter_out)
-                    entry = DocEntry(endpoint, "", filter_in, [filter_out])
+                    entry = TraceEntry(endpoint, "", filter_in, filter_out)
                     results[endpoint+":"] = entry
 
         return results
