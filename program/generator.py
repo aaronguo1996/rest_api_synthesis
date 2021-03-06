@@ -53,17 +53,19 @@ class ProgramGenerator:
         programs = []
         for exprs in itertools.product(*results):
             p = Program(list(inputs.keys()), list(exprs))
-            # print(p)
+            # print(p.pretty())
             if self._filter_by_names(transitions, p):
                 p.simplify()
+                # print(p.pretty())
                 programs.append(p)
-                print(p.to_expression({}))
+                print("get satisfying program", p.to_expression({}))
 
         # raise Exception
         return programs
 
     def _filter_by_names(self, transitions, result):
         name_counts = defaultdict(int)
+        name_counts.clear()
         for tr in transitions:
             if re.search(r"projection\(.*, .*\)", tr):
                 name = "projection"
@@ -75,13 +77,16 @@ class ProgramGenerator:
             name_counts[name] += 1
 
         real_counts = defaultdict(int)
+        real_counts.clear()
         exprs = []
 
         def get_subexprs(e):
             if isinstance(e, AssignExpr):
                 return get_subexprs(e._rhs)
             elif isinstance(e, MapExpr):
-                return get_subexprs(e._prog)
+                obj_subexprs = get_subexprs(e._obj)
+                prog_subexprs = get_subexprs(e._prog)
+                return obj_subexprs + prog_subexprs
             elif isinstance(e, Program):
                 results = []
                 for expr in e._expressions:
@@ -102,7 +107,7 @@ class ProgramGenerator:
             else:
                 return [e]
 
-        for expr in result.reachable_expressions():
+        for expr in result.reachable_expressions({}):
             exprs += get_subexprs(expr)
 
         for expr in exprs:
@@ -119,7 +124,7 @@ class ProgramGenerator:
         # print(real_counts)
         # print(name_counts)
         for name in name_counts:
-            if real_counts[name] != name_counts[name]:
+            if name not in real_counts or real_counts[name] != name_counts[name]:
                 return False
 
         return True
@@ -154,6 +159,10 @@ class ProgramGenerator:
     def _generate_projection(self, typ_subst, sig):
         results = []
         args = self._generate_args(typ_subst, sig)
+        # print(sig.endpoint)
+        # print([p.type.name for p in sig.parameters])
+        # print(sig.response.type)
+        # print(args)
         for params in itertools.product(*args):
             obj = params[0][1]
             obj_is_list = params[0][2]
@@ -187,15 +196,15 @@ class ProgramGenerator:
                 results.append(let_expr)
 
                 typ = sig.response.type
-                self._add_typed_var(typ_subst, let_x, typ, obj_is_list)
+                self._add_typed_var(typ_subst, let_x, typ, obj_is_list + sig.response.array_level)
             else:
                 proj_expr = ProjectionExpr(obj, field, typ)
 
                 typ = sig.response.type.name
                 if typ in typ_subst:
-                    typ_subst[typ].append((proj_expr, 0))
+                    typ_subst[typ].append((proj_expr, sig.response.array_level))
                 else:
-                    typ_subst[typ] = [(proj_expr, 0)]
+                    typ_subst[typ] = [(proj_expr, sig.response.array_level)]
 
         return results
 

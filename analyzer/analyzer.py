@@ -2,7 +2,7 @@ import re
 import logging
 
 from schemas.schema_type import SchemaType
-from analyzer.entry import ResponseParameter, RequestParameter
+from analyzer.entry import ErrorResponse, ResponseParameter, RequestParameter
 from analyzer.utils import get_representative
 from openapi import defs
 
@@ -100,6 +100,10 @@ class LogAnalyzer:
             '/apps.actions.v2.list'
         ]
         for entry in entries:
+            # do not add error responses to DSU
+            if isinstance(entry.response, ErrorResponse):
+                continue
+            
             # match docs to correct integers and booleans
             entry_def = paths.get(entry.endpoint)
             if entry.endpoint in blacklist:
@@ -167,15 +171,17 @@ class LogAnalyzer:
             self.value_to_param[value] = param
 
         root = self.value_to_param[value]
-        group = self.dsu.get_group(root)
-        rep, _ = get_representative(group)
-        # group = self.dsu.get_group(param)
-        # rep2, _ = get_representative(group)
-        if rep == "defs_group_id" and (param.arg_name == "topic" or param.arg_name == "value"):
-            self.dsu.union(param, param)
-            return
+        # group = self.dsu.get_group(root)
+        # rep, _ = get_representative(group)
 
+        # if rep == "defs_group_id" and (param.arg_name == "topic" or param.arg_name == "value"):
+        #     self.dsu.union(param, param)
+        #     return
+
+        # print("union", root, root.type, param, param.type, param.value)
+        # print(self.dsu.get_group(param))
         self.dsu.union(root, param)
+        # print(self.dsu.get_group(param))
 
     def analysis_result(self):
         return self.dsu.groups()
@@ -383,11 +389,11 @@ class LogAnalyzer:
                     param.type = descendant.type
         elif isinstance(param, RequestParameter):
             group = self.dsu.get_group(param)
+            _, rep_type = get_representative(group)
             # if param does not belong to any group
-            if group == []:
+            if group == [] or rep_type is None:
                 param.type = SchemaType(str(param), None)
             else:
-                _, rep_type = get_representative(group)
                 param.type = rep_type
         else:
             raise Exception("Unexpected parameter type: "

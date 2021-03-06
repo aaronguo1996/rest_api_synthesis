@@ -1,6 +1,8 @@
 from collections import defaultdict
 import re
 import time
+import itertools
+import pickle
 
 from synthesizer.encoder import Encoder
 from synthesizer.utils import make_entry_name
@@ -13,7 +15,7 @@ from schemas.schema_type import SchemaType
 from program.generator import ProgramGenerator
 import config_keys as keys
 
-DEFAULT_LENGTH_LIMIT = 10
+DEFAULT_LENGTH_LIMIT = 20
 
 class Synthesizer:
     def __init__(self, doc, config, analyzer):
@@ -22,8 +24,10 @@ class Synthesizer:
         self._analyzer = analyzer
         self._encoder = Encoder({})
         self._groups = {}
+        self._group_names = {}
         self._landmarks = []
         self._program_generator = ProgramGenerator({})
+        self._expand_group = config["synthesis"]["expand_group"]
 
     @TimeStats(key=STATS_GRAPH)
     def init(self):
@@ -61,30 +65,54 @@ class Synthesizer:
         results = []
         result = self._encoder.solve()
 
-        while len(solutions) < n:
+        break_flag = False
+        while len(results) < n:
             # find the correct path len
             while result is None:
                 limit = self._config.get(params.LENGTH_LIMIT, DEFAULT_LENGTH_LIMIT)
                 if self._encoder._path_len >= limit:
+                    break_flag = True
                     break
 
                 self._encoder.increment(landmarks, output_map)
                 result = self._encoder.solve()
 
-            
+            if break_flag:
+                break
+
             # find the solution for a given path len
-            while result is not None and len(solutions) < n:
+            while result is not None and len(results) < n:
                 # print(result)
-                # FIXME: better implementation latter
-                
+                # FIXME: better implementation later
                 end = time.time()
-                programs = self._program_generator.generate_program(
-                    result, inputs, outputs[0]
-                )
+
+                groups = []
+                for name in result:
+                    if self._expand_group:
+                        e = self._entries.get(name)
+                        if e is None:
+                            raise Exception("Unknown transition")
+
+                        param_typs = [p.type.name for p in e.parameters]
+                        response_typ = e.response.type.name
+                        key = (tuple(param_typs), response_typ)
+                        group = self._groups.get(key, [name])
+                        groups.append(group)
+                    else:
+                        groups.append([name])
+                
+                programs = []
+                for r in itertools.product(*groups):
+                    programs += self._program_generator.generate_program(
+                        r, inputs, outputs[0]
+                    )
+
+                has_new_solution = False
                 for p in programs:
                     if p in solutions:
                         continue
 
+                    has_new_solution = True
                     p.to_graph(graph)
                     solutions.add(p)
                     with open("data/example_results.txt", "a+") as f:
@@ -96,14 +124,27 @@ class Synthesizer:
                         f.write(p.pretty(0))
                         f.write("\n")
 
-                results.append(result)
-                if len(solutions) > n:
+                if has_new_solution:
+                    results.append(result)
+                else:
+                    print("Duplicate solution:", result)
+
+                if len(results) > n:
                     break
 
                 self._encoder.block_prev()
                 result = self._encoder.solve()
-                
+
         graph.render(filename="output/programs")
+        
+        # write solutions
+        with open("data/solutions.pkl", "wb") as f:
+            pickle.dump(solutions, f)
+
+        # write annotated entries
+        with open("data/annotated_entries.pkl", "wb") as f:
+            pickle.dump(self._entries, f)
+
         return results
 
     def run_all(self, landmarks, inputs, outputs):
@@ -131,12 +172,31 @@ class Synthesizer:
         filters = self._create_filters()
         entries.update(projections)
         entries.update(filters)
-        for name, e in entries.items():
-            # if e.endpoint == "/conversations.members":
-            #     print([(p.type.name, p.is_required) for p in e.parameters])
-            #     print([(p.type.name, p.is_required) for p in e.responses])
+        self._entries = entries
+        unique_entries = self._group_transitions(entries)
 
+        lst = [
+            "/conversations.list:GET",
+            "filter(objs_conversation, objs_conversation.name):",
+            "projection(objs_conversation, id):",
+            "/conversations.members:GET",
+            "/users.info:GET",
+            "projection(objs_user, profile):",
+            "projection(objs_user.profile, email):",
+            'projection(/conversations.members, response_metadata):'
+        ]
+        for name in lst:
+            e = self._entries.get(name)
+            print('-----')
+            print(name)
+            print([p.type.name for p in e.parameters])
+            print(e.response.type.name)
+            
+        # only add unique entries into the encoder
+        for name, e in unique_entries.items():
             self._encoder.add_transition(e)
+
+        for name, e in entries.items():
             self._program_generator.add_signature(name, e)
 
     def _create_entries(self):
@@ -146,7 +206,7 @@ class Synthesizer:
         endpoints = self._config.get(keys.KEY_ENDPOINTS)
         if not endpoints:
             endpoints = paths.keys()
-        
+
         for endpoint, ep_def in paths.items():
             if endpoint not in endpoints:
                 continue
@@ -158,12 +218,8 @@ class Synthesizer:
                     # set parameter and response types
                     for p in entry.parameters:
                         self._analyzer.set_type(p)
-                    
-                    if endpoint == "/conversations.history":
-                        print(entry.response.type)
+
                     self._analyzer.set_type(entry.response)
-                    if endpoint == "/conversations.history":
-                        print(entry.response.type)
 
                     # store results
                     entry_name = make_entry_name(entry.endpoint, entry.method)
@@ -188,7 +244,8 @@ class Synthesizer:
             projection_entries = self._create_projection(obj_name, obj_def)
             projections.update(projection_entries)
 
-        return self._group_transitions(projections)
+        # return self._group_transitions(projections)
+        return projections
 
     def _group_transitions(self, transitions):
         # group projections with the same input and output
@@ -200,8 +257,11 @@ class Synthesizer:
             if key not in self._groups:
                 results[proj] = e
                 self._groups[key] = [proj]
+                self._group_names[proj] = [proj]
             else:
+                rep = self._groups[key][0]
                 self._groups[key].append(proj)
+                self._group_names[rep].append(proj)
 
         return results
 
@@ -212,9 +272,6 @@ class Synthesizer:
             for s in one_ofs:
                 projection = self._create_projection(obj_name, s)
                 results.update(projection)
-                # obj_entry = projection.pop(obj_name)
-                # obj_entry.func_name = f"{obj_entry.func_name}_{i}"
-                # results[obj_entry.func_name] = obj_entry
         elif defs.DOC_PROPERTIES in obj_def:
             properties = obj_def.get(defs.DOC_PROPERTIES)
             for name, prop in properties.items():
@@ -226,7 +283,7 @@ class Synthesizer:
 
                 endpoint = f"projection({obj_name}, {name})"
                 proj_in = RequestParameter(
-                    "", "obj", endpoint, 
+                    "", "obj", endpoint,
                     True, SchemaType(obj_name, None), None
                 )
                 proj_out = ResponseParameter(
@@ -235,9 +292,6 @@ class Synthesizer:
                 )
                 proj_in = self._analyzer.find_same_type(proj_in)
                 proj_out = self._analyzer.find_same_type(proj_out)
-                # if obj_name == "objs_conversation" and name == "priority":
-                #     print(proj_in.type.name, proj_out.type.name)
-                #     raise Exception
                 entry = TraceEntry(endpoint, "", [proj_in], proj_out)
                 results[endpoint+":"] = entry
 
@@ -254,7 +308,8 @@ class Synthesizer:
             filter_entries = self._create_filter(obj_name, obj_name, obj_def)
             filters.update(filter_entries)
 
-        return self._group_transitions(filters)
+        # return self._group_transitions(filters)
+        return filters
 
     def _create_filter(self, obj_name, field_name, field_def):
         results = {}
@@ -279,7 +334,7 @@ class Synthesizer:
                     endpoint = f"filter({obj_name}, {field_name}.{name})"
                     filter_in = [
                         RequestParameter(
-                            "", "obj", endpoint, 
+                            "", "obj", endpoint,
                             True, SchemaType(obj_name, None), None
                         ),
                         RequestParameter(
@@ -291,7 +346,7 @@ class Synthesizer:
                         "", "obj", endpoint,
                         [], True, 1, SchemaType(obj_name, None), None
                     )
-                    filter_in = [self._analyzer.find_same_type(fin) 
+                    filter_in = [self._analyzer.find_same_type(fin)
                         for fin in filter_in]
                     filter_out = self._analyzer.find_same_type(filter_out)
                     entry = TraceEntry(endpoint, "", filter_in, filter_out)

@@ -1,12 +1,23 @@
 # from analyzer.entry import Parameter
+from analyzer.entry import ErrorResponse
+import random
+
+CMP_ENDPOINT_NAME = 0
+CMP_ENDPOINT_AND_ARG_NAME = 1
+CMP_ENDPOINT_AND_ARG_VALUE = 2
 
 class DynamicAnalysis:
     """search for trace either by a parameter value or the endpoint name
     """
 
-    def __init__(self, entries, skip_fields):
+    def __init__(self, entries, skip_fields, abstraction_level=0):
         self._entries = entries
         self._skip_fields = skip_fields
+        self._environment = {}
+        self._abstraction_level = abstraction_level
+
+    def reset_env(self):
+        self._environment = {}
 
     def get_traces_by_param(self, param):
         results = []
@@ -80,3 +91,93 @@ class DynamicAnalysis:
                 queue += non_loop
 
         return sequences
+
+    def push_var(self, x, v):
+        self._environment[x] = v
+
+    def pop_var(self, x):
+        self._environment.pop(x, None)
+
+    def lookup_var(self, x):
+        return self._environment.get(x)
+
+    def _sample_entry(self, entries, backup=[]):
+        entry_vals = []
+        for e in entries:
+            if (isinstance(e.response, ErrorResponse) or 
+                e.response.value is None):
+                continue
+            else:
+                entry_vals.append(e.response.value)
+
+        if not entry_vals:
+            # print("cannot find trace in the given group, using backups")
+            for e in backup:
+                if (isinstance(e.response, ErrorResponse) or 
+                    e.response.value is None):
+                    continue
+                else:
+                    entry_vals.append(e.response.value)
+
+        if entry_vals:
+            return random.choice(entry_vals)
+        else:
+            return None
+
+    def get_trace(self, fun, args):
+        # abstraction level matters here
+        # get all entries with the same endpoint call
+        same_endpoint_calls = []
+        for entry in self._entries:
+            if entry.endpoint == fun:
+                same_endpoint_calls.append(entry)
+
+        if self._abstraction_level == CMP_ENDPOINT_NAME:
+            return self._sample_entry(same_endpoint_calls)
+
+        # get all entries with the same arg names
+        same_args_calls = []
+        for entry in same_endpoint_calls:
+            param_names = [param.arg_name for param in entry.parameters]
+            has_all_args = True
+            for x, _ in args:
+                if x not in param_names:
+                    has_all_args = False
+                    break
+
+            arg_map = {x: v for x,v in args}
+            # print("arg_map", arg_map)
+            for param in entry.parameters:
+                if param.arg_name in self._skip_fields:
+                    continue
+
+                if param.arg_name not in arg_map:
+                    # print("cannot find the parameter from real trace", param.arg_name, "during execution")
+                    has_all_args = False
+                    break
+
+            if has_all_args:
+                same_args_calls.append(entry)
+
+        if self._abstraction_level == CMP_ENDPOINT_AND_ARG_NAME:
+            # return self._sample_entry(same_args_calls, same_endpoint_calls)
+            return self._sample_entry(same_args_calls)
+
+        # get all entries with the same arg values
+        same_arg_val_calls = []
+        for entry in same_args_calls:
+            params = {param.arg_name: param.value for param in entry.parameters}
+            has_all_values = True
+            for x, v in args:
+                if x not in param_names or params[x] != v:
+                    has_all_values = False
+                    break
+
+            if has_all_values:
+                same_arg_val_calls.append(entry)
+
+        if self._abstraction_level == CMP_ENDPOINT_AND_ARG_VALUE:
+            # return self._sample_entry(same_arg_val_calls, same_args_calls)
+            return self._sample_entry(same_arg_val_calls)
+        else:
+            raise Exception("Unknown abstraction level")

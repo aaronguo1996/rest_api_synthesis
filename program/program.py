@@ -1,3 +1,6 @@
+from argparse import ZERO_OR_MORE
+from analyzer.multiplicity import MUL_ONE_ONE, MUL_ZERO_MORE, MUL_ZERO_ONE
+
 SPACE = '    '
 
 class Expression:
@@ -67,6 +70,29 @@ class AppExpr(Expression):
         arg_vars = [arg.get_vars() for _, arg in self._args]
         return set().union(*arg_vars)
 
+    def execute(self, analyzer):
+        args = [arg.execute(analyzer) for _, arg in self._args]
+        if args:
+            arg_vals, arg_scores = zip(*args)
+            arg_names = list(zip(*self._args))[0]
+            print("[App] arg names", arg_names)
+            named_arg_vals = list(zip(arg_names, arg_vals))
+            print("[App] arg names and vals", list(named_arg_vals))
+        else:
+            arg_scores = [0]
+            named_arg_vals = []
+
+        val = analyzer.get_trace(self._fun, named_arg_vals)
+        if val is None:
+            print("fail to get successful trace for", self._fun, named_arg_vals)
+            return None, 0
+        else:
+            print("[App] get back", val, "for", self._fun, named_arg_vals)
+            return val, 1 + sum(arg_scores)
+
+    def get_multiplicity(self, analyzer):
+        return analyzer.check_endpoint(self._fun)
+
     def pretty(self, hang):
         return self.__str__()
 
@@ -107,59 +133,21 @@ class VarExpr(Expression):
     def get_vars(self):
         return set([self._var])
 
+    def execute(self, analyzer):
+        val = analyzer.lookup_var(self._var)
+        if val is None:
+            return None, 0
+        else:
+            print("[Var] get back", val, "for", self._var)
+            return val, 1
+
+    def get_multiplicity(self, analyzer):
+        var_mul = analyzer.lookup_var(self._var)
+        print("[Var]", self._var, analyzer.pretty(var_mul[1]))
+        return var_mul
+
     def pretty(self, hang):
         return self.__str__()
-
-class AssignExpr(Expression):
-    def __init__(self, x, expr):
-        super().__init__(None)
-        self._lhs = x
-        self._rhs = expr
-
-    def __str__(self):
-        return f"let {self._lhs} = {self._rhs};"
-
-    def __eq__(self, other):
-        if not isinstance(other, AssignExpr):
-            return NotImplemented
-
-        return (
-            self._lhs == other._lhs and
-            self._rhs == other._rhs
-        )
-
-    @property
-    def var(self):
-        return self._lhs
-
-    @property
-    def expr(self):
-        return self._rhs
-
-    def taint_var(self, taint):
-        rhs_vars = self._rhs.get_vars()
-        rhs_reachable_vars = [taint.get(v, set()) for v in rhs_vars]
-        reachable_vars = set().union(*rhs_reachable_vars)
-        curr_reachable = taint.get(self._lhs, set())
-        taint[self._lhs] = curr_reachable.union(rhs_vars, reachable_vars)
-
-    def apply_subst(self, subst):
-        return AssignExpr(
-            self._lhs,
-            self._rhs.apply_subst(subst),
-        )
-
-    def to_graph(self, graph):
-        # print(self)
-        return self._rhs.to_graph(graph)
-
-    def get_vars(self):
-        rhs_vars = self._rhs.get_vars()
-        rhs_vars.add(self._lhs)
-        return rhs_vars
-
-    def pretty(self, hang):
-        return f"{SPACE * hang}let {self._lhs} = {self._rhs.pretty(hang)};"
 
 class ProjectionExpr(Expression):
     def __init__(self, obj, field, typ=None):
@@ -205,6 +193,19 @@ class ProjectionExpr(Expression):
     def get_vars(self):
         obj_vars = self._obj.get_vars()
         return obj_vars
+
+    def execute(self, analyzer):
+        val, score = self._obj.execute(analyzer)
+        if val is not None and self._field in val:
+            val = val.get(self._field)
+            print("[Projection] get back", val, "for", self._field)
+            return val, score + 1
+        else:
+            return None, 0
+
+    def get_multiplicity(self, analyzer):
+        return analyzer.check_endpoint(f"projection({self._obj.type}, {self._field})")
+        # return self._obj.get_multiplicity(analyzer)
 
     def pretty(self, hang):
         return self.__str__()
@@ -266,6 +267,46 @@ class FilterExpr(Expression):
         val_vars = self._val.get_vars()
         return obj_vars.union(val_vars)
 
+    def execute(self, analyzer):
+        obj, score1 = self._obj.execute(analyzer)
+        val, score2 = self._val.execute(analyzer)
+        
+        if obj is None or val is None or not isinstance(obj, list):
+            return None, 0
+
+        paths = self._field.split('.')
+        print("[Filter] filtering by path", paths)
+        result = []
+        for o in obj:
+            tmp = o
+            for p in paths:
+                if p in tmp:
+                    tmp = tmp.get(p)
+                    print("[Filter] get field", p, "returns", tmp)
+                else:
+                    tmp = None
+                    print("[Filter] cannot find field", p, "in", tmp)
+                    break
+            
+            if tmp == val:
+                result.append(o)
+
+        print("[Filter] get back", result, "for", self._field)
+        return result, score1 + score2
+
+    def get_multiplicity(self, analyzer):
+        obj_mul = self._obj.get_multiplicity(analyzer)
+        obj_typ = self._obj.type.name
+        val_mul = self._val.get_multiplicity(analyzer)
+        filter_field = obj_typ + "." + self._field
+        if (filter_field in analyzer._unique_fields and 
+            val_mul[1] is not MUL_ZERO_MORE):
+            print("[Filter]", filter_field, "is found in the analysis result")
+            return obj_mul[0], MUL_ZERO_ONE
+        else:
+            print("[Filter]", filter_field, "is not in the analysis result")
+            return obj_mul[0], MUL_ZERO_MORE
+
     def pretty(self, hang):
         return self.__str__()
 
@@ -326,12 +367,116 @@ class MapExpr(Expression):
         prog_vars = self._prog.get_vars()
         return obj_vars.union(prog_vars)
 
+    def taint_var(self, taint):
+        obj_vars = self._obj.get_vars()
+        exprs = self._prog.reachable_expressions(taint)
+        expr_vars = [e.get_vars() for e in exprs]
+        return obj_vars.union(*expr_vars)
+
+    def execute(self, analyzer):
+        obj, obj_score = self._obj.execute(analyzer)
+        if obj is None:
+            return None, 0
+
+        scores = 0
+        results = []
+        x = self._prog._inputs[0]
+        for o in obj:
+            analyzer.push_var(x, o)
+            prog, prog_score = self._prog.execute(analyzer)
+            analyzer.pop_var(x)
+            scores += prog_score
+            # do not add None to the results, ensure the following operations can be applied
+            if prog is not None:
+                results.append(prog)
+
+        print("get back", results, "for Map")
+        return results, (obj_score + scores / len(obj) if obj else obj_score)
+
+    def get_multiplicity(self, analyzer):
+        obj_mul = self._obj.get_multiplicity(analyzer)
+        x = self._prog._inputs[0]
+        x_mul = obj_mul[0] - 1, MUL_ONE_ONE
+        analyzer.push_var(x, x_mul)
+        prog_mul = self._prog.get_multiplicity(analyzer)
+        print("[Map]", analyzer.pretty(prog_mul[1]))
+        if obj_mul[1] == MUL_ZERO_MORE:
+            return obj_mul[0], MUL_ZERO_MORE
+        else:
+            return obj_mul[0], prog_mul[1]
+
     def pretty(self, hang):
         # print("calling from MapExpr")
         return (
             f"{self._obj}.map("
             f"{self._prog.pretty(hang)})"
         )
+
+class AssignExpr(Expression):
+    def __init__(self, x, expr):
+        super().__init__(None)
+        self._lhs = x
+        self._rhs = expr
+
+    def __str__(self):
+        return f"let {self._lhs} = {self._rhs};"
+
+    def __eq__(self, other):
+        if not isinstance(other, AssignExpr):
+            return NotImplemented
+
+        return (
+            self._lhs == other._lhs and
+            self._rhs == other._rhs
+        )
+
+    @property
+    def var(self):
+        return self._lhs
+
+    @property
+    def expr(self):
+        return self._rhs
+
+    def taint_var(self, taint):
+        if isinstance(self._rhs, MapExpr):
+            rhs_vars = self._rhs.taint_var(taint)
+        else:
+            rhs_vars = self._rhs.get_vars()
+        rhs_reachable_vars = [taint.get(v, set()) for v in rhs_vars]
+        reachable_vars = set().union(*rhs_reachable_vars)
+        curr_reachable = taint.get(self._lhs, set())
+        taint[self._lhs] = curr_reachable.union(rhs_vars, reachable_vars)
+
+    def apply_subst(self, subst):
+        return AssignExpr(
+            self._lhs,
+            self._rhs.apply_subst(subst),
+        )
+
+    def to_graph(self, graph):
+        # print(self)
+        return self._rhs.to_graph(graph)
+
+    def get_vars(self):
+        rhs_vars = self._rhs.get_vars()
+        rhs_vars.add(self._lhs)
+        return rhs_vars
+
+    def execute(self, analyzer):
+        val, score = self._rhs.execute(analyzer)
+        if val is None:
+            return None
+
+        analyzer.push_var(self.var, val)
+        return score
+
+    def get_multiplicity(self, analyzer):
+        mul = self._rhs.get_multiplicity(analyzer)
+        analyzer.push_var(self.var, mul)
+
+    def pretty(self, hang):
+        return f"{SPACE * hang}let {self._lhs} = {self._rhs.pretty(hang)};"
 
 class Program:
     def __init__(self, inputs, expressions):
@@ -390,9 +535,8 @@ class Program:
 
         return all_vars
 
-    def reachable_expressions(self):
+    def reachable_expressions(self, taint={}):
         # print(self)
-        taint = {}
         for expr in self._expressions:
             if isinstance(expr, AssignExpr):
                 expr.taint_var(taint)
@@ -462,6 +606,7 @@ class Program:
                     # print("find a map expression")
                     # print("map expressions", expr._rhs._prog._expressions)
                     expr._rhs._prog.merge_projections(subst)
+                    expr._rhs._prog.simplify()
                     # print("after map expressions", expr._rhs._prog._expressions)
 
             exprs.append(expr)
@@ -490,9 +635,15 @@ class Program:
         ]
 
     def simplify(self):
-        self.merge_direct_eqs()
-        self.merge_maps()
-        self.merge_projections(subst={})
+        old_expressions = None
+        while old_expressions != self._expressions:
+            old_expressions = self._expressions.copy()
+            self.merge_direct_eqs(subst={})
+            # print("after merge direct eq", self.pretty())
+            self.merge_maps()
+            # print("after merge maps", self.pretty())
+            self.merge_projections(subst={})
+            # print("after merge projections", self.pretty())
 
     def assign_type(self, t):
         self._expressions[-1].type = t
@@ -501,7 +652,25 @@ class Program:
             expr = self._expressions[-2]
             expr._prog.assign_type(t)
 
-    def pretty(self, hang):
+    def execute(self, analyzer):
+        scores = 0
+        for expr in self._expressions[:-1]:
+            s = expr.execute(analyzer)
+            if s is None:
+                return None, 0
+
+            scores += s
+
+        ret, score = self._expressions[-1].execute(analyzer)
+        return ret, (scores + score) / len(self._expressions) # normalize by number of expressions
+
+    def get_multiplicity(self, analyzer):
+        for expr in self._expressions[:-1]:
+            expr.get_multiplicity(analyzer)
+
+        return self._expressions[-1].get_multiplicity(analyzer)
+
+    def pretty(self, hang=0):
         indent = SPACE * (hang + 1)
         newline = '\n'
         expr_strs = [expr.pretty(hang + 1) + newline for expr in self._expressions]

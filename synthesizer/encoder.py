@@ -138,7 +138,20 @@ class Encoder:
             self._solver.add(
                 z3.Implies(Int(f"t{t}") == tr_idx, z3.And(pre + post)))
 
-            # if trans.name == "/conversations.members:GET":
+            # if trans.name == "projection(objs_conversation, last_read):":
+            #     print(trans.name)
+            #     print(inputs)
+            #     print(outputs)
+            #     print(z3.Implies(Int(f"t{t}") == tr_idx, z3.And(pre + post)))
+
+            # if trans.name == "projection(objs_conversation.last_read, user):":
+            #     print(trans.name)
+            #     print(inputs)
+            #     print(outputs)
+            #     print(z3.Implies(Int(f"t{t}") == tr_idx, z3.And(pre + post)))
+
+            # if trans.name == "/users.info:GET":
+            #     print(trans.name)
             #     print(inputs)
             #     print(outputs)
             #     print(z3.Implies(Int(f"t{t}") == tr_idx, z3.And(pre + post)))

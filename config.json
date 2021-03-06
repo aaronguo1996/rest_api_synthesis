@@ -16,6 +16,9 @@
             "apps.profile.get"
         ]  
     },
+    "synthesis": {
+        "expand_group": true
+    },
     "endpoints": [
         "/chat.postMessage",
         "/conversations.history",
@@ -42,8 +45,7 @@
         "_x_mode",
         "token",
         "ok",
-        "response_metadata",
-        "cache_ts"
+        "topic"
     ],
     "test_suites": [
         "synthesizer"

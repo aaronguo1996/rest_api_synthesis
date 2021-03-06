@@ -16,6 +16,22 @@ class Parameter:
     def __repr__(self):
         return self.__str__()
 
+class ErrorResponse:
+    def __init__(self, msg):
+        self._error_msg = msg
+
+    def __str__(self):
+        return f"error: {self._error_msg}"
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __eq__(self, other):
+        if isinstance(other, ErrorResponse):
+            return NotImplemented
+
+        return self._error_msg == other._error_msg
+        
 class ResponseParameter(Parameter):
     def __init__(self, method, arg_name, func_name, 
         path, is_required, array_level, typ, value):
@@ -64,7 +80,7 @@ class ResponseParameter(Parameter):
                 #     print(f"pins.list has arg {self.arg_name} of response type", self.type)
                     # print("type schema is", self.type.schema)
             # if self.arg_name == "response_metadata":
-            #     print(self.type.name)
+            #     print("response_metadata", self.type.name)
 
             if not self.type and defs.DOC_OK not in self.value:
                 # print(f"assigning type for {self.value}")

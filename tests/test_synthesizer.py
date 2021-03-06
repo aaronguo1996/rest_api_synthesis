@@ -220,16 +220,17 @@ class SynthesizerTestCase(unittest.TestCase):
         self._synthesizer.init()
 
         result = self._synthesizer.run_n(
-            # ["/conversations.members:get"],
+            # ["/conversations.members:GET"],
             [],
             {
-                "channel_name": SchemaType("objs_channel.name", None)
+                "channel_name": SchemaType("objs_message.name", None)
             },
             [
                 SchemaType("objs_user.profile.email", None)
             ],
-            1
+            30
         )
+        print(result)
         self.assertIn([
             "/conversations.list:GET",
             "filter(objs_conversation, objs_conversation.name):",
@@ -245,10 +246,10 @@ class SynthesizerTestCase(unittest.TestCase):
         self._synthesizer.init()
 
         result = self._synthesizer.run_n(
-            # ["/conversations.members:get"],
+            # ["/conversations.members:GET"],
             [],
             {
-                "channel_name": SchemaType("objs_channel.name", None)
+                "channel_name": SchemaType("objs_message.name", None)
             },
             [
                 SchemaType("objs_user.profile.email", None)
@@ -287,10 +288,10 @@ class SynthesizerTestCase(unittest.TestCase):
             }, 
             [
                 SchemaType("objs_message", None), 
-                SchemaType("defs_group_id", None),
-                SchemaType("defs_ts", None),
+                # SchemaType("defs_group_id", None),
+                # SchemaType("defs_ts", None),
             ],
-            50
+            25
         )
 
         # self.assertIn([
@@ -310,6 +311,6 @@ def synthesizer_suite(doc, config, analyzer):
     # suite.addTest(SynthesizerTestCase('test_two_transitions'))
     # suite.addTest(SynthesizerTestCase('test_nullary'))
     # suite.addTest(SynthesizerTestCase('test_example_a'))
-    # suite.addTest(SynthesizerTestCase('test_example_b'))
-    suite.addTest(SynthesizerTestCase('test_example_b_short'))
+    suite.addTest(SynthesizerTestCase('test_example_b'))
+    # suite.addTest(SynthesizerTestCase('test_example_b_short'))
     return suite
