@@ -1,5 +1,5 @@
-from argparse import ZERO_OR_MORE
 from analyzer.multiplicity import MUL_ONE_ONE, MUL_ZERO_MORE, MUL_ZERO_ONE
+from analyzer.dynamic import Goal
 
 SPACE = '    '
 
@@ -93,6 +93,18 @@ class AppExpr(Expression):
     def get_multiplicity(self, analyzer):
         return analyzer.check_endpoint(self._fun)
 
+    def to_program_graph(self, graph, var_to_trans):
+        for _, arg in self._args:
+            arg_trans = arg.to_program_graph(graph, var_to_trans)
+            if arg_trans is not None:
+                graph.add_edge(arg_trans, self._fun)
+            
+        return self._fun
+
+    def goal_search(self, analyzer, goal):
+        # we need to match the value and the fields
+        args = analyzer.get_trace_by_goal(self._fun, goal)
+
     def pretty(self, hang):
         return self.__str__()
 
@@ -145,6 +157,12 @@ class VarExpr(Expression):
         var_mul = analyzer.lookup_var(self._var)
         print("[Var]", self._var, analyzer.pretty(var_mul[1]))
         return var_mul
+
+    def to_program_graph(self, graph, var_to_trans):
+        return var_to_trans.get(self._var)
+
+    def goal_search(self, analyzer, goal):
+        self.analyzer.push_var(self._var, goal)
 
     def pretty(self, hang):
         return self.__str__()
@@ -206,6 +224,21 @@ class ProjectionExpr(Expression):
     def get_multiplicity(self, analyzer):
         return analyzer.check_endpoint(f"projection({self._obj.type}, {self._field})")
         # return self._obj.get_multiplicity(analyzer)
+
+    def to_program_graph(self, graph, var_to_trans):
+        obj_trans = self._obj.to_program_graph(graph, var_to_trans)
+        proj_trans = f"projection({self._obj.type}, {self._field})"
+        
+        if obj_trans is not None:
+            graph.add_edge(obj_trans, proj_trans)
+
+        return proj_trans
+
+    def goal_search(self, analyzer, goal):
+        fields = goal.fields
+        fields.insert(0, self._field)
+        obj_goal = Goal(goal.multiplicity, goal.value, fields)
+        self._obj.goal_search(analyzer, obj_goal)
 
     def pretty(self, hang):
         return self.__str__()
@@ -307,6 +340,22 @@ class FilterExpr(Expression):
             print("[Filter]", filter_field, "is not in the analysis result")
             return obj_mul[0], MUL_ZERO_MORE
 
+    def to_program_graph(self, graph, var_to_trans):
+        obj_trans = self._obj.to_program_graph(graph, var_to_trans)
+        val_trans = self._val.to_program_graph(graph, var_to_trans)
+        filter_trans = f"filter({self._obj.type}, {self._obj.type}.{self._field})"
+
+        if obj_trans is not None:
+            graph.add_edge(obj_trans, filter_trans)
+        
+        if val_trans is not None:
+            graph.add_edge(val_trans, filter_trans)
+
+        return filter_trans
+
+    def goal_search(self, analyzer, goal):
+        self._obj.goal_search(analyzer, goal)
+
     def pretty(self, hang):
         return self.__str__()
 
@@ -405,6 +454,16 @@ class MapExpr(Expression):
         else:
             return obj_mul[0], prog_mul[1]
 
+    def to_program_graph(self, graph, var_to_trans):
+        obj_trans = self._obj.to_program_graph(graph, var_to_trans)
+        if obj_trans is not None:
+            x = self._prog._inputs[0]
+            var_to_trans[x] = obj_trans
+        return self._prog.to_program_graph(graph, var_to_trans)
+
+    def goal_search(self, analyzer, goal):
+        raise NotImplementedError
+
     def pretty(self, hang):
         # print("calling from MapExpr")
         return (
@@ -475,8 +534,65 @@ class AssignExpr(Expression):
         mul = self._rhs.get_multiplicity(analyzer)
         analyzer.push_var(self.var, mul)
 
+    def to_program_graph(self, graph, var_to_trans):
+        raise NotImplementedError
+
+    def goal_search(self, analyzer, goal):
+        raise NotImplementedError   
+
     def pretty(self, hang):
         return f"{SPACE * hang}let {self._lhs} = {self._rhs.pretty(hang)};"
+
+class ProgramGraph:
+    def __init__(self):
+        self._adj = {}
+        self._indegree = {}
+
+    def add_edge(self, u, v):
+        if u not in self._adj:
+            self._adj[u] = []
+
+        if v not in self._indegree:
+            self._indegree[v] = 0
+
+        self._adj[u].append(v)
+        self._indegree[v] += 1
+
+    def all_nodes(self):
+        nodes = set()
+        for k, v in self._adj.items():
+            nodes.add(k)
+            nodes = nodes.union(set(v))
+
+        return nodes
+
+    def indegree(self, v):
+        if v not in self._indegree:
+            self._indegree[v] = 0
+        return self._indegree.get(v, 0)
+
+    def dec_indegrees(self, v):
+        for u in self._adj.get(v, []):
+            self._indegree[u] -= 1
+
+    def inc_indegrees(self, v):
+        for u in self._adj.get(v, []):
+            self._indegree[u] += 1
+
+def all_topological_sorts(paths, graph, path, discovered):
+    nodes = graph.all_nodes()
+    for v in nodes:
+        if graph.indegree(v) == 0 and not discovered.get(v, False):
+            graph.dec_indegrees(v)
+            path.append(v)
+            discovered[v] = True
+            all_topological_sorts(paths, graph, path, discovered)
+            graph.inc_indegrees(v)
+            path.pop()
+            discovered[v] = False
+
+    if len(path) == len(nodes):
+        paths.append(path[:])
 
 class Program:
     def __init__(self, inputs, expressions):
@@ -681,3 +797,48 @@ class Program:
             f"{indent}return {expr_strs[-1][:-1]};{newline}"
             f"{SPACE * hang}}}"
         )
+
+    def to_program_graph(self, graph=ProgramGraph(), var_to_trans={}):
+        for expr in self._expressions:
+            if isinstance(expr, AssignExpr):
+                v = expr.var
+                trans = expr.expr.to_program_graph(graph, var_to_trans)
+                var_to_trans[v] = trans
+        
+        # the last expression in the list
+        return expr.to_program_graph(graph, var_to_trans)
+
+    def remove_map(self):
+        exprs = []
+        for expr in self._expressions:
+            if isinstance(expr, AssignExpr):
+                rhs = expr.expr
+                v = expr.var
+                if isinstance(rhs, MapExpr):
+                    prog = rhs._prog.remove_map()
+                    x = prog._inputs[0]
+                    prog = prog.apply_subst({x: rhs._obj})
+                    exprs += prog._expressions[:-1]
+                    exprs.append(AssignExpr(v, prog._expressions[-1]))
+                    continue
+
+            exprs.append(expr)
+
+        return Program(self._inputs, exprs)
+
+    def goal_search(self, analyzer, goal):
+        # initialization
+        self._expressions[-1].goal_search(analyzer, goal)
+        # iterate the previous lets
+        for expr in reversed(self._expressions[:-1]):
+            if isinstance(expr, AssignExpr):
+                # expression: let x = rhs;
+                rhs = expr.expr
+                x = expr.var
+                goal = analyzer.lookup_var(x)
+                if goal is None:
+                    return None
+
+                rhs.goal_search(analyzer, goal)
+
+        return goal

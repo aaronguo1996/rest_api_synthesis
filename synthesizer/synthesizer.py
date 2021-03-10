@@ -13,6 +13,7 @@ from openapi import defs
 from analyzer.entry import TraceEntry, ResponseParameter, RequestParameter
 from schemas.schema_type import SchemaType
 from program.generator import ProgramGenerator
+from program.program import ProgramGraph, all_topological_sorts
 import config_keys as keys
 
 DEFAULT_LENGTH_LIMIT = 20
@@ -27,7 +28,9 @@ class Synthesizer:
         self._group_names = {}
         self._landmarks = []
         self._program_generator = ProgramGenerator({})
+        # flags
         self._expand_group = config["synthesis"]["expand_group"]
+        self._block_perms = config["synthesis"]["block_perms"]
 
     @TimeStats(key=STATS_GRAPH)
     def init(self):
@@ -48,6 +51,41 @@ class Synthesizer:
             # print(self._encoder._solver.unsat_core())
 
         return result
+
+    def _write_solution(self, idx, t, p):
+        with open("data/example_results.txt", "a+") as f:
+            f.write(f"#{idx}")
+            f.write("\n")
+            f.write(f"time: {t: .2f}")
+            f.write("\n")
+            f.write(f"time breakdown:\n{TimeStats._timing}\n")
+            f.write(p.pretty(0))
+            f.write("\n")
+
+    def _expand_groups(self, result):
+        groups = []
+        for name in result:
+            if self._expand_group:
+                e = self._entries.get(name)
+                if e is None:
+                    raise Exception("Unknown transition")
+
+                param_typs = [p.type.name for p in e.parameters]
+                response_typ = e.response.type.name
+                key = (tuple(param_typs), response_typ)
+                group = self._groups.get(key, [name])
+                groups.append(group)
+            else:
+                groups.append([name])
+
+        return groups
+
+    def _get_topo_sorts(self, p):
+        perms = []
+        pgraph = ProgramGraph()
+        p.to_program_graph(graph=pgraph, var_to_trans={})
+        all_topological_sorts(perms, pgraph, [], {})
+        return perms
 
     def run_n(self, landmarks, inputs, outputs, n):
         solutions = set()
@@ -86,21 +124,7 @@ class Synthesizer:
                 # FIXME: better implementation later
                 end = time.time()
 
-                groups = []
-                for name in result:
-                    if self._expand_group:
-                        e = self._entries.get(name)
-                        if e is None:
-                            raise Exception("Unknown transition")
-
-                        param_typs = [p.type.name for p in e.parameters]
-                        response_typ = e.response.type.name
-                        key = (tuple(param_typs), response_typ)
-                        group = self._groups.get(key, [name])
-                        groups.append(group)
-                    else:
-                        groups.append([name])
-                
+                groups = self._expand_groups(result)
                 programs = []
                 for r in itertools.product(*groups):
                     programs += self._program_generator.generate_program(
@@ -108,31 +132,51 @@ class Synthesizer:
                     )
 
                 has_new_solution = False
+                all_perms = []
                 for p in programs:
                     if p in solutions:
                         continue
 
                     has_new_solution = True
+                    # draw type graphs without transitions
                     p.to_graph(graph)
                     solutions.add(p)
-                    with open("data/example_results.txt", "a+") as f:
-                        f.write(f"#{len(solutions)}")
-                        f.write("\n")
-                        f.write(f"time: {(end - start): .2f}")
-                        f.write("\n")
-                        f.write(f"time breakdown:\n{TimeStats._timing}\n")
-                        f.write(p.pretty(0))
-                        f.write("\n")
+                    # write solutions to file
+                    self._write_solution(len(solutions), end-start, p)
+                    # generate all topological sorts for blocking
+                    if self._block_perms:
+                        perms = self._get_topo_sorts(p)
+                        all_perms += perms
 
                 if has_new_solution:
                     results.append(result)
+                    print(len(solutions), end-start, flush=True)
                 else:
-                    print("Duplicate solution:", result)
+                    # print("Duplicate solution:", result)
+                    pass
 
                 if len(results) > n:
                     break
 
-                self._encoder.block_prev()
+                # print(all_perms)
+                # convert permutations into indices
+                if self._block_perms:
+                    perm_indices = []
+                    for perms in all_perms:
+                        indices = []
+                        for tr in perms:
+                            for idx, r in enumerate(result):
+                                if tr == r[:len(tr)]:
+                                    indices.append(idx)
+                                    break
+
+                        if len(indices) == len(result):
+                            perm_indices.append(indices)
+                else:
+                    perm_indices = [list(range(len(result)))]
+
+                # print(perm_indices)
+                self._encoder.block_prev(perm_indices)
                 result = self._encoder.solve()
 
         graph.render(filename="output/programs")
@@ -183,7 +227,7 @@ class Synthesizer:
             "/users.info:GET",
             "projection(objs_user, profile):",
             "projection(objs_user.profile, email):",
-            'projection(/conversations.members, response_metadata):'
+            'projection(/conversations.members_response, response_metadata):'
         ]
         for name in lst:
             e = self._entries.get(name)

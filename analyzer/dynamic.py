@@ -6,6 +6,12 @@ CMP_ENDPOINT_NAME = 0
 CMP_ENDPOINT_AND_ARG_NAME = 1
 CMP_ENDPOINT_AND_ARG_VALUE = 2
 
+class Goal:
+    def __init__(self, multiplicity, values, fields=[]):
+        self.multiplicity = multiplicity
+        self.values = values
+        self.fields = fields
+
 class DynamicAnalysis:
     """search for trace either by a parameter value or the endpoint name
     """
@@ -181,3 +187,31 @@ class DynamicAnalysis:
             return self._sample_entry(same_arg_val_calls)
         else:
             raise Exception("Unknown abstraction level")
+
+    def get_trace_by_goal(self, goal, fun):
+        # get all entries with the same endpoint call
+        same_endpoint_calls = []
+        for entry in self._entries:
+            if entry.endpoint == fun:
+                # check fields
+                response_matches = True
+                obj = entry.response.value
+                for p in goal.fields:
+                    if obj is None:
+                        response_matches = False
+                        break
+                    else:
+                        obj = obj.get(p)
+ 
+                if not response_matches:
+                    continue
+                
+                # check values
+                for v in goal.values:
+                    if (isinstance(obj, list) and v not in obj) or v != obj:
+                        response_matches = False
+
+                if not response_matches:
+                    continue
+
+                same_endpoint_calls.append(entry)

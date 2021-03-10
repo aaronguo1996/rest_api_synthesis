@@ -56,9 +56,10 @@ class ProgramGenerator:
             # print(p.pretty())
             if self._filter_by_names(transitions, p):
                 p.simplify()
-                # print(p.pretty())
+                print(p.pretty())
+                print(p.remove_map().pretty())
                 programs.append(p)
-                print("get satisfying program", p.to_expression({}))
+                # print("get satisfying program", p.to_expression({}))
 
         # raise Exception
         return programs

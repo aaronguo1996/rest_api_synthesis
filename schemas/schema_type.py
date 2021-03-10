@@ -243,6 +243,7 @@ class SchemaType:
         obj_candidates = sorted(obj_candidates, key=rank)
         if obj_candidates:
             # print("choose", obj_candidates[-1][0])
+            # TODO: add the type partitioning here or after this returns, record the partitions somewhere
             return obj_candidates[-1][0]
         else:
             return None

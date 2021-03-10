@@ -17,7 +17,8 @@
         ]  
     },
     "synthesis": {
-        "expand_group": true
+        "expand_group": false,
+        "block_perms": true
     },
     "endpoints": [
         "/chat.postMessage",

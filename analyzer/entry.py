@@ -316,7 +316,7 @@ class TraceEntry:
                 name in requires, int(rp.get(defs.DOC_TYPE) == "array"))
 
             e = TraceEntry(
-                f"projection({endpoint}, {name})",
+                f"projection({endpoint}_response, {name})",
                 "", [entry_param], param)
             results.append(e)
 

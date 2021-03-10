@@ -47,7 +47,7 @@ class Encoder:
         self._add_landmarks(landmarks)
         self._set_final(outputs)
 
-        print("Current len:", self._path_len)
+        # print("Current len:", self._path_len)
 
     @TimeStats(key=STATS_SEARCH)
     def solve(self):
@@ -65,17 +65,21 @@ class Encoder:
             results = []
             for i in range(self._path_len):
                 tr = m[Int(f"t{i}")].as_long()
-                self._prev_result.append(Int(f"t{i}") == tr)
+                self._prev_result.append(tr)
                 results.append(self._variable_to_trans[tr])
             return results
         else:
             self._targets = []
             return None
 
-    def block_prev(self):
-        self._targets.append(
-            z3.Not(z3.And(self._prev_result))
-        )
+    def block_prev(self, indices):
+        for permutation in indices:
+            transitions = [self._prev_result[i] for i in permutation]
+            blocks = []
+            for i in range(self._path_len):
+                blocks.append(Int(f"t{i}") == transitions[i])
+            self._targets.append(z3.Not(z3.And(blocks)))
+
         # print(z3.Not(z3.And(self._prev_result)))
         self._prev_result = []
 
