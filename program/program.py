@@ -102,8 +102,32 @@ class AppExpr(Expression):
         return self._fun
 
     def goal_search(self, analyzer, goal):
-        # we need to match the value and the fields
-        args = analyzer.get_trace_by_goal(self._fun, goal)
+        print(self._fun, "has goal", goal)
+        # we need to match the value and the fields, considering multiplicity
+        if self._args:
+            arg_names = list(zip(*self._args))[0]
+        else:
+            arg_names = []
+
+        entries = analyzer.get_trace_by_goal(self._fun, arg_names, goal)
+        if entries is None:
+            return
+
+        arg_values = {}
+        for entry in entries:
+            for param in entry.parameters:
+                param_name = param.arg_name
+                if param_name not in arg_values:
+                    arg_values[param_name] = []
+
+                arg_values[param_name].append(param.value)
+
+        for x, arg in self._args:
+            multi = MUL_ONE_ONE # TODO: is this correct?
+            values = arg_values[x]
+            fields = []
+            arg_goal = Goal(multi, values, fields)
+            arg.goal_search(analyzer, arg_goal)
 
     def pretty(self, hang):
         return self.__str__()
@@ -162,7 +186,7 @@ class VarExpr(Expression):
         return var_to_trans.get(self._var)
 
     def goal_search(self, analyzer, goal):
-        self.analyzer.push_var(self._var, goal)
+        analyzer.push_var(self._var, goal)
 
     def pretty(self, hang):
         return self.__str__()
@@ -237,7 +261,7 @@ class ProjectionExpr(Expression):
     def goal_search(self, analyzer, goal):
         fields = goal.fields
         fields.insert(0, self._field)
-        obj_goal = Goal(goal.multiplicity, goal.value, fields)
+        obj_goal = Goal(goal.multiplicity, goal.values, fields)
         self._obj.goal_search(analyzer, obj_goal)
 
     def pretty(self, hang):
@@ -355,6 +379,9 @@ class FilterExpr(Expression):
 
     def goal_search(self, analyzer, goal):
         self._obj.goal_search(analyzer, goal)
+        # find a field value such that the filter does not return empty lists
+        val_goal = Goal(MUL_ONE_ONE, goal.values[:1])
+        self._val.goal_search(analyzer, val_goal)
 
     def pretty(self, hang):
         return self.__str__()

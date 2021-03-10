@@ -1,15 +1,16 @@
 #!/usr/bin/python3.8
 
-from analyzer.utils import get_representative
 import argparse
 import pickle
 import os
 import json
 import logging
+import random
 from graphviz import Digraph
 
 # analyze traces
 from analyzer import analyzer, dynamic, multiplicity
+from analyzer.dynamic import Goal
 from schemas.schema_type import SchemaType
 from openapi import defs
 from openapi.utils import read_doc, get_schema_forest
@@ -104,6 +105,8 @@ def main():
         seqs = analysis.get_sequences(endpoint="/conversations.list", limit=500)
         print(seqs)
     elif args.filtering:
+        random.seed(1)
+
         analysis = dynamic.DynamicAnalysis(
             entries,
             configuration.get(keys.KEY_SKIP_FIELDS),
@@ -122,43 +125,48 @@ def main():
         with open("data/solutions.pkl", 'rb') as f:
             solutions = pickle.load(f)
 
-        results = []
         for p in solutions:
             print(p.pretty())
-
             analysis.reset_env()
-            analysis.push_var("channel_name", "general")
-            r1, score1 = p.execute(analysis)
+            goal = Goal(multiplicity.MUL_ZERO_MORE, [], [])
+            prog = p.remove_map()
+            prog.goal_search(analysis, goal)
 
-            analysis.reset_env()
-            analysis.push_var("channel_name", "general")
-            r2, score2 = p.execute(analysis)
+            break
 
-            r = r1 if score1 > score2 else r2
-            score = (score1 + score2) / 2
-            mul = p.get_multiplicity(multi_analysis)
-            mul_score = int(mul[1] == multiplicity.MUL_ZERO_MORE) * 10
+        results = []
+        # for p in solutions:
+        #     print(p.pretty())
 
-            if r is None:
-                results.append((r, p, mul, score))
-            else:
-                results.append((r, p, mul, score + len(str(r)) + mul_score))
+        #     analysis.reset_env()
+        #     analysis.push_var("channel_name", "general")
+        #     r1, score1 = p.execute(analysis)
 
-        results = sorted(results, key=lambda x: x[-1], reverse=True)
-        for i, (r, p, m, s) in enumerate(results):
-            multi_analysis.reset()
-            print("#", i+1)
-            print("score:", s)
-            print(r)
-            print(
-                "multiplicity:", 
-                multiplicity.MultiplicityAnalysis.pretty(m[1])
-            )
-            print(p.pretty())
-        # multi_analysis = multiplicity.MultiplicityAnalysis(entries)
-        # unique_fields = multi_analysis.analyze(
-        #     configuration.get(keys.KEY_SKIP_FIELDS),
-        # )
+        #     analysis.reset_env()
+        #     analysis.push_var("channel_name", "general")
+        #     r2, score2 = p.execute(analysis)
+
+        #     r = r1 if score1 > score2 else r2
+        #     score = (score1 + score2) / 2
+        #     mul = p.get_multiplicity(multi_analysis)
+        #     mul_score = int(mul[1] == multiplicity.MUL_ZERO_MORE) * 10
+
+        #     if r is None:
+        #         results.append((r, p, mul, score))
+        #     else:
+        #         results.append((r, p, mul, score + len(str(r)) + mul_score))
+
+        # results = sorted(results, key=lambda x: x[-1], reverse=True)
+        # for i, (r, p, m, s) in enumerate(results):
+        #     multi_analysis.reset()
+        #     print("#", i+1)
+        #     print("score:", s)
+        #     print(r)
+        #     print(
+        #         "multiplicity:", 
+        #         multiplicity.MultiplicityAnalysis.pretty(m[1])
+        #     )
+        #     print(p.pretty())
     else:
         # output the results to json file
         with open(os.path.join("webapp/src/data/", "data.json"), 'w') as f:

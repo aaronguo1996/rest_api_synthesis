@@ -2,6 +2,10 @@
 import re
 from openapi import defs
 
+def type_partition(value, typ):
+    schema = typ.schema
+    
+
 class SchemaType:
     doc_obj = {}
     
@@ -244,6 +248,7 @@ class SchemaType:
         if obj_candidates:
             # print("choose", obj_candidates[-1][0])
             # TODO: add the type partitioning here or after this returns, record the partitions somewhere
+            type_partition(value, obj_candidates[-1][0].schema)
             return obj_candidates[-1][0]
         else:
             return None

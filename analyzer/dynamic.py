@@ -1,5 +1,6 @@
 # from analyzer.entry import Parameter
 from analyzer.entry import ErrorResponse
+from analyzer.multiplicity import MUL_ZERO_MORE
 import random
 
 CMP_ENDPOINT_NAME = 0
@@ -11,6 +12,15 @@ class Goal:
         self.multiplicity = multiplicity
         self.values = values
         self.fields = fields
+
+    def __str__(self):
+        return (
+            "values:" + str(self.values) +
+            " fields:" + str(self.fields)
+        )
+
+    def __repr__(self):
+        return self.__str__()
 
 class DynamicAnalysis:
     """search for trace either by a parameter value or the endpoint name
@@ -188,12 +198,34 @@ class DynamicAnalysis:
         else:
             raise Exception("Unknown abstraction level")
 
-    def get_trace_by_goal(self, goal, fun):
+    def get_trace_by_goal(self, fun, arg_names, goal):
         # get all entries with the same endpoint call
         same_endpoint_calls = []
         for entry in self._entries:
             if entry.endpoint == fun:
-                # check fields
+                # check arg names
+                param_names = [param.arg_name for param in entry.parameters]
+                has_all_args = True
+                for x in arg_names:
+                    if x not in param_names:
+                        has_all_args = False
+                        break
+
+                for param in entry.parameters:
+                    if param.arg_name in self._skip_fields:
+                        continue
+
+                    if param.arg_name not in arg_names:
+                        has_all_args = False
+                        break
+                
+                if not has_all_args:
+                    continue
+
+                # check response fields
+                if isinstance(entry.response, ErrorResponse):
+                    continue
+                
                 response_matches = True
                 obj = entry.response.value
                 for p in goal.fields:
@@ -202,11 +234,14 @@ class DynamicAnalysis:
                         break
                     else:
                         obj = obj.get(p)
+                        while isinstance(obj, list):
+                            idx = random.randint(0, len(obj)-1)
+                            obj = obj[idx]
  
                 if not response_matches:
                     continue
                 
-                # check values
+                # check response values
                 for v in goal.values:
                     if (isinstance(obj, list) and v not in obj) or v != obj:
                         response_matches = False
@@ -215,3 +250,18 @@ class DynamicAnalysis:
                     continue
 
                 same_endpoint_calls.append(entry)
+
+        is_return_array = False
+        if same_endpoint_calls:
+            an_endpoint = same_endpoint_calls[0]
+            is_return_array = an_endpoint.response.array_level > 0
+            
+        if goal.multiplicity == MUL_ZERO_MORE and not is_return_array:
+            count = 2
+        else:
+            count = 1
+
+        if same_endpoint_calls:
+            return random.choices(same_endpoint_calls, k=count)
+        else:
+            return None
