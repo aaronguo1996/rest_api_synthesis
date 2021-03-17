@@ -1,3 +1,5 @@
+import re
+
 from analyzer.multiplicity import MUL_ONE_ONE, MUL_ZERO_MORE, MUL_ZERO_ONE
 from analyzer.dynamic import Goal
 
@@ -129,6 +131,23 @@ class AppExpr(Expression):
             arg_goal = Goal(multi, values, fields)
             arg.goal_search(analyzer, arg_goal)
 
+    def to_multiline(self, counter):
+        args = []
+        exprs = []
+        for name, arg in self._args:
+            arg_exprs, arg_expr = arg.to_multiline(counter)
+            args.append((name, arg_expr))
+            exprs.extend(arg_exprs)
+
+        app_expr = AppExpr(self._fun, args, self.type)
+
+        let_x = counter.get("x")
+        counter["x"] += 1
+        let_var = VarExpr(f"x{let_x}", self.type)
+        let_expr = AssignExpr(f"x{let_x}", app_expr)
+        exprs.append(let_expr)
+        return exprs, let_var
+
     def pretty(self, hang):
         return self.__str__()
 
@@ -187,6 +206,9 @@ class VarExpr(Expression):
 
     def goal_search(self, analyzer, goal):
         analyzer.push_var(self._var, goal)
+
+    def to_multiline(self, counter):
+        return [], self
 
     def pretty(self, hang):
         return self.__str__()
@@ -263,6 +285,11 @@ class ProjectionExpr(Expression):
         fields.insert(0, self._field)
         obj_goal = Goal(goal.multiplicity, goal.values, fields)
         self._obj.goal_search(analyzer, obj_goal)
+
+    def to_multiline(self, counter):
+        exprs, obj_expr = self._obj.to_multiline(counter)
+        proj_expr = ProjectionExpr(obj_expr, self._field, self.type)
+        return exprs, proj_expr
 
     def pretty(self, hang):
         return self.__str__()
@@ -383,6 +410,22 @@ class FilterExpr(Expression):
         val_goal = Goal(MUL_ONE_ONE, goal.values[:1])
         self._val.goal_search(analyzer, val_goal)
 
+    def to_multiline(self, counter):
+        obj_exprs, obj_expr = self._obj.to_multiline(counter)
+        val_exprs, val_expr = self._val.to_multiline(counter)
+        exprs = obj_exprs + val_exprs
+        filter_expr = FilterExpr(
+            obj_expr, self._field, 
+            val_expr, self._is_val_list, self.type
+        )
+
+        let_x = counter.get("x")
+        counter["x"] += 1
+        let_var = VarExpr(f"x{let_x}", self.type)
+        let_expr = AssignExpr(f"x{let_x}", filter_expr)
+        exprs.append(let_expr)
+        return exprs, let_var
+
     def pretty(self, hang):
         return self.__str__()
 
@@ -491,6 +534,18 @@ class MapExpr(Expression):
     def goal_search(self, analyzer, goal):
         raise NotImplementedError
 
+    def to_multiline(self, counter):
+        exprs, obj_expr = self._obj.to_multiline(counter)
+        map_body = self._prog.to_multiline(counter)
+        map_expr = MapExpr(obj_expr, map_body, self.type)
+        
+        let_x = counter.get("x")
+        counter["x"] += 1
+        let_var = VarExpr(f"x{let_x}")
+        let_expr = AssignExpr(f"x{let_x}", map_expr)
+        exprs.append(let_expr)
+        return exprs, let_var
+
     def pretty(self, hang):
         # print("calling from MapExpr")
         return (
@@ -565,7 +620,12 @@ class AssignExpr(Expression):
         raise NotImplementedError
 
     def goal_search(self, analyzer, goal):
-        raise NotImplementedError   
+        raise NotImplementedError
+
+    def to_multiline(self, counter):
+        exprs, rhs = self._rhs.to_multiline(counter)
+        exprs.append(AssignExpr(self._lhs, rhs))
+        return exprs, VarExpr(self._lhs, self.type), counter
 
     def pretty(self, hang):
         return f"{SPACE * hang}let {self._lhs} = {self._rhs.pretty(hang)};"
@@ -618,7 +678,9 @@ def all_topological_sorts(paths, graph, path, discovered):
             path.pop()
             discovered[v] = False
 
+    # print(path)
     if len(path) == len(nodes):
+        # print("adding to result: ", path)
         paths.append(path[:])
 
 class Program:
@@ -638,10 +700,16 @@ class Program:
         if not isinstance(other, Program):
             return NotImplemented
 
-        return (
-            self.to_expression({}) == other.to_expression({}) and
-            self._inputs == other._inputs
-        )
+        if self._inputs == other._inputs:
+            return self.to_expression({}) == other.to_expression({})
+        elif len(self._inputs) == len(other._inputs):
+            subst = {}
+            for i, x in enumerate(other._inputs):
+                subst[x] = VarExpr(self._inputs[i])
+            other = other.apply_subst(subst)
+            return self.to_expression({}) == other.to_expression({})
+        else:
+            return False
 
     def __hash__(self):
         return hash((tuple(self._inputs), str(self.to_expression({}))))
@@ -869,3 +937,13 @@ class Program:
                 rhs.goal_search(analyzer, goal)
 
         return goal
+
+    def to_multiline(self, counter):
+        exprs = []
+        for expr in self._expressions:
+            expr_lines, ret_expr = expr.to_multiline(counter)
+            exprs += expr_lines
+
+        exprs.append(ret_expr)
+        # exprs.append(VarExpr("x"+str(counter-1), exprs[-1].type))
+        return Program(self._inputs, exprs)

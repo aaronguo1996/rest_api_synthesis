@@ -7,11 +7,13 @@ from analyzer.utils import get_representative
 from openapi import defs
 
 class DSU:
+    # TODO: record types for each param here
     def __init__(self):
         self._parents = {}
         self._sizes = {}
         self._nexts = {}
         self._values = {}
+        self._types = {}
         self._logger = logging.getLogger(__name__)
 
     def find(self, x):
@@ -90,6 +92,70 @@ class LogAnalyzer:
     def __init__(self):
         self.value_to_param = {}
         self.dsu = DSU()
+        self.type_fields = {}
+        self.type_partitions = {}
+
+    def _add_type_fields(self, r):
+        if r.type is None:
+            return
+
+        typ = r.type.get_oldest_parent()
+        # if typ.name == "defs_user_id":
+        #     print(typ.name)
+        #     print(typ.schema)
+        #     print(typ.is_object)
+        if not typ.is_object:
+            # print(typ.name, "is not an object")
+            return
+
+        typ_name = typ.name
+        if typ_name not in self.type_fields:
+            self.type_fields[typ_name] = {}
+        
+        if r.func_name not in self.type_fields[typ_name]:
+            self.type_fields[typ_name][r.func_name] = set()
+
+        # FIXME: this is specific to Slack API
+        path = [p for p in r.path[1:] if p is not defs.INDEX_ANY]
+        if path:
+            self.type_fields[typ_name][r.func_name].add('.'.join(path))
+
+    def _partition_type(self):
+        for t, fun_map in self.type_fields.items():
+            for typ_fields in fun_map.values():
+                if t not in self.type_partitions:
+                    self.type_partitions[t] = [list(typ_fields)]
+                    continue
+
+                curr_partitions = self.type_partitions[t]
+                new_partitions = []
+                all_diffs = []
+                for part in curr_partitions:
+                    overlap = [f for f in typ_fields if f in part]
+                    diff = [f for f in typ_fields if f not in part]
+                    if all_diffs:
+                        all_diffs = [d for d in all_diffs if d in diff]
+                    else:
+                        all_diffs = diff
+
+                    if not overlap or not diff: # if there is no overlapping
+                        if len(part) == 0:
+                            print("empty part")
+                        new_partitions.append(part)
+                    else: # they have some overlap but also some differences, divide this partition into two
+                        if len(overlap) == 0:
+                            print("empty overlap")
+                        new_partitions.append(overlap)
+                        split = [f for f in part if f not in typ_fields]
+                        if split: # sometimes this is empty because typ_fields include all the elements in split but has more
+                            new_partitions.append(split)
+                            print("splitting", part, "into", split)
+
+                if all_diffs:
+                    new_partitions.append(all_diffs)
+
+                self.type_partitions[t] = new_partitions
+
 
     def analyze(self, paths, entries, skip_fields, path_to_defs = "#/components/schemas"):
         '''
@@ -99,6 +165,7 @@ class LogAnalyzer:
         blacklist = [
             '/apps.actions.v2.list'
         ]
+        params = []
         for entry in entries:
             # do not add error responses to DSU
             if isinstance(entry.response, ErrorResponse):
@@ -141,17 +208,24 @@ class LogAnalyzer:
                         typ = param.get(defs.DOC_SCHEMA).get(defs.DOC_TYPE)
                         correct_value(p, typ)
                     
-                    break
+                    # break
                 
                 if p.arg_name in entry_requests:
                     param = entry_requests.get(p.arg_name)
                     typ = param.get(defs.DOC_TYPE)
                     correct_value(p, typ)
 
-                self.insert(p)
+                params.append(p)
                 
             for r in responses:
-                self.insert(r)
+                self._add_type_fields(r)
+                params.append(r)
+
+        print(self.type_fields)
+        self._partition_type()
+        print(self.type_partitions)
+        for p in params:
+            self.insert(p)
 
     def insert(self, param):
         # if param.arg_name == "fields":
@@ -353,10 +427,7 @@ class LogAnalyzer:
         params = self.dsu._parents.keys()
         for p in params:
             if p.type and p.type.name == param.type.name:
-                # print(p)
                 group = self.dsu.get_group(p)
-                # print(group)
-                # print([(p, p.value) for p in group])
                 _, rep_type = get_representative(group)
                 # TODO: we do not want to find the parent of this type, correct?
                 param.type = rep_type
@@ -379,11 +450,36 @@ class LogAnalyzer:
                 # group = self.dsu.get_group(descendant)
                 # _, rep_type = get_representative(group)
                 if descendant.type:
-                    # if param.func_name == "/conversations.members":
-                    #     print(descendant.type.name)
-                    param.type = descendant.type.get_oldest_parent()
-                    # if param.func_name == "/conversations.members":
-                    #     print(param.type.name)
+                    param_type = descendant.type.get_oldest_parent()
+                    # get the fields
+                    func_fields = self.type_fields.get(param_type.name, {})
+                    fields = func_fields.get(param.func_name)
+                    if fields is None: # we add all partitions that we can find
+                        parts = self.type_partitions.get(param_type.name)
+                        if parts is None:
+                            print("not partition available for type when fields not available", param_type)
+                            param.type = param_type
+                        else:
+                            param.type = [
+                                SchemaType(f"{param_type.name}_{i}", None)
+                                for i in range(len(parts))
+                            ]
+                    else:
+                        # get all the partitions that cover the fields
+                        partitions = self.type_partitions.get(param_type.name)
+                        if partitions is None:
+                            print("not partition available for type when fields available", param_type)
+                            param.type = param_type
+                        else:
+                            indices = []
+                            for i, part in enumerate(partitions):
+                                if part[0] in fields:
+                                    indices.append(i)
+
+                            param.type = [
+                                SchemaType(f"{param_type.name}_{i}", None)
+                                for i in indices
+                            ]
                 else:
                     # print(f"{param} does not have a descendant type {descendant}")
                     param.type = descendant.type

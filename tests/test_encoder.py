@@ -1,10 +1,10 @@
 import unittest
-from synthesizer.encoder import *
+from synthesizer.petrinet_encoder import *
 from analyzer.entry import TraceEntry, RequestParameter, ResponseParameter
 
 class EncoderTestCase(unittest.TestCase):
     def setUp(self):
-        self._encoder = Encoder({})
+        self._encoder = PetriNetEncoder({})
         self._entries = [
             TraceEntry("/users.list", "GET", [], 
                 ResponseParameter(

@@ -2,10 +2,6 @@
 import re
 from openapi import defs
 
-def type_partition(value, typ):
-    schema = typ.schema
-    
-
 class SchemaType:
     doc_obj = {}
     
@@ -13,6 +9,8 @@ class SchemaType:
         self.name = name
         self.schema = obj
         self.parent = parent
+        self.is_object = True
+        self.fields = []
 
     @staticmethod
     def to_python_type(typ):
@@ -140,16 +138,15 @@ class SchemaType:
                     if k in types:
                         # print(f"{k} is in the type definition, has type {types[k]}")
                         field_type = SchemaType(k, types[k])
-                        # if k == "latest":
-                        #     print(types[k])
                         _, field_score = field_type.is_type_of(v)
                         if field_score < 0:
-                            # if k == "latest":
-                            #     print(f"{k} type check fails")
                             return None, -1
                         else:
-                            # if k == "latest":
-                            #     print(f"get {field_score} for {k}")
+                            if field_type.fields:
+                                self.fields = [[k].extend(f) for f in field_type.fields]
+                            else:
+                                self.fields = [[k]]
+
                             score += field_score + 1
                     else:
                         # print(f"{k} is not in the type definition")
@@ -161,6 +158,7 @@ class SchemaType:
                 # if all checks
                 return self, score
             else:
+                self.is_object = False
                 if isinstance(obj, str):
                     return self.of_regex_type(obj, expected_type)
                 else:
@@ -248,7 +246,6 @@ class SchemaType:
         if obj_candidates:
             # print("choose", obj_candidates[-1][0])
             # TODO: add the type partitioning here or after this returns, record the partitions somewhere
-            type_partition(value, obj_candidates[-1][0].schema)
             return obj_candidates[-1][0]
         else:
             return None

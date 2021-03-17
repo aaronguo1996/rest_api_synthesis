@@ -1,10 +1,11 @@
 from collections import defaultdict
 import re
+from synthesizer.hypergraph_encoder import HyperGraphEncoder
 import time
 import itertools
 import pickle
 
-from synthesizer.encoder import Encoder
+from synthesizer.petrinet_encoder import PetriNetEncoder
 from synthesizer.utils import make_entry_name
 from stats.time_stats import TimeStats, STATS_GRAPH
 from stats.graph_stats import GraphStats
@@ -23,7 +24,14 @@ class Synthesizer:
         self._doc = doc
         self._config = config
         self._analyzer = analyzer
-        self._encoder = Encoder({})
+
+        if config["synthesis"]["solver_type"] == "petri net":
+            self._encoder = PetriNetEncoder({})
+        elif config["synthesis"]["solver_type"] == "hypergraph":
+            self._encoder = HyperGraphEncoder({})
+        else:
+            raise Exception("Unknown solver type in config")
+
         self._groups = {}
         self._group_names = {}
         self._landmarks = []
@@ -71,8 +79,11 @@ class Synthesizer:
                     raise Exception("Unknown transition")
 
                 param_typs = [p.type.name for p in e.parameters]
-                response_typ = e.response.type.name
-                key = (tuple(param_typs), response_typ)
+                if isinstance(e.response.type, list):
+                    response_typ = [t.name for t in e.response.type]
+                else:
+                    response_typ = [e.response.type.name]
+                key = (tuple(param_typs), tuple(response_typ))
                 group = self._groups.get(key, [name])
                 groups.append(group)
             else:
@@ -84,7 +95,11 @@ class Synthesizer:
         perms = []
         pgraph = ProgramGraph()
         p.to_program_graph(graph=pgraph, var_to_trans={})
+        # print(pgraph._adj)
+        # print(pgraph.all_nodes())
+        # print(pgraph._indegree)
         all_topological_sorts(perms, pgraph, [], {})
+        # print("topo sort results:", perms)
         return perms
 
     def run_n(self, landmarks, inputs, outputs, n):
@@ -102,6 +117,7 @@ class Synthesizer:
         self._encoder.init(landmarks, input_map, output_map)
         results = []
         result = self._encoder.solve()
+        # result = ['/conversations.list:GET', 'projection(/conversations.list_response, channels):', 'filter(objs_conversation_9, objs_conversation_9.name):', 'projection(objs_conversation_9, creator):', '/users.info:GET', 'projection(objs_conversation_15, user):', 'projection(/users.info_response, user):', 'filter(objs_user_0, objs_user_0.id):', 'projection(objs_user_0, profile):', 'projection(objs_user.profile, email):']
 
         break_flag = False
         while len(results) < n:
@@ -120,7 +136,7 @@ class Synthesizer:
 
             # find the solution for a given path len
             while result is not None and len(results) < n:
-                # print(result)
+                # print(result, flush=True)
                 # FIXME: better implementation later
                 end = time.time()
 
@@ -139,7 +155,7 @@ class Synthesizer:
 
                     has_new_solution = True
                     # draw type graphs without transitions
-                    p.to_graph(graph)
+                    # p.to_graph(graph)
                     solutions.add(p)
                     # write solutions to file
                     self._write_solution(len(solutions), end-start, p)
@@ -160,7 +176,7 @@ class Synthesizer:
 
                 # print(all_perms)
                 # convert permutations into indices
-                if self._block_perms:
+                if self._block_perms and has_new_solution:
                     perm_indices = []
                     for perms in all_perms:
                         indices = []
@@ -175,7 +191,7 @@ class Synthesizer:
                 else:
                     perm_indices = [list(range(len(result)))]
 
-                # print(perm_indices)
+                # print("perms:", perm_indices)
                 self._encoder.block_prev(perm_indices)
                 result = self._encoder.solve()
 
@@ -221,20 +237,27 @@ class Synthesizer:
 
         lst = [
             "/conversations.list:GET",
-            "filter(objs_conversation, objs_conversation.name):",
-            "projection(objs_conversation, id):",
+            "projection(objs_conversation_0, id):",
+            "projection(/conversations.list_response, channels):",
             "/conversations.members:GET",
             "/users.info:GET",
-            "projection(objs_user, profile):",
+            '/users.list:GET',
+            'filter(objs_conversation_9, objs_conversation_9.name):',
             "projection(objs_user.profile, email):",
-            'projection(/conversations.members_response, response_metadata):'
+            "projection(objs_conversation_9, creator):",
+            "projection(/users.info_response, user):",
+            "projection(objs_user_0, profile):",
+            "projection(/conversations.members_response, members):",
+            'projection(/users.conversations_response, channels):',
+            # "projection(objs_user.profile, email):",
+            # 'projection(/conversations.members_response, response_metadata):'
         ]
         for name in lst:
             e = self._entries.get(name)
             print('-----')
             print(name)
             print([p.type.name for p in e.parameters])
-            print(e.response.type.name)
+            print(e.response.type, flush=True)
             
         # only add unique entries into the encoder
         for name, e in unique_entries.items():
@@ -296,8 +319,11 @@ class Synthesizer:
         results = {}
         for proj, e in transitions.items():
             param_typs = [p.type.name for p in e.parameters]
-            response_typ = e.response.type.name
-            key = (tuple(param_typs), response_typ)
+            if isinstance(e.response.type, list):
+                response_typ = [t.name for t in e.response.type]
+            else:
+                response_typ = [e.response.type.name]
+            key = (tuple(param_typs), tuple(response_typ))
             if key not in self._groups:
                 results[proj] = e
                 self._groups[key] = [proj]
@@ -325,15 +351,39 @@ class Synthesizer:
                         f"{obj_name}.{name}", prop)
                     results.update(projections)
 
-                endpoint = f"projection({obj_name}, {name})"
+                typ_path = obj_name.split('.')
+                # root_typ = typ_path[0]
+                if len(typ_path) > 1:
+                    to_field_typ = '.'.join(typ_path[1:] + [name])
+                else:
+                    to_field_typ = name
+
+                in_name = None
+
+                parts = self._analyzer.type_partitions.get(obj_name)
+                if parts is not None:
+                    for i, part in enumerate(parts):
+                        for p in part:
+                            if to_field_typ == p[:len(to_field_typ)]:
+                                in_name = f"{obj_name}_{i}"
+                                break
+                            if in_name is not None:
+                                break
+                        else:
+                            in_name = None
+
+                if in_name is None:
+                    in_name = obj_name
+
+                endpoint = f"projection({in_name}, {name})"
                 proj_in = RequestParameter(
-                    "", "obj", endpoint,
-                    True, SchemaType(obj_name, None), None
+                    "", "obj", endpoint, True, SchemaType(in_name, None), None
                 )
                 proj_out = ResponseParameter(
                     "", "field", endpoint,
                     [], True, 0, SchemaType(f"{obj_name}.{name}", None), None
                 )
+                # FIXME: this is probably wrong in other cases
                 proj_in = self._analyzer.find_same_type(proj_in)
                 proj_out = self._analyzer.find_same_type(proj_out)
                 entry = TraceEntry(endpoint, "", [proj_in], proj_out)
@@ -375,24 +425,62 @@ class Synthesizer:
                         obj_name, f"{field_name}.{name}", prop)
                     results.update(projections)
                 else:
-                    endpoint = f"filter({obj_name}, {field_name}.{name})"
+                    
+
+                    typ_path = field_name.split('.')
+                    if len(typ_path) > 1:
+                        to_field_typ = '.'.join(typ_path[1:] + [name])
+                    else:
+                        to_field_typ = name
+
+                    in_name = None
+                    parts = self._analyzer.type_partitions.get(obj_name)
+                    opt_ins = []
+                    if parts is not None:
+                        for i, part in enumerate(parts):
+                            if to_field_typ in part:
+                                in_name = f"{obj_name}_{i}"
+                                break
+                            else:
+                                in_name = None
+
+                        for j in range(len(parts)):
+                            if j != i:
+                                param = RequestParameter(
+                                    "", "obj", 
+                                    f"filter({in_name}, {in_name}.{to_field_typ})", 
+                                    False, 
+                                    SchemaType(f"{obj_name}_{j}", None), None
+                                ) 
+                                opt_ins.append(param)
+
+                        out_type = [
+                            SchemaType(f"{obj_name}_{j}", None)
+                            for j in range(len(parts))
+                        ]
+
+                    if in_name is None:
+                        in_name = obj_name
+                        out_type = SchemaType(obj_name, None)
+
+                    endpoint = f"filter({in_name}, {in_name}.{to_field_typ})"
                     filter_in = [
                         RequestParameter(
-                            "", "obj", endpoint,
-                            True, SchemaType(obj_name, None), None
+                            "", "obj", endpoint, True, 
+                            SchemaType(in_name, None), None
                         ),
                         RequestParameter(
                             "", "field", endpoint,
                             True, SchemaType(f"{field_name}.{name}", None), None
                         )
-                    ]
+                    ] + opt_ins
                     filter_out = ResponseParameter(
                         "", "obj", endpoint,
-                        [], True, 1, SchemaType(obj_name, None), None
+                        [], True, 1, out_type, None
                     )
                     filter_in = [self._analyzer.find_same_type(fin)
                         for fin in filter_in]
-                    filter_out = self._analyzer.find_same_type(filter_out)
+                    # filter_out = self._analyzer.find_same_type(filter_out)
                     entry = TraceEntry(endpoint, "", filter_in, filter_out)
                     results[endpoint+":"] = entry
 
