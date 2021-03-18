@@ -15,6 +15,7 @@ from schemas.schema_type import SchemaType
 from openapi import defs
 from openapi.utils import read_doc, get_schema_forest
 import config_keys as keys
+from synthesizer.filtering import run_filter
 
 # test imports
 from tests.run_test import run_test
@@ -107,66 +108,28 @@ def main():
     elif args.filtering:
         random.seed(1)
 
-        analysis = dynamic.DynamicAnalysis(
+        dyn_analysis = dynamic.DynamicAnalysis(
             entries,
             configuration.get(keys.KEY_SKIP_FIELDS),
-            abstraction_level=dynamic.CMP_ENDPOINT_AND_ARG_NAME
+            abstraction_level=dynamic.CMP_ENDPOINT_AND_ARG_VALUE
         )
-
-        with open("data/annotated_entries.pkl", 'rb') as f:
-            annotations = pickle.load(f)
-
-        multi_analysis = multiplicity.MultiplicityAnalysis(entries, annotations)
-        multi_analysis.analyze(
-            configuration.get(keys.KEY_SKIP_FIELDS),
-        )
-        print("Unique fields", multi_analysis._unique_fields)
 
         with open("data/solutions.pkl", 'rb') as f:
             solutions = pickle.load(f)
 
-        for p in solutions:
-            print(p.pretty())
-            analysis.reset_env()
-            goal = Goal(multiplicity.MUL_ZERO_MORE, [], [])
-            prog = p.remove_map()
-            prog.goal_search(analysis, goal)
-
-            break
-
         results = []
-        # for p in solutions:
-        #     print(p.pretty())
+        for p in solutions:
+            score = run_filter(
+                log_analyzer, dyn_analysis, 
+                {"channel_name": "objs_message.name"}, p, True
+            )
+            results.append((p, score))
 
-        #     analysis.reset_env()
-        #     analysis.push_var("channel_name", "general")
-        #     r1, score1 = p.execute(analysis)
-
-        #     analysis.reset_env()
-        #     analysis.push_var("channel_name", "general")
-        #     r2, score2 = p.execute(analysis)
-
-        #     r = r1 if score1 > score2 else r2
-        #     score = (score1 + score2) / 2
-        #     mul = p.get_multiplicity(multi_analysis)
-        #     mul_score = int(mul[1] == multiplicity.MUL_ZERO_MORE) * 10
-
-        #     if r is None:
-        #         results.append((r, p, mul, score))
-        #     else:
-        #         results.append((r, p, mul, score + len(str(r)) + mul_score))
-
-        # results = sorted(results, key=lambda x: x[-1], reverse=True)
-        # for i, (r, p, m, s) in enumerate(results):
-        #     multi_analysis.reset()
-        #     print("#", i+1)
-        #     print("score:", s)
-        #     print(r)
-        #     print(
-        #         "multiplicity:", 
-        #         multiplicity.MultiplicityAnalysis.pretty(m[1])
-        #     )
-        #     print(p.pretty())
+        results = sorted(results, key=lambda x: x[-1], reverse=True)
+        for i, (p, s) in enumerate(results):
+            print("#", i+1)
+            print("score:", s)
+            print(p.pretty())
     else:
         # output the results to json file
         with open(os.path.join("webapp/src/data/", "data.json"), 'w') as f:

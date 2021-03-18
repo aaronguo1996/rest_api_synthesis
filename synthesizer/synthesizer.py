@@ -155,7 +155,7 @@ class Synthesizer:
 
                     has_new_solution = True
                     # draw type graphs without transitions
-                    # p.to_graph(graph)
+                    p.to_graph(graph)
                     solutions.add(p)
                     # write solutions to file
                     self._write_solution(len(solutions), end-start, p)
@@ -237,16 +237,16 @@ class Synthesizer:
 
         lst = [
             "/conversations.list:GET",
-            "projection(objs_conversation_0, id):",
+            # "projection(objs_conversation_0, id):",
             "projection(/conversations.list_response, channels):",
             "/conversations.members:GET",
             "/users.info:GET",
             '/users.list:GET',
-            'filter(objs_conversation_9, objs_conversation_9.name):',
+            # 'filter(objs_conversation_9, objs_conversation_9.name):',
             "projection(objs_user.profile, email):",
-            "projection(objs_conversation_9, creator):",
+            # "projection(objs_conversation_9, creator):",
             "projection(/users.info_response, user):",
-            "projection(objs_user_0, profile):",
+            # "projection(objs_user_0, profile):",
             "projection(/conversations.members_response, members):",
             'projection(/users.conversations_response, channels):',
             # "projection(objs_user.profile, email):",

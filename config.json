@@ -19,7 +19,8 @@
     "synthesis": {
         "expand_group": true,
         "block_perms": true,
-        "solver_type": "petri net"
+        "solver_type": "petri net",
+        "enable_prefilter": false
     },
     "endpoints": [
         "/chat.postMessage",

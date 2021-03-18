@@ -194,7 +194,7 @@ class DynamicAnalysis:
 
         if self._abstraction_level == CMP_ENDPOINT_AND_ARG_VALUE:
             # return self._sample_entry(same_arg_val_calls, same_args_calls)
-            return self._sample_entry(same_arg_val_calls)
+            return self._sample_entry(same_arg_val_calls, backup=same_args_calls)
         else:
             raise Exception("Unknown abstraction level")
 

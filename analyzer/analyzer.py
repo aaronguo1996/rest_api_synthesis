@@ -94,6 +94,8 @@ class LogAnalyzer:
         self.dsu = DSU()
         self.type_fields = {}
         self.type_partitions = {}
+        # temporary field
+        self._checked_fields = {}
 
     def _add_type_fields(self, r):
         if r.type is None:
@@ -157,7 +159,7 @@ class LogAnalyzer:
                 self.type_partitions[t] = new_partitions
 
 
-    def analyze(self, paths, entries, skip_fields, path_to_defs = "#/components/schemas"):
+    def analyze(self, paths, entries, skip_fields, path_to_defs="#/components/schemas", prefilter=False):
         '''
             Match the value of each request argument or response parameter
             in a log entry and union the common ones
@@ -221,9 +223,10 @@ class LogAnalyzer:
                 self._add_type_fields(r)
                 params.append(r)
 
-        print(self.type_fields)
-        self._partition_type()
-        print(self.type_partitions)
+        if prefilter:
+            print(self.type_fields)
+            self._partition_type()
+            print(self.type_partitions)
         for p in params:
             self.insert(p)
 
@@ -423,6 +426,20 @@ class LogAnalyzer:
                 return p
         return None
 
+    def get_values_by_type(self, typ):
+        params = self.dsu._parents.keys()
+        values = []
+        for param in params:
+            if param.type and param.type.name == typ:
+                group = self.dsu.get_group(param)
+                for p in group:
+                    if p.value is not None:
+                        values.append(p.value)
+                
+                # break
+
+        return values
+
     def find_same_type(self, param):
         params = self.dsu._parents.keys()
         for p in params:
@@ -494,3 +511,46 @@ class LogAnalyzer:
         else:
             raise Exception("Unexpected parameter type: "
                 "neither ResponseParameter nor RequestParameter")
+
+    def reset_context(self):
+        self._checked_fields = {}
+
+    def add_projection_field(self, obj_typ, inter_typ, fun, field):
+        if re.search('^/.*_response$', obj_typ):
+            return
+
+        prefix = []
+        if (obj_typ, fun) in self._checked_fields:
+            obj_typ, prefix = self._checked_fields[(obj_typ, fun)]
+        
+        self._checked_fields[(inter_typ, fun)] = obj_typ, (prefix + [field])
+
+    def check_type_fields(self, typ, fun, field):
+        if re.search('^/.*_response$', typ):
+            return True
+
+        func_fields = self.type_fields.get(typ)
+        prefix = []
+        if func_fields is None:
+            # check whether it is an intermediate type
+            key = (typ, fun)
+            try:
+                obj_typ, prefix = self._checked_fields.get(key)
+                func_fields = self.type_fields.get(obj_typ)
+            except Exception:
+                print(key)
+                raise Exception
+
+        fields = func_fields.get(fun)
+        if fields is None:
+            return True
+
+        found = False
+        for f in fields:
+            fs = f.split('.')
+            fixed_field = prefix + [field]
+            if fixed_field == fs[:len(fixed_field)]:
+                found = True
+                break
+
+        return found

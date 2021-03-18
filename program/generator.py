@@ -55,7 +55,7 @@ class ProgramGenerator:
 
         programs = []
         for expr, _ in exprs:
-            expr.type = target
+            expr.set_type(target)
             p = Program(list(inputs.keys()), [expr])
             # print(p.pretty())
             if self._filter_by_names(transitions, p):
@@ -164,8 +164,8 @@ class ProgramGenerator:
                 # print("Find expressions for type", typ)
                 arg_exprs = []
                 for expr, list_lv in exprs:
+                    expr.set_type(SchemaType(typ, None))
                     maps, obj = self._add_map(expr, typ, list_lv)
-                    obj.type = SchemaType(typ, None)
                     arg_exprs.append((param.arg_name, maps, obj))
                 args.append(arg_exprs)
 
@@ -175,10 +175,11 @@ class ProgramGenerator:
         results = []
 
         map_obj = copy.deepcopy(obj)
+        map_obj.type = SchemaType(typ, None)
         for _ in range(lv):
             map_x = self._fresh_var("x")
             results.append((map_obj, map_x))
-            map_obj = VarExpr(map_x, typ)
+            map_obj = VarExpr(map_x, SchemaType(typ, None))
 
         return results, map_obj
 

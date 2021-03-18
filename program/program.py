@@ -18,6 +18,9 @@ class Expression:
     def pretty_with_type(self):
         return f"{self}: {self.type}"
 
+    def set_type(self, typ):
+        self.type = typ
+
     def pretty(self, hang):
         return f"{SPACE * hang}" + self.__str__()
 
@@ -77,19 +80,19 @@ class AppExpr(Expression):
         if args:
             arg_vals, arg_scores = zip(*args)
             arg_names = list(zip(*self._args))[0]
-            print("[App] arg names", arg_names)
+            # print("[App] arg names", arg_names)
             named_arg_vals = list(zip(arg_names, arg_vals))
-            print("[App] arg names and vals", list(named_arg_vals))
+            # print("[App] arg names and vals", list(named_arg_vals))
         else:
             arg_scores = [0]
             named_arg_vals = []
 
         val = analyzer.get_trace(self._fun, named_arg_vals)
         if val is None:
-            print("fail to get successful trace for", self._fun, named_arg_vals)
+            # print("fail to get successful trace for", self._fun, named_arg_vals)
             return None, 0
         else:
-            print("[App] get back", val, "for", self._fun, named_arg_vals)
+            # print("[App] get back", val, "for", self._fun, named_arg_vals)
             return val, 1 + sum(arg_scores)
 
     def get_multiplicity(self, analyzer):
@@ -148,6 +151,14 @@ class AppExpr(Expression):
         exprs.append(let_expr)
         return exprs, let_var
 
+    def check_fields(self, analyzer, var_to_trans):
+        for _, arg in self._args:
+            match, _ = arg.check_fields(analyzer, var_to_trans)
+            if not match:
+                return False, self._fun
+
+        return True, self._fun
+
     def pretty(self, hang):
         return self.__str__()
 
@@ -193,7 +204,7 @@ class VarExpr(Expression):
         if val is None:
             return None, 0
         else:
-            print("[Var] get back", val, "for", self._var)
+            # print("[Var] get back", val, "for", self._var)
             return val, 1
 
     def get_multiplicity(self, analyzer):
@@ -209,6 +220,9 @@ class VarExpr(Expression):
 
     def to_multiline(self, counter):
         return [], self
+
+    def check_fields(self, analyzer, var_to_trans):
+        return True, var_to_trans.get(self._var)
 
     def pretty(self, hang):
         return self.__str__()
@@ -262,7 +276,7 @@ class ProjectionExpr(Expression):
         val, score = self._obj.execute(analyzer)
         if val is not None and self._field in val:
             val = val.get(self._field)
-            print("[Projection] get back", val, "for", self._field)
+            # print("[Projection] get back", val, "for", self._field)
             return val, score + 1
         else:
             return None, 0
@@ -288,8 +302,23 @@ class ProjectionExpr(Expression):
 
     def to_multiline(self, counter):
         exprs, obj_expr = self._obj.to_multiline(counter)
+        # print(self, self.type)
         proj_expr = ProjectionExpr(obj_expr, self._field, self.type)
         return exprs, proj_expr
+
+    def check_fields(self, analyzer, var_to_trans):
+        # print(self)
+        # print(type(self.type))
+        match, trans = self._obj.check_fields(analyzer, var_to_trans)
+        if match:
+            match = analyzer.check_type_fields(
+                self._obj.type.name, trans, self._field
+            )
+            analyzer.add_projection_field(
+                self._obj.type.name, self.type.name, 
+                trans, self._field
+            )
+        return match, trans
 
     def pretty(self, hang):
         return self.__str__()
@@ -359,23 +388,23 @@ class FilterExpr(Expression):
             return None, 0
 
         paths = self._field.split('.')
-        print("[Filter] filtering by path", paths)
+        # print("[Filter] filtering by path", paths)
         result = []
         for o in obj:
             tmp = o
             for p in paths:
                 if p in tmp:
                     tmp = tmp.get(p)
-                    print("[Filter] get field", p, "returns", tmp)
+                    # print("[Filter] get field", p, "returns", tmp)
                 else:
                     tmp = None
-                    print("[Filter] cannot find field", p, "in", tmp)
+                    # print("[Filter] cannot find field", p, "in", tmp)
                     break
             
             if tmp == val:
                 result.append(o)
 
-        print("[Filter] get back", result, "for", self._field)
+        # print("[Filter] get back", result, "for", self._field)
         return result, score1 + score2
 
     def get_multiplicity(self, analyzer):
@@ -425,6 +454,20 @@ class FilterExpr(Expression):
         let_expr = AssignExpr(f"x{let_x}", filter_expr)
         exprs.append(let_expr)
         return exprs, let_var
+
+    def check_fields(self, analyzer, var_to_trans):
+        print("Checking field", self._field, "for object", self._obj.type)
+        match, trans = self._obj.check_fields(analyzer, var_to_trans)
+        if match:
+            match, _ = self._val.check_fields(analyzer, var_to_trans)
+
+        if match:
+            match = analyzer.check_type_fields(
+                self._obj.type.name, trans, self._field
+            )
+
+        print("check result:", match)
+        return match, trans
 
     def pretty(self, hang):
         return self.__str__()
@@ -509,7 +552,7 @@ class MapExpr(Expression):
             if prog is not None:
                 results.append(prog)
 
-        print("get back", results, "for Map")
+        # print("get back", results, "for Map")
         return results, (obj_score + scores / len(obj) if obj else obj_score)
 
     def get_multiplicity(self, analyzer):
@@ -541,10 +584,22 @@ class MapExpr(Expression):
         
         let_x = counter.get("x")
         counter["x"] += 1
-        let_var = VarExpr(f"x{let_x}")
+        let_var = VarExpr(f"x{let_x}", self.type)
         let_expr = AssignExpr(f"x{let_x}", map_expr)
         exprs.append(let_expr)
         return exprs, let_var
+
+    def check_fields(self, analyzer, var_to_trans):
+        match, trans = self._obj.check_fields(analyzer, var_to_trans)
+        if match:
+            x = self._prog._inputs[0]
+            var_to_trans[x] = trans
+            match, trans = self._prog.check_fields(analyzer, var_to_trans)
+        return match, trans
+
+    def set_type(self, typ):
+        self.type = typ
+        self._prog.set_type(typ)
 
     def pretty(self, hang):
         # print("calling from MapExpr")
@@ -625,7 +680,14 @@ class AssignExpr(Expression):
     def to_multiline(self, counter):
         exprs, rhs = self._rhs.to_multiline(counter)
         exprs.append(AssignExpr(self._lhs, rhs))
-        return exprs, VarExpr(self._lhs, self.type), counter
+        return exprs, VarExpr(self._lhs, rhs.type), counter
+
+    def check_fields(self, analyzer, var_to_trans):
+        match, trans = self._rhs.check_fields(analyzer, var_to_trans)
+        if match:
+            var_to_trans[self.var] = trans
+
+        return match, trans
 
     def pretty(self, hang):
         return f"{SPACE * hang}let {self._lhs} = {self._rhs.pretty(hang)};"
@@ -947,3 +1009,16 @@ class Program:
         exprs.append(ret_expr)
         # exprs.append(VarExpr("x"+str(counter-1), exprs[-1].type))
         return Program(self._inputs, exprs)
+
+    def check_fields(self, analyzer, var_to_trans):
+        # print("calling check fields for programs")
+        for expr in self._expressions:
+            # print("checking fields in", expr)
+            match, trans = expr.check_fields(analyzer, var_to_trans)
+            if not match:
+                return False, trans
+
+        return True, trans
+
+    def set_type(self, typ):
+        self._expressions[-1].set_type(typ)
