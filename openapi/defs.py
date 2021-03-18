@@ -23,6 +23,7 @@ DOC_PARAMS = "parameters"
 DOC_NAME = "name"
 DOC_ID = "id"
 DOC_REQUEST = "requestBody"
+DOC_OK = "ok"
 
 # definitions of types in OpenAPI
 TYPE_NONE = "none"
@@ -56,6 +57,14 @@ CODE_OK = 200
 CODE_CREATED = 201
 CODE_NO_CONTENT = 204
 SUCCESS_CODES = [200, 201, 204]
+
+# definitions of annotation keys
+ANN_CONSUMER = "consumer"
+ANN_PRODUCER = "producer"
+ANN_ENDPOINT = "endpoint"
+ANN_PATH = "path"
+ANN_ENUM = "enum"
+ANN_COMBINE = "combine"
 
 # other definitions
 INDEX_ANY = "[?]"

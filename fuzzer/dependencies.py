@@ -4,9 +4,9 @@ import re
 from openapi import defs
 from fuzzer import error
 from fuzzer.utils import split_by
-from traces.log import RequestParameter
+from analyzer.entry import RequestParameter
 
-class Producer:
+class EndpointProducer:
     def __init__(self, ep: str, method: str, ep_method_def, path: List[str]):
         self.endpoint = ep
         self.method = method
@@ -32,6 +32,26 @@ class Producer:
 
     def __hash__(self):
         return hash((self.endpoint, self.method, tuple(self.path)))
+
+class EnumProducer:
+    def __init__(self, values, combine):
+        self.values = values
+        self.combine = combine
+
+    def __str__(self):
+        return f"enum: {self.values}"
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __eq__(self, other):
+        return (
+            self.values == other.values and
+            self.combine == other.combine
+        )
+
+    def __hash__(self):
+        return hash((tuple(self.values), self.combine))
 
 class DependencyResolver:
     def __init__(self):
@@ -64,7 +84,7 @@ class DependencyResolver:
                 else:
                     ep_method_def = ep_def.get(resp.method)
                 
-                producer = Producer(
+                producer = EndpointProducer(
                     endpoint, resp.method, ep_method_def, resp.path)
                 producers.add(producer)
 
@@ -91,10 +111,71 @@ class DependencyResolver:
             param_names = [rp.arg_name for rp in params]
             if param_name in param_names:
                 producers = self._create_producers_with_same_output(resps)
-                curr_producers = self._dependencies[param_name]
+                curr_producers = self._dependencies.get(param_name, set())
                 self._dependencies[param_name] = curr_producers.union(producers)
 
+    def _generate_annotation_for(self, annotations, endpoint, param_name):
+        valid_producers = set()
+        for ann in annotations:
+            if (ann.get(defs.ANN_CONSUMER) == param_name and
+                (ann.get(defs.ANN_ENDPOINT) is None or
+                ann.get(defs.ANN_ENDPOINT) == endpoint)):
+
+                ann_producers = ann.get(defs.ANN_PRODUCER)
+                for producer in ann_producers:
+                    if defs.ANN_ENUM in producer:
+                        values = producer.get(defs.ANN_ENUM)
+                        combine = producer.get(defs.ANN_COMBINE)
+                        valid_producers.add(EnumProducer(values, combine))
+                    else:
+                        ep = producer.get(defs.ANN_ENDPOINT)
+                        path = producer.get(defs.ANN_PATH)
+
+                        for p in self._producers:
+                            if p.endpoint == ep and p.path == path.split('/'):
+                                valid_producers.add(p)
+
+        return valid_producers
+
+    def get_dependencies_from_annotations(self, paths, annotations):
+        self._dependencies = {}
+        self._flatten_responses(paths)
+
+        for ep, path_def in paths.items():
+            for _, method_def in path_def.items():
+                parameters = method_def.get(defs.DOC_PARAMS, [])
+                for param in parameters:
+                    param_name = param.get(defs.DOC_NAME)
+                    producers = self._generate_annotation_for(
+                        annotations, 
+                        ep, param_name
+                    )
+                    if producers:
+                        self._dependencies[(ep, param_name)] = producers
+
+                request_body = method_def.get(defs.DOC_REQUEST)
+                if not request_body:
+                    continue
+
+                request_content = request_body.get(defs.DOC_CONTENT)
+                if not request_content:
+                    raise Exception("Request content is unavailable")
+
+                for _, request_def in request_content.items():
+                    request_schema = request_def.get(defs.DOC_SCHEMA)
+                    request_properties = request_schema.get(defs.DOC_PROPERTIES)
+                    for param_name in request_properties:
+                        producers = self._generate_annotation_for(
+                            annotations, 
+                            ep, param_name
+                        )
+                        if producers:
+                            self._dependencies[(ep, param_name)] = producers
+
+        return self._dependencies
+
     def get_dependencies_from_doc(self, paths, groups):
+        self._dependencies = {}
         self._flatten_responses(paths)
 
         for _, path_def in paths.items():
@@ -198,7 +279,7 @@ class DependencyResolver:
 
         elif schema_type:
             # base case: create a new Producer object
-            producer = Producer(endpoint, method, ep_method_def, path)
+            producer = EndpointProducer(endpoint, method, ep_method_def, path)
             self._producers.add(producer)
 
         else:

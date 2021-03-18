@@ -9,10 +9,11 @@
         "value_dict": {
             "token": "xoxp-1442946594759-1463848871412-1618073336579-1735b1e1b231339f9677e134350fed4c"
         },
+        "annotation_path": "annotation.json",
         "fuzz_depth": 3,
         "timeout_total": 600,
         "timeout_per_request": 60,
-        "iterations": 2,
+        "iterations": 50,
         "plot_graph": true,
         "endpoints": [
             "/chat.postMessage",
@@ -51,7 +52,8 @@
             "_x_gantry",
             "_x_mode",
             "token",
-            "ok"
+            "ok",
+            "topic"
         ]
     },
     "test_suites": []

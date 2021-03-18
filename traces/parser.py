@@ -2,7 +2,8 @@ import json
 import re
 from urllib.parse import urlparse
 
-from traces import log, typeChecker
+from analyzer.entry import RequestParameter, ResponseParameter, TraceEntry
+from traces import typeChecker
 
 JSON_TYPE = "application/json"
 HOSTNAME_PREFIX = "https://"
@@ -34,7 +35,7 @@ class LogParser:
 
     def _resolve_entry(self, skip_fields, entry):
         '''
-            resolve a request/response entry into an LogEntry object
+            resolve a request/response entry into an TraceEntry object
         '''
 
         request = entry.get("request", None)
@@ -83,7 +84,7 @@ class LogParser:
 
         request_params = [ x for x in request_params if x["name"] not in skip_fields]
         for rp in request_params:
-            p = log.RequestParameter(method, rp["name"], endpoint, rp["value"])
+            p = RequestParameter(method, rp["name"], endpoint, True, None, rp["value"])
             parameters.append(p)
 
         responses = []
@@ -95,18 +96,19 @@ class LogParser:
             for obj_name, obj in obj_defs.items():
                 obj_type = typeChecker.Type(obj_name, obj)
                 if obj_type.is_type_of(response_params):
-                    p = log.ResponseParameter(
+                    p = ResponseParameter(
                         self.method, obj_name, self.func_name,
-                        self.path + [obj_name], self.value[i])
+                        self.path + [obj_name], obj_type, response_params)
                     break
+        else:
+            p = ResponseParameter(method, "", endpoint, [], None, response_params)
+        # for k, v in response_params.items():
+        #     # flatten the returned object
+        #     p = entry.ResponseParameter(method, k, endpoint, [k], None, v)
+        #     if k not in skip_fields:
+        #         responses += p.flatten(self.path_to_defs, skip_fields)
 
-        for k, v in response_params.items():
-            # flatten the returned object
-            p = log.ResponseParameter(method, k, endpoint, [k], v)
-            if k not in skip_fields:
-                responses += p.flatten(self.path_to_defs, skip_fields)
-
-        return log.LogEntry(endpoint, method, parameters, responses)
+        return TraceEntry(endpoint, method, parameters, p)
 
     def _resolve_entries(self, entries, skips, skip_fields):
         '''

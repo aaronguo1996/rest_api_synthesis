@@ -43,7 +43,7 @@ class PreProcessor:
             return typ
         else:
             # create a new reference type
-            new_ref = "obj_ref_" + str(self._counter)
+            new_ref = "objs_ref_" + str(self._counter)
             self._counter += 1
 
             fixed_typ = self._fix_items_in_schema(

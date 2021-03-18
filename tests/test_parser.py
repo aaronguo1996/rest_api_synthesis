@@ -1,6 +1,7 @@
 import unittest
 
-from traces import parser, log
+from traces import parser
+from analyzer import entry
 
 class ParserTestCase(unittest.TestCase):
     def test_hostname_sanitization_prepend(self):
@@ -19,18 +20,18 @@ class ParserTestCase(unittest.TestCase):
 
 class ResponseParameterTestCase(unittest.TestCase):
     def test_response_flatten_simple(self):
-        param = log.ResponseParameter("GET", "result", "func", ["result"], {
+        param = entry.ResponseParameter("GET", "result", "func", ["result"], {
             "a": "abc",
             "b": "abc"
         })
         params = param.flatten("#/components/schemas", [])
         self.assertEqual(params, [
-            log.ResponseParameter("GET", "a", "func", ["result", "a"], "abc"),
-            log.ResponseParameter("GET", "b", "func", ["result", "b"], "abc")
+            entry.ResponseParameter("GET", "a", "func", ["result", "a"], "abc"),
+            entry.ResponseParameter("GET", "b", "func", ["result", "b"], "abc")
         ])
 
     def test_response_flatten_nested(self):
-        param = log.ResponseParameter("GET", "result", "func", ["result"], {
+        param = entry.ResponseParameter("GET", "result", "func", ["result"], {
             "a": {
                 "c": "abc",
                 "d": "abc"
@@ -39,9 +40,9 @@ class ResponseParameterTestCase(unittest.TestCase):
         })
         params = param.flatten("#/components/schemas", [])
         self.assertEqual(params, [
-            log.ResponseParameter("GET", "c", "func", ["result", "a", "c"], "abc"),
-            log.ResponseParameter("GET", "d", "func", ["result", "a", "d"], "abc"),
-            log.ResponseParameter("GET", "b", "func", ["result", "b"], "abc")
+            entry.ResponseParameter("GET", "c", "func", ["result", "a", "c"], "abc"),
+            entry.ResponseParameter("GET", "d", "func", ["result", "a", "d"], "abc"),
+            entry.ResponseParameter("GET", "b", "func", ["result", "b"], "abc")
         ])
 
 def param_suite():

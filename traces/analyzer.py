@@ -1,5 +1,5 @@
 import re
-from traces import log
+from analyzer import entry
 import logging
 
 class DSU:
@@ -95,15 +95,26 @@ class LogAnalyzer:
         self.value_to_param = {}
         self.dsu = DSU()
 
-    def analyze(self, entries):
+    def analyze(self, entries, skip_fields, path_to_defs = "#/components/schemas"):
         '''
             Match the value of each request argument or response parameter
             in a log entry and union the common ones
         '''
-        for entry in entries:
-            for p in entry.parameters:
+        for e in entries:
+            blacklist = [
+                '/apps.actions.v2.list'
+            ]
+            # do not add error responses to DSU
+            if isinstance(e.response, entry.ErrorResponse):
+                continue
+
+            if e.endpoint in blacklist:
+                continue
+
+            responses = e.response.flatten(path_to_defs, skip_fields)
+            for p in e.parameters:
                 self.insert(p)
-            for r in entry.responses:
+            for r in responses:
                 self.insert(r)
 
     def insert(self, param):
@@ -117,7 +128,10 @@ class LogAnalyzer:
             self.value_to_param[value] = param
 
         root = self.value_to_param[value]
+        # print("union", root, root.type, param, param.type, param.value)
+        # print(self.dsu.get_group(param))
         self.dsu.union(root, param)
+        # print(self.dsu.get_group(param))
 
     def analysis_result(self):
         return self.dsu.groups()
@@ -135,9 +149,11 @@ class LogAnalyzer:
             # pick representative in each group, the shortest path name
             rep = ""
             for param in group:
-                if isinstance(param, log.ResponseParameter):
-                    path_str = '.'.join(param.path)
-                    if not rep or len(rep) > len(path_str):
+                if isinstance(param, entry.ResponseParameter):
+                    # path_str = '.'.join(param.path)
+                    path_str = str(param.type)
+                    if ("unknown_obj" not in path_str and param.type and
+                        (not rep or len(rep) > len(path_str))):
                         rep = path_str
             
             if not rep:
@@ -148,25 +164,45 @@ class LogAnalyzer:
                 # print("not response, choosing", group[0])
                 rep = group[0].arg_name
             
+            # if not rep or rep == "blocks":
+            #     print(f"not rep in group {group}")
+
             dot.node(rep, label=rep, shape="oval")
 
             for param in group:
                 dot.node(param.func_name, label=param.func_name, shape='rectangle')
-                if isinstance(param, log.ResponseParameter):
+                if isinstance(param, entry.ResponseParameter):
                     # add an edge between the method and its return type
                     # TODO: modify the rep for array here
-                    l, s = param.path_to_str(rep)
-                    if '[' not in rep and not re.search("image_*", rep):
-                        edges.add((param.func_name, s))
+                    # l, s = param.path_to_str(rep)
+                    # if param.func_name == "/conversations.members":
+                    #     print("conversations.members has")
+                    #     print(param)
+                    #     print(param.type)
+                    #     print(param.type.get_oldest_parent())
 
-                    if l > 0:
-                        edges.add((s, rep))
+                    if '[' not in rep and not re.search("image_*", rep):
+                        if param.type:
+                            p = param.type.get_oldest_parent()
+                            if p.name == param.type.name:
+                                edges.add((param.func_name, rep))
+                            else:
+                                projection = f"projection ({param.type.name})"
+                                edges.add((p.name, projection))
+                                edges.add((projection, rep))
+                                edges.add((param.func_name, p.name))
+                        else:
+                            edges.add((param.func_name, rep))
+
+                    # if l > 0:
+                    #     edges.add((s, rep))
                 else:
                     # add an edge between parameter name and the method
                     if '[' not in rep and not re.search("image_*", rep):
                         edges.add((rep, param.func_name))
 
         for v1, v2 in edges:
+            # print(v1, v2)
             if ((v1[0] == '/' and v1 not in endpoints) or 
                 (v2[0] == '/' and v2 not in endpoints)):
                 continue

@@ -1,8 +1,8 @@
-from fuzzer.error import EndpointNotFoundError, ExceedDepthLimit, NoParamInBank
+from fuzzer.error import EndpointNotFoundError, ExceedDepthLimit
 from fuzzer.request import Connection
-from fuzzer.dependencies import DependencyResolver, Producer
+from fuzzer.dependencies import DependencyResolver, EndpointProducer, EnumProducer
 from openapi import defs
-from traces.log import RequestParameter, ResponseParameter
+from analyzer.entry import ErrorResponse, RequestParameter, ResponseParameter, TraceEntry
 
 from xeger import Xeger
 import logging
@@ -51,7 +51,7 @@ class FuzzResult:
 
 class BasicFuzzer:
     def __init__(self, hostname, base_path, endpoint, method, ep_method_def,
-        value_dict, real_dependencies, inferred_dependencies, depth_limit):
+        value_dict, real_dependencies, annotations, depth_limit):
         # create a logger for this module
         self._logger = logging.getLogger(__name__)
         self._endpoint = endpoint
@@ -63,7 +63,8 @@ class BasicFuzzer:
         self._conn = Connection(hostname, base_path)
         self._fuzzing_depth_limit = depth_limit
         self._real_dependencies = real_dependencies
-        self._inferred_dependencies = inferred_dependencies
+        self._annotations = annotations
+        # self._inferred_dependencies = inferred_dependencies
 
     def _random_from_type(self, param_name, param_type):
         x = Xeger(limit=20)
@@ -78,7 +79,7 @@ class BasicFuzzer:
         elif param_type == defs.TYPE_ARRAY:
             return []
         elif param_type == defs.TYPE_INT:
-            int_range = defined_regex or range(0,100)
+            int_range = defined_regex or range(0,5)
             return random.choice(int_range)
         elif param_type == defs.TYPE_NUM:
             float_range = defined_regex or (0, 1)
@@ -148,19 +149,19 @@ class BasicFuzzer:
         return FuzzResult(self._method, self._endpoint, code, response, params)
 
     def run(self):
-        try:
+        # try:
             return self._fuzz_one(1)
-        except Exception as e:
-            self._logger.debug(f"Exception: {e}")
-            return None
+        # except Exception as e:
+        #     self._logger.debug(f"Exception: {e}")
+        #     return None
 
 class FuzzerThread(BasicFuzzer):
     def __init__(self, hostname, base_path, endpoint, method, ep_method_def, 
-        value_dict, real_dependencies, inferred_dependencies, _, depth_limit):
+        value_dict, real_dependencies, annotations, _, depth_limit):
         super().__init__(
             hostname, base_path,
             endpoint, method, ep_method_def, 
-            value_dict, real_dependencies, inferred_dependencies, depth_limit
+            value_dict, real_dependencies, annotations, depth_limit
         )
         
 
@@ -168,33 +169,40 @@ class FuzzerThread(BasicFuzzer):
         try:
             producer = next(producer_gen)
             
-            if not isinstance(producer, Producer):
+            if isinstance(producer, EnumProducer):
+                if producer.combine:
+                    n = random.randint(1, len(producer.values))
+                    selected = random.sample(producer.values, n)
+                    return ','.join([str(s) for s in selected])
+                else:
+                    return random.choice(producer.values)
+            elif isinstance(producer, EndpointProducer):
+                self._logger.debug(f"Trying the producer {producer.endpoint}"
+                    f" with path {producer.path}")
+                producer_thread = FuzzerThread(
+                    self._hostname, self._base_path, 
+                    producer.endpoint, producer.method, producer.ep_method_def,
+                    self._fuzzing_depth_limit - 1)
+                producer_thread.start()
+                code, result = producer_thread.join()
+                if code not in defs.SUCCESS_CODES:
+                    raise Exception("Unsuccessful fuzzing")
+
+                for field in producer.path:
+                    if field == defs.INDEX_ANY:
+                        # TODO: do we want to backtrack here?
+                        result = random.choice(result)
+                    else:
+                        # instead of using "get", we want the exception to be thrown
+                        # and caught by the recursive case below
+                        result = result[field]
+
+                self._logger.info(f"Selected producer {producer.endpoint}"
+                    f" with path {producer.path}")
+                return result
+            else:
                 self._logger.debug(f"Trying the parameter value {producer}")
                 return producer
-
-            self._logger.debug(f"Trying the producer {producer.endpoint}"
-                f" with path {producer.path}")
-            producer_thread = FuzzerThread(
-                self._hostname, self._base_path, 
-                producer.endpoint, producer.method, producer.ep_method_def,
-                self._fuzzing_depth_limit - 1)
-            producer_thread.start()
-            code, result = producer_thread.join()
-            if code not in defs.SUCCESS_CODES:
-                raise Exception("Unsuccessful fuzzing")
-
-            for field in producer.path:
-                if field == defs.INDEX_ANY:
-                    # TODO: do we want to backtrack here?
-                    result = random.choice(result)
-                else:
-                    # instead of using "get", we want the exception to be thrown
-                    # and caught by the recursive case below
-                    result = result[field]
-
-            self._logger.info(f"Selected producer {producer.endpoint}"
-                f" with path {producer.path}")
-            return result
         except (StopIteration, ExceedDepthLimit):
             return None
         except Exception as e:
@@ -248,12 +256,40 @@ class FuzzerThread(BasicFuzzer):
 
 class SaturationThread(BasicFuzzer):
     def __init__(self, hostname, base_path, endpoint, method, ep_method_def, 
-        value_dict, real_dependencies, inferred_dependencies, analyzer, depth_limit):
+        value_dict, real_dependencies, annotations, analyzer, depth_limit):
         super().__init__(
             hostname, base_path,
             endpoint, method, ep_method_def, value_dict,
-            real_dependencies, inferred_dependencies, depth_limit)
+            real_dependencies, annotations, depth_limit)
         self._analyzer = analyzer
+
+    def _try_producer(self, producer):
+        if isinstance(producer, EnumProducer):
+            if producer.combine:
+                n = random.randint(1, len(producer.values))
+                selected = random.sample(producer.values, n)
+                return ','.join([str(s) for s in selected])
+            else:
+                return random.choice(producer.values)
+        elif isinstance(producer, EndpointProducer):
+            self._logger.debug(f"Trying the producer {producer.endpoint}"
+                f" with path {producer.path}")
+            resp = ResponseParameter(
+                producer.method,
+                producer.path[-1],
+                producer.endpoint,
+                producer.path,
+                None,
+                None
+            )
+            bank = self._analyzer.dsu.get_value_bank(resp)
+            if bank:
+                return random.choice(list(bank))
+            else:
+                return None
+        else:
+            self._logger.debug(f"Trying the parameter value {producer}")
+            return producer
 
     # get params from bank
     def _fuzz_params(self, _, params):
@@ -265,9 +301,8 @@ class SaturationThread(BasicFuzzer):
             # if not required:
             #     continue
             # randomly choose one of these optional arguments
-            if not required:
-                if random.random() > 0.75:
-                    continue
+            if not required and random.random() > 0.25:
+                continue
 
             param_name = param_obj.get(defs.DOC_NAME)
             param_schema = param_obj.get(defs.DOC_SCHEMA)
@@ -278,27 +313,28 @@ class SaturationThread(BasicFuzzer):
 
             self._logger.debug(f"Filling for parameter {param_name}")
             param = RequestParameter(
-                self._method, param_name, self._endpoint, None)
+                self._method,
+                param_name, 
+                self._endpoint, 
+                required, 
+                None, 
+                None
+            )
             if self._analyzer.dsu.find(param):
                 self._logger.debug(f"Trying fill parameter {param_name} by real dependencies")
                 # if we already have the value bank for this variable
                 param_value_bank = self._analyzer.dsu.get_value_bank(param)
                 param_val = random.choice(list(param_value_bank))
-            elif param_name in self._inferred_dependencies:
-                self._logger.debug(f"Trying fill parameter {param_name} by inferred dependencies")
+            elif (self._endpoint, param_name) in self._annotations:
+                self._logger.debug(f"Trying fill parameter {param_name} by annotated dependencies")
                 # try inferred dependencies but do not create new values
-                producers = self._inferred_dependencies.get(param_name, [])
+                producers = self._annotations.get(
+                    (self._endpoint, param_name), [])
                 param_value_bank = set()
                 for producer in producers:
-                    resp = ResponseParameter(
-                        producer.method,
-                        producer.path[-1],
-                        producer.endpoint,
-                        producer.path,
-                        None
-                    )
-                    bank = self._analyzer.dsu.get_value_bank(resp)
-                    param_value_bank = param_value_bank.union(bank)
+                    v = self._try_producer(producer)
+                    if v:
+                        param_value_bank.add(v)
 
                 if param_value_bank:
                     param_val = random.choice(list(param_value_bank))
@@ -307,8 +343,12 @@ class SaturationThread(BasicFuzzer):
             else:
                 param_val = None
 
+            # if we cannot find a value for an optional arg, skip it
+            if not param_val and not required and param_type == "string":
+                continue
+
             if not param_val:
-                self._logger.debug(f"No dependency found for {param_name}. Trying random values.")
+                self._logger.debug(f"No dependency found for {(self._endpoint, param_name)}. Trying random values.")
                 param_val = self._random_from_type(param_name, param_type)
 
             param_dict[param_name] = param_val
@@ -316,8 +356,9 @@ class SaturationThread(BasicFuzzer):
         return param_dict
 
 class Fuzzer:
-    def __init__(self, openapi_doc, analyzer, val_dict, depth_limit=3,
-        path_to_defs="#/components/schemas", skip_fields=[], plot_graph = False):
+    def __init__(self, openapi_doc, analyzer, val_dict, ann_path, 
+        depth_limit=3, path_to_defs="#/components/schemas", 
+        skip_fields=[], plot_graph = False):
         self._logger = logging.getLogger(__name__)
         # parse the spec into dict
         self._doc = openapi_doc
@@ -325,11 +366,21 @@ class Fuzzer:
 
         # resolve dependencies from the spec
         resolver = DependencyResolver()
-        dependencies = resolver.get_dependencies_from_doc(self._paths)
-        self._inferred_dependencies = dependencies
-
         self._analyzer = analyzer
         groups = analyzer.analysis_result()
+
+        with open(ann_path, 'r') as f:
+            annotations = json.load(f)
+
+        # print(annotations)
+        dependencies = resolver.get_dependencies_from_annotations(
+            self._paths, 
+            annotations
+        )
+        # print(dependencies)
+        # self._inferred_dependencies = dependencies
+        self._annotations = dependencies
+
         self._real_dependencies = resolver.get_dependencies_from_groups(
             self._paths, groups)
 
@@ -352,19 +403,43 @@ class Fuzzer:
         self._error_buckets = set()
         self._covered_endpoints = set()
         self._plot_graph = plot_graph
+        # self._annotations = annotations
 
     def _add_new_result(self, result: FuzzResult):
+        
+
+        requests = []
+        for name, val in result.request_params.items():
+            request = RequestParameter(
+                result.method, name, result.endpoint, True, None, val)
+            requests.append(request)
+            self._analyzer.insert(request)
+
+        if result.has_error:
+            response = ErrorResponse(result.response_body)
+        else:
+            response = ResponseParameter(
+                result.method, "", result.endpoint, [], None, result.response_body)
+
+        with open('traces.pkl', 'rb') as f:
+            entries = pickle.load(f)
+            print(len(entries))
+            entries.append(
+                TraceEntry(
+                    result.endpoint,
+                    result.method,
+                    requests,
+                    response,
+                ))
+
+        with open('traces.pkl', 'wb') as f:
+            pickle.dump(entries, f)
+            
         if result.has_error:
             return
 
-        for name, val in result.request_params.items():
-            request = RequestParameter(
-                result.method, name, result.endpoint, val)
-            self._analyzer.insert(request)
-
-        response = ResponseParameter(
-            result.method, "", result.endpoint, [], result.response_body)
-        for r in response.flatten(self._path_to_defs, self._skip_fields):
+        responses = response.flatten(self._path_to_defs, self._skip_fields)
+        for r in responses:
             self._analyzer.insert(r)
 
     def _run_all(self, fuzz_type, endpoints, iterations, timeout):
@@ -385,7 +460,7 @@ class Fuzzer:
                             ep, method, ep_method_def,
                             self._value_dict, 
                             self._real_dependencies,
-                            self._inferred_dependencies,
+                            self._annotations,
                             self._analyzer, self._depth_limit)
                         futures.append(executor.submit(t.run))
                 for future in as_completed(futures):
@@ -393,8 +468,9 @@ class Fuzzer:
                         results.append(future.result(timeout=timeout))
                     except TimeoutError:
                         print("We lacked patience and got a TimeoutError")
-                    except Exception:
-                        print("we get other exceptions")
+                    # except Exception as e:
+                    #     print(e)
+                    #     print("we get other exceptions")
 
             # self._logger.debug("===============Start to write new results into DSU")
             for fuzz_result in results:
@@ -474,13 +550,14 @@ class Fuzzer:
             for _, ep_method_def in ep_def.items():
                 param_names = self.get_param_names(ep_method_def)
                 for name in param_names:
-                    producers = self._inferred_dependencies.get(name, [])
+                    producers = self._annotations.get(name, [])
                     for producer in producers:
                         resp = ResponseParameter(
                             producer.method,
                             producer.path[-1],
                             producer.endpoint,
                             producer.path,
+                            None,
                             None
                         )
                         group = self._analyzer.dsu.get_group(resp)
