@@ -62,7 +62,7 @@ def main():
 
     print("Reading traces...")
     entries = []
-    with open(os.path.join("data/", "traces_update.pkl"), 'rb') as f:
+    with open(os.path.join("data/", "traces_update_bk.pkl"), 'rb') as f:
         entries = pickle.load(f)
 
     # for e in entries:
@@ -75,7 +75,8 @@ def main():
     log_analyzer.analyze(
         doc.get(defs.DOC_PATHS),
         entries, 
-        configuration.get(keys.KEY_SKIP_FIELDS))
+        configuration.get(keys.KEY_SKIP_FIELDS),
+        prefilter=configuration.get(keys.KEY_SYNTHESIS).get(keys.KEY_SYN_PREFILTER))
     groups = log_analyzer.analysis_result()
     if enable_debug:
         logging.debug("========== Start Logging Analyze Results ==========")

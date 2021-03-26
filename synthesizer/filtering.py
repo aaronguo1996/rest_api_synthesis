@@ -53,8 +53,12 @@ def run_filter(log_analyzer, dynamic_analyzer, inputs, program, multiple, repeat
     # check multiplicity match
     score_avg = sum(scores) / len(scores)
     if all_singleton and multiple:
-        print("this program does not match the goal multiplicity")
+        print("expects multiple values, but this program does not match the multiplicity")
         score_avg = score_avg - 5.0
+
+    if not all_singleton and not multiple:
+        print("expects single value, but this program does not match the multiplicity")
+        score_avg = score_avg - 10.0
 
     # check field matches
     log_analyzer.reset_context()

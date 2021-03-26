@@ -144,7 +144,7 @@ class AppExpr(Expression):
 
         app_expr = AppExpr(self._fun, args, self.type)
 
-        let_x = counter.get("x")
+        let_x = counter.get("x", 0)
         counter["x"] += 1
         let_var = VarExpr(f"x{let_x}", self.type)
         let_expr = AssignExpr(f"x{let_x}", app_expr)
@@ -448,7 +448,7 @@ class FilterExpr(Expression):
             val_expr, self._is_val_list, self.type
         )
 
-        let_x = counter.get("x")
+        let_x = counter.get("x", 0)
         counter["x"] += 1
         let_var = VarExpr(f"x{let_x}", self.type)
         let_expr = AssignExpr(f"x{let_x}", filter_expr)
@@ -582,7 +582,7 @@ class MapExpr(Expression):
         map_body = self._prog.to_multiline(counter)
         map_expr = MapExpr(obj_expr, map_body, self.type)
         
-        let_x = counter.get("x")
+        let_x = counter.get("x", 0)
         counter["x"] += 1
         let_var = VarExpr(f"x{let_x}", self.type)
         let_expr = AssignExpr(f"x{let_x}", map_expr)

@@ -223,6 +223,7 @@ class SynthesizerTestCase(unittest.TestCase):
             # ["/conversations.members:GET"],
             [],
             {
+                # "channel_name": SchemaType("objs_conversation.name", None)
                 "channel_name": SchemaType("objs_message.name", None)
             },
             [

@@ -243,12 +243,14 @@ class Synthesizer:
             "/users.info:GET",
             '/users.list:GET',
             # 'filter(objs_conversation_9, objs_conversation_9.name):',
-            "projection(objs_user.profile, email):",
+            # "projection(objs_user.profile, email):",
             # "projection(objs_conversation_9, creator):",
             "projection(/users.info_response, user):",
             # "projection(objs_user_0, profile):",
             "projection(/conversations.members_response, members):",
             'projection(/users.conversations_response, channels):',
+            # "projection(objs_conversation, name):",
+            # "projection(objs_conversation, id):",
             # "projection(objs_user.profile, email):",
             # 'projection(/conversations.members_response, response_metadata):'
         ]

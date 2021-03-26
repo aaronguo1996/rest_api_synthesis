@@ -43,7 +43,7 @@ class PetriNetEncoder:
         self._add_landmarks(landmarks)
         self._set_final(outputs)
 
-        # print("Current len:", self._path_len, flush=True)
+        print("Current len:", self._path_len, flush=True)
 
     @TimeStats(key=STATS_SEARCH)
     def solve(self):

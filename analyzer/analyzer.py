@@ -38,15 +38,16 @@ class DSU:
             self._nexts[y] = y
             self._values[y] = set([y.value])
 
-        xr, yr = self.find(x), self.find(y)
-        group = self.get_group(xr)
-        rep1, _ = get_representative(group)
-        group = self.get_group(yr)
-        rep2, _ = get_representative(group)
+        # hard code some rules that should not be included
+        # if (("name" in y.arg_name and isinstance(y, ResponseParameter) and y.type and "objs_message" in y.type.name) or 
+        #     ("name" in x.arg_name and isinstance(x, ResponseParameter) and x.type and "objs_message" in x.type.name)):
+        #     return
 
-        if ((rep1 == "defs_group_id" and y.arg_name == "name") or 
-            (rep2 == "defs_group_id" and x.arg_name == "name")):
-            return
+        xr, yr = self.find(x), self.find(y)
+        # group = self.get_group(xr)
+        # rep1, _ = get_representative(group)
+        # group = self.get_group(yr)
+        # rep2, _ = get_representative(group)
 
         if self._sizes[xr] < self._sizes[yr]:
             self._parents[yr] = xr

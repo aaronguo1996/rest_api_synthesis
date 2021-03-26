@@ -239,6 +239,7 @@ class TraceEntry:
         """
         entry_params = []
         
+        # print(endpoint)
         # read parameters
         parameters = entry_def.get(defs.DOC_PARAMS)
         for p in parameters:
@@ -306,11 +307,31 @@ class TraceEntry:
 
         requires = response_schema.get(defs.DOC_REQUIRED, [])
         response_params = response_schema.get(defs.DOC_PROPERTIES)
-        # TODO: this is specific to Slack API, should modify this to fit other domains
+        if response_params is None:
+            # def expand_oneof(schema):
+            #     results = []
+            #     if defs.DOC_ONEOF in schema:
+            #         oneof_params = schema.get(defs.DOC_ONEOF)
+            #         for p in oneof_params:
+            #             results += expand_oneof(p)
+            #     else:
+            #         results.append(schema.get(defs.DOC_PROPERTIES))
+
+            #     return results
+        
+            # response_params = expand_oneof(response_schema)
+
+            while defs.DOC_ONEOF in response_schema:
+                response_schemas = response_schema.get(defs.DOC_ONEOF)
+                response_schema = response_schemas[0]
+
+            response_params = response_schema.get(defs.DOC_PROPERTIES)
+
         for name, rp in response_params.items():
             if name in skip_fields:
                 continue
 
+            # print("name:", name)
             param = ResponseParameter.from_openapi(
                 endpoint, method, name,
                 name in requires, int(rp.get(defs.DOC_TYPE) == "array"))
