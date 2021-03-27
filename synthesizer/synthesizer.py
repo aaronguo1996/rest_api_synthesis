@@ -2,11 +2,8 @@ from collections import defaultdict
 import re
 from synthesizer.hypergraph_encoder import HyperGraphEncoder
 import time
-<<<<<<< HEAD
-=======
 import itertools
 import pickle
->>>>>>> 86ebf765dd6fe6ced9f9f1c5bab6d0c8c784c8bd
 
 from synthesizer.petrinet_encoder import PetriNetEncoder
 from synthesizer.utils import make_entry_name
@@ -111,12 +108,8 @@ class Synthesizer:
         result = self._encoder.solve()
         # result = ['/conversations.list:GET', 'projection(/conversations.list_response, channels):', 'filter(objs_conversation_9, objs_conversation_9.name):', 'projection(objs_conversation_9, creator):', '/users.info:GET', 'projection(objs_conversation_15, user):', 'projection(/users.info_response, user):', 'filter(objs_user_0, objs_user_0.id):', 'projection(objs_user_0, profile):', 'projection(objs_user.profile, email):']
 
-<<<<<<< HEAD
-        while len(solutions) < n:
-=======
         break_flag = False
         while len(results) < n:
->>>>>>> 86ebf765dd6fe6ced9f9f1c5bab6d0c8c784c8bd
             # find the correct path len
             while result is None:
                 limit = self._config.get(params.LENGTH_LIMIT, DEFAULT_LENGTH_LIMIT)
@@ -131,39 +124,6 @@ class Synthesizer:
                 break
 
             # find the solution for a given path len
-<<<<<<< HEAD
-            while result is not None and len(solutions) < n:
-                # print(result)
-                # FIXME: better implementation latter
-                
-                end = time.time()
-                programs = self._program_generator.generate_program(
-                    result, inputs, outputs[0]
-                )
-                for p in programs:
-                    if p in solutions:
-                        continue
-
-                    p.to_graph(graph)
-                    solutions.add(p)
-                    with open("data/example_results.txt", "a+") as f:
-                        f.write(f"#{len(solutions)+1}")
-                        f.write("\n")
-                        f.write(f"time: {(end - start): .2f}")
-                        f.write("\n")
-                        f.write(f"time breakdown:\n{TimeStats._timing}\n")
-                        f.write(p.pretty(0))
-                        f.write("\n")
-
-                results.append(result)
-                if len(solutions) > n:
-                    break
-
-                self._encoder.block_prev()
-                result = self._encoder.solve()
-                
-        graph.render(filename="output/programs")
-=======
             while result is not None and len(results) < n:
                 # print(result, flush=True)
                 # FIXME: better implementation later
@@ -234,7 +194,6 @@ class Synthesizer:
         with open("data/annotated_entries.pkl", "wb") as f:
             pickle.dump(self._entries, f)
 
->>>>>>> 86ebf765dd6fe6ced9f9f1c5bab6d0c8c784c8bd
         return results
 
     # def run_all(self, landmarks, inputs, outputs):

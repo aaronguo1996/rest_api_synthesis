@@ -38,18 +38,6 @@ class DSU:
             self._nexts[y] = y
             self._values[y] = set([y.value])
 
-<<<<<<< HEAD
-        xr, yr = self.find(x), self.find(y)
-        group = self.get_group(xr)
-        rep1, _ = get_representative(group)
-        group = self.get_group(yr)
-        rep2, _ = get_representative(group)
-
-        if ((rep1 == "defs_group_id" and y.arg_name == "name") or 
-            (rep2 == "defs_group_id" and x.arg_name == "name")):
-            return
-
-=======
         # hard code some rules that should not be included
         if (("name" in y.arg_name and isinstance(y, ResponseParameter) and y.type and "objs_message" in y.type.name) or 
             ("name" in x.arg_name and isinstance(x, ResponseParameter) and x.type and "objs_message" in x.type.name)):
@@ -61,7 +49,6 @@ class DSU:
         # group = self.get_group(yr)
         # rep2, _ = get_representative(group)
 
->>>>>>> 86ebf765dd6fe6ced9f9f1c5bab6d0c8c784c8bd
         if self._sizes[xr] < self._sizes[yr]:
             self._parents[yr] = xr
             # swap the next pointer of xr and yr
@@ -262,16 +249,7 @@ class LogAnalyzer:
             self.value_to_param[value] = param
 
         root = self.value_to_param[value]
-<<<<<<< HEAD
-        group = self.dsu.get_group(root)
-        rep, _ = get_representative(group)
-        # group = self.dsu.get_group(param)
-        # rep2, _ = get_representative(group)
-        if rep == "defs_group_id" and (param.arg_name == "topic" or param.arg_name == "value"):
-            self.dsu.union(param, param)
-            return
 
-=======
         # group = self.dsu.get_group(root)
         # rep, _ = get_representative(group)
 
@@ -281,7 +259,7 @@ class LogAnalyzer:
 
         # print("union", root, root.type, param, param.type, param.value)
         # print(self.dsu.get_group(param))
->>>>>>> 86ebf765dd6fe6ced9f9f1c5bab6d0c8c784c8bd
+        
         self.dsu.union(root, param)
         # print(self.dsu.get_group(param))
 

@@ -59,16 +59,11 @@ class ProgramGenerator:
             p = Program(list(inputs.keys()), [expr])
             # print(p.pretty())
             if self._filter_by_names(transitions, p):
-<<<<<<< HEAD
-                p.merge_maps()
-                p.merge_projections({})
-=======
                 # print(p)
                 p = p.to_multiline(self._name_counters)
                 p.simplify()
                 # print(p.pretty())
                 # print(p.remove_map().pretty())
->>>>>>> 86ebf765dd6fe6ced9f9f1c5bab6d0c8c784c8bd
                 programs.append(p)
                 # print("get satisfying program", p.to_expression({}))
 
@@ -194,52 +189,7 @@ class ProgramGenerator:
             maps = params[0][1]
             obj = params[0][2]
             field = re.search(r"projection\(.*, (.*)\)", sig.endpoint).group(1)
-<<<<<<< HEAD
-            typ = sig.responses[0].type
-
-            if obj_is_list:   
-                map_x = self._fresh_var("x")
-                proj_expr = ProjectionExpr(VarExpr(map_x, obj.type), field, typ)
-                map_body = proj_expr
-                for i in range(obj_is_list):
-                    if i == obj_is_list - 1:
-                        next_x = None
-                        map_obj = obj
-                    else:
-                        next_x = self._fresh_var("x")
-                        map_obj = VarExpr(next_x)
-
-                    let_x = self._fresh_var("x")
-                    map_body = MapExpr(
-                        map_obj,
-                        Program(
-                            [map_x],
-                            [AssignExpr(let_x, map_body), VarExpr(let_x)]
-                        )
-                    )
-                    map_x = next_x
-
-                # let_x = self._fresh_var("x")
-                # map_body = MapExpr(
-                #     obj,
-                #     Program(
-                #         [map_x],
-                #         [AssignExpr(let_x, map_body), VarExpr(let_x)]
-                #     )
-                # )
-
-                let_x = self._fresh_var("x")
-                let_expr = AssignExpr(let_x, map_body)
-                results.append(let_expr)
-
-                for r in sig.responses:
-                    typ = r.type
-                    self._add_typed_var(typ_subst, let_x, typ, obj_is_list)
-            else:
-                proj_expr = ProjectionExpr(obj, field, typ)
-=======
             typ = sig.response.type
->>>>>>> 86ebf765dd6fe6ced9f9f1c5bab6d0c8c784c8bd
 
             map_body = ProjectionExpr(obj, field)
             for o, x in reversed(maps):
@@ -291,54 +241,10 @@ class ProgramGenerator:
             )
 
     def _generate_let(self, typ_subst, sig):
-<<<<<<< HEAD
-        # get a fresh type variable
-        # x = self._fresh_var("x")
-
-        results = []
-=======
->>>>>>> 86ebf765dd6fe6ced9f9f1c5bab6d0c8c784c8bd
         args = self._generate_args(typ_subst, sig)
         for params in itertools.product(*args):
             map_pairs = []
             named_args = []
-<<<<<<< HEAD
-            for arg_name, arg, is_list in params:
-                if is_list:
-                    map_x = self._fresh_var("x")
-                    map_pairs.append((arg, map_x))
-                    for _ in range(is_list - 1):
-                        next_x = self._fresh_var("x")
-                        map_pairs.append((VarExpr(map_x, arg.type), next_x))
-                        map_x = next_x
-                    named_args.append((arg_name, VarExpr(map_x, arg.type)))
-                else:
-                    named_args.append((arg_name, arg))
-
-            expr = AppExpr(sig.endpoint, named_args)
-            # if len(map_pairs) > 0:
-            let_x = self._fresh_var("x")
-            expr = [AssignExpr(let_x, expr), VarExpr(let_x)]
-            
-            map_pairs.reverse()
-            for arg, xx in map_pairs:
-                let_x = self._fresh_var("x")
-                expr = [
-                    AssignExpr(let_x, MapExpr(arg, Program([xx], expr))),
-                    VarExpr(let_x),
-                ]
-
-            results.append(expr[0])
-
-        for r in sig.responses:
-            typ = r.type
-            self._add_typed_var(
-                typ_subst, let_x, typ, 
-                r.array_level + len(map_pairs)
-            )
-
-        return results
-=======
             for arg_name, arg_maps, arg in params:
                 map_pairs += arg_maps
                 named_args.append((arg_name, arg))
@@ -351,4 +257,3 @@ class ProgramGenerator:
                 typ_subst, map_body, sig.response.type,
                 sig.response.array_level + len(map_pairs)
             )
->>>>>>> 86ebf765dd6fe6ced9f9f1c5bab6d0c8c784c8bd
