@@ -51,6 +51,6 @@
         "topic"
     ],
     "test_suites": [
-        "synthesizer"
+        "generator"
     ]
 }
