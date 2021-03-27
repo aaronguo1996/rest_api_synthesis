@@ -16,6 +16,22 @@ class Parameter:
     def __repr__(self):
         return self.__str__()
 
+class ErrorResponse:
+    def __init__(self, msg):
+        self._error_msg = msg
+
+    def __str__(self):
+        return f"error: {self._error_msg}"
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __eq__(self, other):
+        if isinstance(other, ErrorResponse):
+            return NotImplemented
+
+        return self._error_msg == other._error_msg
+        
 class ResponseParameter(Parameter):
     def __init__(self, method, arg_name, func_name, 
         path, is_required, array_level, typ, value):
@@ -64,7 +80,7 @@ class ResponseParameter(Parameter):
                 #     print(f"pins.list has arg {self.arg_name} of response type", self.type)
                     # print("type schema is", self.type.schema)
             # if self.arg_name == "response_metadata":
-            #     print(self.type.name)
+            #     print("response_metadata", self.type.name)
 
             if not self.type and defs.DOC_OK not in self.value:
                 # print(f"assigning type for {self.value}")
@@ -196,36 +212,34 @@ class TraceEntry:
         return (self.method.upper() + " " + self.endpoint + "\n" +
                 ",".join(param_strs) + "\n" + str(self.response))
 
-class DocEntry:
-    def __init__(self, endpoint, method, parameters, responses):
-        self.endpoint = endpoint
-        self.method = method
-        self.parameters = parameters
-        self.responses = responses
-
-    def __str__(self):
-        param_strs = map(str, self.parameters)
-        resp_strs = map(str, self.responses)
-        return (self.method.upper() + " " + self.endpoint + "\n" +
-                ",".join(param_strs) + "\n" + 
-                ",".join(resp_strs) + "\n")
-    
     def __repr__(self):
         return self.__str__()
 
     def __eq__(self, other):
-        if not isinstance(other, DocEntry):
+        if not isinstance(other, TraceEntry):
             return NotImplemented
 
         return (self.endpoint == other.endpoint and
             self.method == other.method and
             self.parameters == other.parameters and
-            self.responses == other.responses)
+            self.response == other.response)
 
     @staticmethod
     def from_openapi(skip_fields, endpoint, method, entry_def):
+        """read definition from openapi and generate several entries
+
+        Args:
+            skip_fields ([type]): [description]
+            endpoint ([type]): [description]
+            method ([type]): [description]
+            entry_def ([type]): [description]
+
+        Returns:
+            [type]: [description]
+        """
         entry_params = []
         
+        # print(endpoint)
         # read parameters
         parameters = entry_def.get(defs.DOC_PARAMS)
         for p in parameters:
@@ -263,7 +277,20 @@ class DocEntry:
                 )
                 entry_params.append(param)
 
-        entry_responses = []
+        entry_response = ResponseParameter(
+            method, "", endpoint, [], True, 0,
+            SchemaType(endpoint+"_response", None), None
+        )
+
+        entry_param = RequestParameter(
+            method, "", endpoint, True,
+            SchemaType(endpoint+"_response", None), None
+        )
+
+        results = [
+            TraceEntry(endpoint, method, entry_params, entry_response)
+        ]
+
         # read responses
         responses = entry_def.get(defs.DOC_RESPONSES)
         response_content = responses \
@@ -280,18 +307,38 @@ class DocEntry:
 
         requires = response_schema.get(defs.DOC_REQUIRED, [])
         response_params = response_schema.get(defs.DOC_PROPERTIES)
-        # TODO: this is specific to Slack API, should modify this to fit other domains
+        if response_params is None:
+            # def expand_oneof(schema):
+            #     results = []
+            #     if defs.DOC_ONEOF in schema:
+            #         oneof_params = schema.get(defs.DOC_ONEOF)
+            #         for p in oneof_params:
+            #             results += expand_oneof(p)
+            #     else:
+            #         results.append(schema.get(defs.DOC_PROPERTIES))
+
+            #     return results
+        
+            # response_params = expand_oneof(response_schema)
+
+            while defs.DOC_ONEOF in response_schema:
+                response_schemas = response_schema.get(defs.DOC_ONEOF)
+                response_schema = response_schemas[0]
+
+            response_params = response_schema.get(defs.DOC_PROPERTIES)
+
         for name, rp in response_params.items():
             if name in skip_fields:
                 continue
 
-            # skip requires for test
-            # if name not in requires:
-            #     continue
-
+            # print("name:", name)
             param = ResponseParameter.from_openapi(
                 endpoint, method, name,
                 name in requires, int(rp.get(defs.DOC_TYPE) == "array"))
-            entry_responses.append(param)
 
-        return DocEntry(endpoint, method, entry_params, entry_responses)
+            e = TraceEntry(
+                f"projection({endpoint}_response, {name})",
+                "", [entry_param], param)
+            results.append(e)
+
+        return results

@@ -2,6 +2,7 @@ from urllib.parse import urlencode
 from urllib.request import urlopen, Request
 import logging
 import time
+import json
 
 from openapi import defs
 
@@ -13,8 +14,16 @@ class Connection:
 
     def send_and_recv(self, endpoint, headers, data):
         url = "https://" + self._hostname + self._base_path + endpoint
-        params = urlencode(data).encode()
+
+        # POST data
+        if (defs.HEADER_CONTENT in headers and
+            headers.get(defs.HEADER_CONTENT) == defs.HEADER_JSON):
+            params = json.dumps(data).encode()
+        else:
+            params = urlencode(data).encode()
+        
         headers.update({"User-Agent": "RestSyn/0.1"})
+        # print(headers)
         req = Request(url, data=params, headers=headers)
         self._logger.info(f"Sending to {url} the message {params}")
         try:
@@ -24,7 +33,7 @@ class Connection:
             self._logger.info(f"Getting back from {url, params} the response {resp_body}")
             return return_code, resp_body
         except Exception as e:
-            time.sleep(60)
+            # time.sleep(60)
             return 404, str(e)
 
 
