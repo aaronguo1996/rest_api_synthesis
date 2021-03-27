@@ -46,19 +46,8 @@ class Synthesizer:
         self._add_transitions()
 
     def run(self, landmarks, inputs, outputs):
-        self._encoder.init(landmarks, inputs, outputs)
-        result = self._encoder.solve()
-        while result is None:
-            limit = self._config.get(params.LENGTH_LIMIT, DEFAULT_LENGTH_LIMIT)
-            if self._encoder._path_len >= limit:
-                break
-
-            self._encoder.increment(landmarks, outputs)
-            # print(self._encoder._solver.assertions())
-            result = self._encoder.solve()
-            # print(self._encoder._solver.unsat_core())
-
-        return result
+        results = self.run_n(landmarks, inputs, outputs, 1)
+        return results[0]
 
     def _write_solution(self, idx, t, p):
         with open("data/example_results.txt", "a+") as f:
@@ -207,24 +196,24 @@ class Synthesizer:
 
         return results
 
-    def run_all(self, landmarks, inputs, outputs):
-        self._encoder.init(landmarks, inputs, outputs)
-        results = []
-        result = self._encoder.solve()
-        while result is None:
-            limit = self._config.get(params.LENGTH_LIMIT, DEFAULT_LENGTH_LIMIT)
-            if self._encoder._path_len >= limit:
-                break
+    # def run_all(self, landmarks, inputs, outputs):
+    #     self._encoder.init(landmarks, inputs, outputs)
+    #     results = []
+    #     result = self._encoder.solve()
+    #     while result is None:
+    #         limit = self._config.get(params.LENGTH_LIMIT, DEFAULT_LENGTH_LIMIT)
+    #         if self._encoder._path_len >= limit:
+    #             break
 
-            self._encoder.increment(landmarks, outputs)
-            result = self._encoder.solve()
+    #         self._encoder.increment(landmarks, outputs)
+    #         result = self._encoder.solve()
 
-        while result is not None:
-            results.append(result)
-            self._encoder.block_prev()
-            result = self._encoder.solve()
+    #     while result is not None:
+    #         results.append(result)
+    #         self._encoder.block_prev()
+    #         result = self._encoder.solve()
 
-        return results
+    #     return results
 
     def _add_transitions(self):
         entries = self._create_entries()
