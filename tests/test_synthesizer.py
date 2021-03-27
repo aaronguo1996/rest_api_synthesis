@@ -245,8 +245,8 @@ class SynthesizerTestCase(unittest.TestCase):
             # ["/conversations.members:GET"],
             [],
             {
-                # "channel_name": SchemaType("objs_conversation.name", None)
-                "channel_name": SchemaType("objs_message.name", None)
+                # "channel_name": SchemaType("objs_message.name", None)
+                "channel_name": SchemaType("objs_conversation.name", None)
             },
             [
                 SchemaType("objs_user.profile.email", None)
@@ -264,31 +264,6 @@ class SynthesizerTestCase(unittest.TestCase):
             "projection(objs_user.profile, email):"
         ], result)
         # self.assertEqual(result, [])
-
-    def test_example_b_short(self):
-        self._synthesizer.init()
-
-        self._synthesizer.run_n(
-            # ["/conversations.members:GET"],
-            [],
-            {
-                "channel_name": SchemaType("objs_message.name", None)
-            },
-            [
-                SchemaType("objs_user.profile.email", None)
-            ],
-            50
-        )
-        # self.assertIn([
-        #     "/conversations.list:GET",
-        #     "filter(objs_conversation, objs_conversation.name):",
-        #     "projection(objs_conversation, id):",
-        #     "/conversations.members:GET",
-        #     "/users.info:GET",
-        #     "projection(objs_user, profile):",
-        #     "projection(objs_user.profile, email):"
-        # ], result)
-        # print(result)
 
     def test_example_a(self):
         self._synthesizer.init()
@@ -316,12 +291,11 @@ class SynthesizerTestCase(unittest.TestCase):
 def synthesizer_suite(doc, config, analyzer):
     SynthesizerTestCase._setUp(doc, config, analyzer)
     suite = unittest.TestSuite()
-    suite.addTest(SynthesizerTestCase('test_create_projection'))
-    suite.addTest(SynthesizerTestCase('test_create_filter'))
-    suite.addTest(SynthesizerTestCase('test_single_transition'))
-    suite.addTest(SynthesizerTestCase('test_two_transitions'))
-    suite.addTest(SynthesizerTestCase('test_nullary'))
-    suite.addTest(SynthesizerTestCase('test_example_a'))
-    # suite.addTest(SynthesizerTestCase('test_example_b'))
-    # suite.addTest(SynthesizerTestCase('test_example_b_short'))
+    # suite.addTest(SynthesizerTestCase('test_create_projection'))
+    # suite.addTest(SynthesizerTestCase('test_create_filter'))
+    # suite.addTest(SynthesizerTestCase('test_single_transition'))
+    # suite.addTest(SynthesizerTestCase('test_two_transitions'))
+    # suite.addTest(SynthesizerTestCase('test_nullary'))
+    # suite.addTest(SynthesizerTestCase('test_example_a'))
+    suite.addTest(SynthesizerTestCase('test_example_b'))
     return suite

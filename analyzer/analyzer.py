@@ -39,9 +39,9 @@ class DSU:
             self._values[y] = set([y.value])
 
         # hard code some rules that should not be included
-        # if (("name" in y.arg_name and isinstance(y, ResponseParameter) and y.type and "objs_message" in y.type.name) or 
-        #     ("name" in x.arg_name and isinstance(x, ResponseParameter) and x.type and "objs_message" in x.type.name)):
-        #     return
+        if (("name" in y.arg_name and isinstance(y, ResponseParameter) and y.type and "objs_message" in y.type.name) or 
+            ("name" in x.arg_name and isinstance(x, ResponseParameter) and x.type and "objs_message" in x.type.name)):
+            return
 
         xr, yr = self.find(x), self.find(y)
         # group = self.get_group(xr)
