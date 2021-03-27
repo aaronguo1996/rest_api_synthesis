@@ -3,3 +3,4 @@ prance
 openapi_spec_validator
 z3-solver
 SNAKES
+seaborn

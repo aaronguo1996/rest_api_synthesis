@@ -17,15 +17,15 @@ class TimeStats:
             start = time.time()
             result = func(*args, **kwargs)
             end = time.time()
-            Stats.add_entry(self._key, end - start)
+            TimeStats.add_entry(self._key, end - start)
             return result
 
         return wrapper
 
     @staticmethod
     def add_entry(key, value):
-        Stats._timing[key] += value
+        TimeStats._timing[key] += value
 
     @staticmethod
     def reset():
-        Stats._timing = defaultdict(float)
+        TimeStats._timing = defaultdict(float)

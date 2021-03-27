@@ -30,22 +30,13 @@ class AnalyzerTestCase(unittest.TestCase):
         self.assertEqual(param.type.name, "objs_user.profile.email")
         self.assertNotEqual(param.type.schema, None)
 
-        typ = SchemaType("objs_channel.creator", None)
+        typ = SchemaType("objs_conversation.creator", None)
         param = ResponseParameter(
-            "", "", "projection(objs_channel, creator)", 
+            "", "", "projection(objs_conversation, creator)", 
             [], True, 0, typ, None)
         param = self._analyzer.find_same_type(param)
         self.assertNotEqual(param.type, None)
         self.assertEqual(param.type.name, "defs_user_id")
-        self.assertNotEqual(param.type.schema, None)
-
-        typ = SchemaType("objs_channel.id", None)
-        param = ResponseParameter(
-            "", "", "projection(objs_channel, id)", 
-            [], True, 0, typ, None)
-        param = self._analyzer.find_same_type(param)
-        self.assertNotEqual(param.type, None)
-        self.assertEqual(param.type.name, "defs_group_id")
         self.assertNotEqual(param.type.schema, None)
 
         typ = SchemaType("objs_conversation.id", None)
@@ -54,7 +45,7 @@ class AnalyzerTestCase(unittest.TestCase):
             [], True, 0, typ, None)
         param = self._analyzer.find_same_type(param)
         self.assertNotEqual(param.type, None)
-        self.assertEqual(param.type.name, "defs_group_id")
+        self.assertEqual(param.type.name, "defs_dm_id")
         self.assertNotEqual(param.type.schema, None)
 
         typ = SchemaType("objs_conversation.priority", None)

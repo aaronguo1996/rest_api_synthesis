@@ -2,9 +2,13 @@ from collections import defaultdict
 import itertools
 import functools
 import re
+import copy
 
-from program.program import *
+from program.program import (Program, VarExpr, ProjectionExpr,
+                             FilterExpr, MapExpr, AssignExpr, AppExpr)
+from schemas.schema_type import SchemaType
 from openapi import defs
+
 
 class ProgramGenerator:
     def __init__(self, signatures):
@@ -26,7 +30,7 @@ class ProgramGenerator:
         # add inputs
         for name, in_typ in inputs.items():
             # in_typ = in_typ.name
-            self._add_typed_var(typ_subst, name, in_typ, 0)
+            self._add_typed_var(typ_subst, VarExpr(name, in_typ), in_typ, 0)
 
         results = []
         for trans in transitions:
@@ -35,54 +39,55 @@ class ProgramGenerator:
                 raise Exception(f"Unknown transition name {trans}")
 
             if re.search(r"projection\(.*, .*\)", sig.endpoint):
-                exprs = self._generate_projection(typ_subst, sig)
-                if exprs:
-                    results.append(exprs)
+                self._generate_projection(typ_subst, sig)
             elif re.search(r"filter\(.*, .*\)", sig.endpoint):
-                exprs = self._generate_filter(typ_subst, sig)
-                results.append(exprs)
+                self._generate_filter(typ_subst, sig)
             else:
-                exprs = self._generate_let(typ_subst, sig)
-                results.append(exprs)
+                self._generate_let(typ_subst, sig)
 
             # print(sig.endpoint, exprs)
 
-        expr = typ_subst.get(target.name, [])
-        results.append([e[0] for e in expr])
+        # for t, exprs in typ_subst.items():
+        #     print(t)
+        #     for e in exprs:
+        #         print(e)
+        exprs = typ_subst.get(target.name, [])
 
         programs = []
-        for exprs in itertools.product(*results):
-            p = Program(list(inputs.keys()), list(exprs))
-            # print(p)
+        for expr, _ in exprs:
+            expr.set_type(target)
+            p = Program(list(inputs.keys()), [expr])
+            # print(p.pretty())
             if self._filter_by_names(transitions, p):
-                # p.merge_maps()
-                # p.merge_projections({})
+                # print(p)
+                p = p.to_multiline(self._name_counters)
+                p.simplify()
+                # print(p.pretty())
+                # print(p.remove_map().pretty())
                 programs.append(p)
-                print(p.to_expression({}))
+                # print("get satisfying program", p.to_expression({}))
 
         # raise Exception
         return programs
 
     def _filter_by_names(self, transitions, result):
         name_counts = defaultdict(int)
+        name_counts.clear()
         for tr in transitions:
-            if re.search(r"projection\(.*, .*\)", tr):
-                name = "projection"
-            elif re.search(r"filter\(.*, .*\)", tr):
-                name = "filter"
-            else:
-                name = re.search(r"(.*):.*", tr).group(1)
-
+            name = re.search(r"(.*):.*", tr).group(1)
             name_counts[name] += 1
 
         real_counts = defaultdict(int)
+        real_counts.clear()
         exprs = []
 
         def get_subexprs(e):
             if isinstance(e, AssignExpr):
                 return get_subexprs(e._rhs)
             elif isinstance(e, MapExpr):
-                return get_subexprs(e._prog)
+                obj_subexprs = get_subexprs(e._obj)
+                prog_subexprs = get_subexprs(e._prog)
+                return obj_subexprs + prog_subexprs
             elif isinstance(e, Program):
                 results = []
                 for expr in e._expressions:
@@ -103,14 +108,14 @@ class ProgramGenerator:
             else:
                 return [e]
 
-        for expr in result.reachable_expressions():
+        for expr in result.reachable_expressions({}):
             exprs += get_subexprs(expr)
 
         for expr in exprs:
             if isinstance(expr, ProjectionExpr):
-                name = "projection"
+                name = f"projection({expr._obj.type}, {expr._field})"
             elif isinstance(expr, FilterExpr):
-                name = "filter"
+                name = f"filter({expr._obj.type}, {expr._obj.type}.{expr._field})"
             elif isinstance(expr, AppExpr):
                 name = expr._fun
             else:
@@ -120,18 +125,24 @@ class ProgramGenerator:
         # print(real_counts)
         # print(name_counts)
         for name in name_counts:
-            if real_counts[name] != name_counts[name]:
+            if name not in real_counts or real_counts[name] < name_counts[name]:
                 return False
 
         return True
 
-    def _add_typed_var(self, typ_subst, name, typ, is_list):
-        v = VarExpr(name, typ)
+    def _add_typed_var(self, typ_subst, expr, typ, is_list):
         tname = typ.name
         if tname in typ_subst:
-            typ_subst[tname].append((v, is_list))
+            typ_subst[tname].append((expr, is_list))
         else:
-            typ_subst[tname] = [(v, is_list)]
+            typ_subst[tname] = [(expr, is_list)]
+
+    def _add_results(self, typ_subst, x, typ, array_level):
+        if isinstance(typ, list):
+            for t in typ:
+                self._add_typed_var(typ_subst, x, t, array_level)
+        else:
+            self._add_typed_var(typ_subst, x, typ, array_level)
 
     def _generate_args(self, typ_subst, sig):
         # get variables for each parameter type
@@ -143,124 +154,106 @@ class ProgramGenerator:
 
             typ = param.type.name
             if param.is_required and param.type.name not in typ_subst:
-                raise Exception(f"Given path is spurious, no program can be generated for {sig.endpoint}")
+                raise Exception(
+                    f"Given path is spurious, "
+                    f"no program can be generated for {sig.endpoint}"
+                )
 
-            ids = typ_subst.get(typ)
-            if ids:
-                # raise Exception(f"Given path is spurious, no program can be generated for {sig.endpoint} with type {typ}")
-                args.append([(param.arg_name, x, is_list) for (x, is_list) in ids])
+            exprs = typ_subst.get(typ)
+            if exprs is not None:
+                # print("Find expressions for type", typ)
+                arg_exprs = []
+                for expr, list_lv in exprs:
+                    expr.set_type(SchemaType(typ, None))
+                    maps, obj = self._add_map(expr, typ, list_lv)
+                    arg_exprs.append((param.arg_name, maps, obj))
+                args.append(arg_exprs)
 
         return args
 
-    def _generate_projection(self, typ_subst, sig):
+    def _add_map(self, obj, typ, lv):
         results = []
+
+        map_obj = copy.deepcopy(obj)
+        map_obj.type = SchemaType(typ, None)
+        for _ in range(lv):
+            map_x = self._fresh_var("x")
+            results.append((map_obj, map_x))
+            map_obj = VarExpr(map_x, SchemaType(typ, None))
+
+        return results, map_obj
+
+    def _generate_projection(self, typ_subst, sig):
         args = self._generate_args(typ_subst, sig)
         for params in itertools.product(*args):
-            obj = params[0][1]
-            obj_is_list = params[0][2]
+            maps = params[0][1]
+            obj = params[0][2]
             field = re.search(r"projection\(.*, (.*)\)", sig.endpoint).group(1)
-            typ = sig.responses[0].type
+            typ = sig.response.type
 
-            if obj_is_list:   
-                map_x = self._fresh_var("x")
-                proj_expr = ProjectionExpr(VarExpr(map_x, obj.type), field, typ)
-                map_body = proj_expr
-                for i in range(obj_is_list - 1):
-                    next_x = self._fresh_var("x")
-                    map_body = MapExpr(
-                        VarExpr(next_x),
-                        Program([map_x], [map_body])
-                    )
-                    map_x = next_x
+            map_body = ProjectionExpr(obj, field)
+            for o, x in reversed(maps):
+                map_body = MapExpr(o, Program([x], [map_body]))
 
-                map_body = MapExpr(obj, Program([map_x], [map_body]))
-
-                let_x = self._fresh_var("x")
-                let_expr = AssignExpr(let_x, map_body)
-                results.append(let_expr)
-
-                for r in sig.responses:
-                    typ = r.type
-                    self._add_typed_var(typ_subst, let_x, typ, obj_is_list)
-            else:
-                proj_expr = ProjectionExpr(obj, field, typ)
-
-                for r in sig.responses:
-                    typ = r.type.name
-                    if typ in typ_subst:
-                        typ_subst[typ].append((proj_expr, 0))
-                    else:
-                        typ_subst[typ] = [(proj_expr, 0)]
-
-        return results
+            # print("get projection expr", map_body)
+            self._add_results(
+                typ_subst, map_body, typ, 
+                len(maps) + sig.response.array_level
+            )    
 
     def _generate_filter(self, typ_subst, sig):
-        x = self._fresh_var("x")
-
-        results = []
         args = self._generate_args(typ_subst, sig)
+        args = args[:2]
+        # print("args for filter", args)
         for params in itertools.product(*args):
-            obj = params[0][1]
-            obj_is_list = params[0][2]
-            val = params[1][1]
-            val_is_list = params[1][2]
+            # print("param length for filter", len(params))
+            # get only the required obj
+            obj_maps = params[0][1]
+            obj = params[0][2]
+            val_maps = params[1][1]
+            val = params[1][2]
+            # print("filter obj type", obj.type)
+            # print("filter val type", val.type)
             field = re.search(r"filter\(.*, (.*)\)", sig.endpoint).group(1)
             field = '.'.join(field.split('.')[1:])
-            typ = sig.responses[0].type
-            if obj_is_list > 1:
-                map_x = self._fresh_var("x")
-                filter_expr = FilterExpr(
-                    VarExpr(map_x, obj.type),
-                    field, val, val_is_list, typ
-                )
-                map_expr = MapExpr(obj, Program([map_x], [filter_expr]))
-                results.append(AssignExpr(x, map_expr))
-            else:
-                filter_expr = FilterExpr(obj, field, val, val_is_list, typ)
-                results.append(AssignExpr(x, filter_expr))
+            # filter may only have one single output type
+            typ = sig.response.type
+            
+            # print("collapse for filter")
+            # filter works for one level of list, get rid of the first map
+            if len(obj_maps) > 0:
+                obj = obj.apply_subst({obj_maps[-1][1]: obj_maps[-1][0]})
+            # print("collapsed obj", obj)
+            if len(val_maps) > 0:
+                val = val.apply_subst({val_maps[-1][1]: val_maps[-1][0]})
+            # print("collapsed val", val)
+            map_body = FilterExpr(obj, field, val, len(val_maps) > 0)
+            for v, x in reversed(val_maps[:-1]):
+                map_body = MapExpr(v, Program([x], [map_body]))
 
-        for r in sig.responses:
-            typ = r.type
-            self._add_typed_var(typ_subst, x, typ, r.array_level)
-
-        return results
+            for o, x in reversed(obj_maps[:-1]):
+                map_body = MapExpr(o, Program([x], [map_body]))
+            
+            # print("get filter expr", map_body)
+            self._add_results(
+                typ_subst, map_body, typ, 
+                1 + len(val_maps[:-1]) + len(obj_maps[:-1]),
+            )
 
     def _generate_let(self, typ_subst, sig):
-        # get a fresh type variable
-        x = self._fresh_var("x")
-
-        results = []
         args = self._generate_args(typ_subst, sig)
         for params in itertools.product(*args):
             map_pairs = []
             named_args = []
-            for arg_name, arg, is_list in params:
-                if is_list:
-                    map_x = self._fresh_var("x")
-                    map_pairs.append((arg, map_x))
-                    for _ in range(is_list - 1):
-                        next_x = self._fresh_var("x")
-                        map_pairs.append((VarExpr(map_x, arg.type), next_x))
-                        map_x = next_x
-                    named_args.append((arg_name, VarExpr(map_x, arg.type)))
-                else:
-                    named_args.append((arg_name, arg))
+            for arg_name, arg_maps, arg in params:
+                map_pairs += arg_maps
+                named_args.append((arg_name, arg))
 
-            expr = AppExpr(sig.endpoint, named_args)
-            if len(map_pairs) > 0:
-                let_x = self._fresh_var("x")
-                expr = [AssignExpr(let_x, expr), VarExpr(let_x)]
-            
-            map_pairs.reverse()
-            for arg, xx in map_pairs:
-                if isinstance(expr, list):
-                    expr = MapExpr(arg, Program([xx], expr))
-                else:
-                    expr = MapExpr(arg, Program([xx], [expr]))
-            results.append(AssignExpr(x, expr))
+            map_body = AppExpr(sig.endpoint, named_args)
+            for arg, x in reversed(map_pairs):
+                map_body = MapExpr(arg, Program([x], [map_body]))
 
-        for r in sig.responses:
-            typ = r.type
-            self._add_typed_var(typ_subst, x, typ, r.array_level + len(map_pairs))
-
-        return results
+            self._add_results(
+                typ_subst, map_body, sig.response.type,
+                sig.response.array_level + len(map_pairs)
+            )

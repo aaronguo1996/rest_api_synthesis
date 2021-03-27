@@ -9,6 +9,8 @@ class SchemaType:
         self.name = name
         self.schema = obj
         self.parent = parent
+        self.is_object = True
+        self.fields = []
 
     @staticmethod
     def to_python_type(typ):
@@ -89,7 +91,9 @@ class SchemaType:
         if isinstance(obj, str) and expected_type.get("type") == "string":
             pattern = expected_type.get("pattern")
             # print(f"checking string {obj} against pattern {pattern}")
-            if not pattern or re.search(pattern, obj):
+            if not pattern:
+                return self, 0
+            elif re.search(pattern, obj):
                 return self, 1
     
         # print(f"checking {obj} for pattern")
@@ -125,6 +129,8 @@ class SchemaType:
                     return None, -1
                     
                 for k, v in obj.items():
+                    # if k == "latest":
+                    #     print(self.name, k, v)
                     types = expected_type.get(defs.DOC_PROPERTIES)
                     if not types: # if no properties is given, assume anything matches
                         continue
@@ -132,14 +138,16 @@ class SchemaType:
                     if k in types:
                         # print(f"{k} is in the type definition, has type {types[k]}")
                         field_type = SchemaType(k, types[k])
-                        # print(types[k])
                         _, field_score = field_type.is_type_of(v)
                         if field_score < 0:
-                            # print(f"{k} type check fails")
                             return None, -1
                         else:
-                            # print(f"get {field_score} for {k}")
-                            score += field_score
+                            if field_type.fields:
+                                self.fields = [[k].extend(f) for f in field_type.fields]
+                            else:
+                                self.fields = [[k]]
+
+                            score += field_score + 1
                     else:
                         # print(f"{k} is not in the type definition")
                         # if the object contains fields not in the type definition
@@ -150,6 +158,7 @@ class SchemaType:
                 # if all checks
                 return self, score
             else:
+                self.is_object = False
                 if isinstance(obj, str):
                     return self.of_regex_type(obj, expected_type)
                 else:
@@ -236,6 +245,7 @@ class SchemaType:
         obj_candidates = sorted(obj_candidates, key=rank)
         if obj_candidates:
             # print("choose", obj_candidates[-1][0])
+            # TODO: add the type partitioning here or after this returns, record the partitions somewhere
             return obj_candidates[-1][0]
         else:
             return None

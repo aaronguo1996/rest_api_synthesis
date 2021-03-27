@@ -1,6 +1,6 @@
 import unittest
 from synthesizer.synthesizer import *
-# from analyzer.entry import DocEntry, RequestParameter, ResponseParameter
+from analyzer.entry import TraceEntry, RequestParameter, ResponseParameter
 
 class SynthesizerTestCase(unittest.TestCase):
     @staticmethod
@@ -37,57 +37,53 @@ class SynthesizerTestCase(unittest.TestCase):
             }
         })
         self.assertEqual(projections, {
-            "projection(user, id)": DocEntry(
+            "projection(user, id):": TraceEntry(
                 "projection(user, id)", "", [
                     RequestParameter(
-                        "", "", "projection(user, id)", 
+                        "", "obj", "projection(user, id)", 
                         True, None, None
                     )
-                ], [
-                    ResponseParameter(
-                        "", "", "projection(user, id)", 
-                        [], True, 0, None, None
-                    )
-                ]
+                ],
+                ResponseParameter(
+                    "", "field", "projection(user, id)", 
+                    [], True, 0, None, None
+                )
             ),
-            "projection(user, name)": DocEntry(
+            "projection(user, name):": TraceEntry(
                 "projection(user, name)", "", [
                     RequestParameter(
-                        "", "", "projection(user, name)", 
+                        "", "obj", "projection(user, name)", 
                         True, None, None
                     )
-                ], [
-                    ResponseParameter(
-                        "", "", "projection(user, name)", 
-                        [], True, 0, None, None
-                    )
-                ]
+                ],
+                ResponseParameter(
+                    "", "field", "projection(user, name)", 
+                    [], True, 0, None, None
+                )
             ),
-            "projection(user, profile)": DocEntry(
+            "projection(user, profile):": TraceEntry(
                 "projection(user, profile)", "", [
                     RequestParameter(
-                        "", "", "projection(user, profile)", 
+                        "", "obj", "projection(user, profile)", 
                         True, None, None
                     )
-                ], [
-                    ResponseParameter(
-                        "", "", "projection(user, profile)", 
-                        [], True, 0, None, None
-                    )
-                ]
+                ],
+                ResponseParameter(
+                    "", "field", "projection(user, profile)", 
+                    [], True, 0, None, None
+                )
             ),
-            "projection(user.profile, email)": DocEntry(
+            "projection(user.profile, email):": TraceEntry(
                 "projection(user.profile, email)", "", [
                     RequestParameter(
-                        "", "", "projection(user.profile, email)", 
+                        "", "obj", "projection(user.profile, email)", 
                         True, None, None
                     )
-                ], [
-                    ResponseParameter(
-                        "", "", "projection(user.profile, email)", 
-                        [], True, 0, None, None
-                    )
-                ]
+                ],
+                ResponseParameter(
+                    "", "field", "projection(user.profile, email)", 
+                    [], True, 0, None, None
+                )
             ),
         })
 
@@ -111,56 +107,53 @@ class SynthesizerTestCase(unittest.TestCase):
             }
         })
         self.assertEqual(filters, {
-            "filter(user, user.id)": DocEntry(
+            "filter(user, user.id):": TraceEntry(
                 "filter(user, user.id)", "", [
                     RequestParameter(
-                        "", "", "filter(user, user.id)", 
+                        "", "obj", "filter(user, user.id)", 
                         True, None, None
                     ),
                     RequestParameter(
-                        "", "", "filter(user, user.id)", 
+                        "", "field", "filter(user, user.id)", 
                         True, None, None
                     ),
-                ], [
-                    ResponseParameter(
-                        "", "", "filter(user, user.id)", 
-                        [], True, 1, None, None
-                    ),
-                ]
+                ],
+                ResponseParameter(
+                    "", "obj", "filter(user, user.id)", 
+                    [], True, 1, None, None
+                )
             ),
-            "filter(user, user.name)": DocEntry(
+            "filter(user, user.name):": TraceEntry(
                 "filter(user, user.name)", "", [
                     RequestParameter(
-                        "", "", "filter(user, user.name)", 
+                        "", "obj", "filter(user, user.name)", 
                         True, None, None
                     ),
                     RequestParameter(
-                        "", "", "filter(user, user.name)", 
+                        "", "field", "filter(user, user.name)", 
                         True, None, None
                     ),
-                ], [
-                    ResponseParameter(
-                        "", "", "filter(user, user.name)", 
-                        [], True, 1, None, None
-                    ),
-                ]
+                ],
+                ResponseParameter(
+                    "", "obj", "filter(user, user.name)", 
+                    [], True, 1, None, None
+                )
             ),
-            "filter(user, user.profile.email)": DocEntry(
+            "filter(user, user.profile.email):": TraceEntry(
                 "filter(user, user.profile.email)", "", [
                     RequestParameter(
-                        "", "", "filter(user, user.profile.email)", 
+                        "", "obj", "filter(user, user.profile.email)", 
                         True, None, None
                     ),
                     RequestParameter(
-                        "", "", "filter(user, user.profile.email)", 
+                        "", "field", "filter(user, user.profile.email)", 
                         True, None, None
                     ),
-                ], [
-                    ResponseParameter(
-                        "", "", "filter(user, user.profile.email)", 
-                        [], True, 1, None, None
-                    ),
-                ]
+                ],
+                ResponseParameter(
+                    "", "obj", "filter(user, user.profile.email)", 
+                    [], True, 1, None, None
+                )
             ),
         })
 
@@ -168,16 +161,27 @@ class SynthesizerTestCase(unittest.TestCase):
         self._synthesizer.init()
 
         result = self._synthesizer.run(
-            {"defs_user_id": 1}, 
-            {"objs_user": 1}
+            [],
+            {
+                "user": SchemaType("defs_user_id", None)
+            }, 
+            [
+                SchemaType("objs_user", None)
+            ],
         )
         self.assertEqual(result, [
-            "/users.info:get",
+            "/users.info:GET",
+            'projection(/users.info_response, user):',
         ])
 
         result = self._synthesizer.run(
-            {"objs_user": 1}, 
-            {"defs_user_id": 1}
+            [],
+            {
+                "user_id": SchemaType("objs_user", None)
+            }, 
+            [
+                SchemaType("defs_user_id", None)
+            ],
         )
         self.assertEqual(result, [
             "projection(objs_user, id):",
@@ -187,21 +191,33 @@ class SynthesizerTestCase(unittest.TestCase):
         self._synthesizer.init()
         
         result = self._synthesizer.run(
-            {"defs_user_id": 1}, 
-            {"objs_user.name": 1}
+            [],
+            {
+                "user_id": SchemaType("defs_user_id", None)
+            }, 
+            [
+                SchemaType("objs_user.name", None)
+            ],
         )
         self.assertEqual(result, [
-            "/users.info:get",
-            "projection(objs_user, real_name):",
+            "/users.info:GET",
+            'projection(/users.info_response, user):',
+            "projection(objs_user, name):",
         ])
 
         result = self._synthesizer.run(
-            {"defs_user_id": 1},
-            {"objs_user.profile.email": 1}
+            [],
+            {
+                "user_id": SchemaType("defs_user_id", None)
+            }, 
+            [
+                SchemaType("objs_user.profile.email", None)
+            ],
         )
         self.assertEqual(result,
             [
-                "/users.info:get", 
+                "/users.info:GET",
+                'projection(/users.info_response, user):',
                 "projection(objs_user, profile):",
                 "projection(objs_user.profile, email):"
             ],
@@ -209,27 +225,35 @@ class SynthesizerTestCase(unittest.TestCase):
 
     def test_nullary(self):
         self._synthesizer.init()
-        result = self._synthesizer.run_all(
+        result = self._synthesizer.run(
             [],
             {}, 
-            {"defs_group_id": 1}
+            [
+                SchemaType("defs_dm_id", None)
+            ],
         )
-        self.assertEqual(result, ["/conversations.list:get"])
+        self.assertEqual(result, [
+            "/conversations.list:GET",
+            "projection(/conversations.list_response, channels):",
+            "projection(objs_conversation, id):",
+        ])
 
     def test_example_b(self):
         self._synthesizer.init()
 
         result = self._synthesizer.run_n(
-            # ["/conversations.members:get"],
+            # ["/conversations.members:GET"],
             [],
             {
-                "channel_name": SchemaType("objs_channel.name", None)
+                # "channel_name": SchemaType("objs_message.name", None)
+                "channel_name": SchemaType("objs_conversation.name", None)
             },
             [
                 SchemaType("objs_user.profile.email", None)
             ],
-            10
+            30
         )
+        print(result)
         self.assertIn([
             "/conversations.list:GET",
             "filter(objs_conversation, objs_conversation.name):",
@@ -241,43 +265,19 @@ class SynthesizerTestCase(unittest.TestCase):
         ], result)
         # self.assertEqual(result, [])
 
-    def test_example_b_long(self):
-        self._synthesizer.init()
-
-        result = self._synthesizer.run_n(
-            # ["/conversations.members:get"],
-            [],
-            {
-                "channel_name": SchemaType("objs_channel.name", None)
-            },
-            [
-                SchemaType("objs_user.profile.email", None)
-            ],
-            50
-        )
-        self.assertIn([
-            "/users.lookupByEmail:GET",
-            "projection(objs_user, id):",
-            "/conversations.open:GET",
-            "projection(objs_conversation, id):",
-            "/chat.postMessage:POST",
-        ], result)
-
     def test_example_a(self):
         self._synthesizer.init()
 
-        result = self._synthesizer.run_n(
+        self._synthesizer.run_n(
             # ["/conversations.members:get"],
             [],
             {
                 "email": SchemaType("objs_user.profile.email", None)
             }, 
             [
-                SchemaType("objs_message", None), 
-                SchemaType("defs_group_id", None),
-                SchemaType("defs_ts", None),
+                SchemaType("objs_message", None),
             ],
-            10
+            25
         )
 
         # self.assertIn([
@@ -296,6 +296,6 @@ def synthesizer_suite(doc, config, analyzer):
     # suite.addTest(SynthesizerTestCase('test_single_transition'))
     # suite.addTest(SynthesizerTestCase('test_two_transitions'))
     # suite.addTest(SynthesizerTestCase('test_nullary'))
-    suite.addTest(SynthesizerTestCase('test_example_a'))
-    # suite.addTest(SynthesizerTestCase('test_example_b'))
+    # suite.addTest(SynthesizerTestCase('test_example_a'))
+    suite.addTest(SynthesizerTestCase('test_example_b'))
     return suite
