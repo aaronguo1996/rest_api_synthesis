@@ -251,11 +251,7 @@ class SynthesizerTestCase(unittest.TestCase):
             [
                 SchemaType("objs_user.profile.email", None)
             ],
-<<<<<<< HEAD
-            50
-=======
             30
->>>>>>> 86ebf765dd6fe6ced9f9f1c5bab6d0c8c784c8bd
         )
         print(result)
         self.assertIn([
@@ -269,33 +265,6 @@ class SynthesizerTestCase(unittest.TestCase):
         ], result)
         # self.assertEqual(result, [])
 
-<<<<<<< HEAD
-    def test_example_b_long(self):
-        self._synthesizer.init()
-
-        result = self._synthesizer.run_n(
-            # ["/conversations.members:get"],
-            [],
-            {
-                "channel_name": SchemaType("objs_channel.name", None)
-            },
-            [
-                SchemaType("objs_user.profile.email", None)
-            ],
-            50
-        )
-        self.assertIn([
-            "/conversations.list:GET",
-            "filter(objs_conversation, objs_conversation.name):",
-            "projection(objs_conversation, id):",
-            "/conversations.members:GET",
-            "/users.info:GET",
-            "projection(objs_user, profile):",
-            "projection(objs_user.profile, email):"
-        ], result)
-
-=======
->>>>>>> 86ebf765dd6fe6ced9f9f1c5bab6d0c8c784c8bd
     def test_example_a(self):
         self._synthesizer.init()
 
@@ -308,11 +277,7 @@ class SynthesizerTestCase(unittest.TestCase):
             [
                 SchemaType("objs_message", None),
             ],
-<<<<<<< HEAD
-            50
-=======
             25
->>>>>>> 86ebf765dd6fe6ced9f9f1c5bab6d0c8c784c8bd
         )
 
         # self.assertIn([

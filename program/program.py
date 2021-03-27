@@ -218,14 +218,8 @@ class VarExpr(Expression):
     def goal_search(self, analyzer, goal):
         analyzer.push_var(self._var, goal)
 
-<<<<<<< HEAD
-    def to_graph(self, graph):
-        # print(self)
-        return self._rhs.to_graph(graph)
-=======
     def to_multiline(self, counter):
         return [], self
->>>>>>> 86ebf765dd6fe6ced9f9f1c5bab6d0c8c784c8bd
 
     def check_fields(self, analyzer, var_to_trans):
         return True, var_to_trans.get(self._var)
@@ -768,12 +762,6 @@ class Program:
         if not isinstance(other, Program):
             return NotImplemented
 
-<<<<<<< HEAD
-        return (
-            self.to_expression({}) == other.to_expression({}) and
-            self._inputs == other._inputs
-        )
-=======
         if self._inputs == other._inputs:
             return self.to_expression({}) == other.to_expression({})
         elif len(self._inputs) == len(other._inputs):
@@ -784,10 +772,6 @@ class Program:
             return self.to_expression({}) == other.to_expression({})
         else:
             return False
-
-    def __hash__(self):
-        return hash((tuple(self._inputs), str(self.to_expression({}))))
->>>>>>> 86ebf765dd6fe6ced9f9f1c5bab6d0c8c784c8bd
 
     def __hash__(self):
         return hash((tuple(self._inputs), str(self.to_expression({}))))
