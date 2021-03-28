@@ -54,6 +54,6 @@ def get_schema_forest(doc):
     components = doc.get(defs.DOC_COMPONENTS)
     schemas = components.get(defs.DOC_SCHEMAS)
     schema_json = [schema_to_json(k, v) for k, v in schemas.items() 
-        if not re.search("obj_ref_\d+", k)]
+        if not re.search("objs_ref_\d+", k)]
     return [schema for schema in schema_json 
         if isinstance(schema, dict) and "children" in schema]

@@ -104,6 +104,13 @@ class Synthesizer:
 
         start = time.time()
         self._encoder.init(landmarks, input_map, output_map)
+        
+        # debug info:
+        # transitions = self._encoder._net.transition()
+        # print("Transition numbers:", len(transitions))
+        # for tr in transitions:
+        #     print(tr)
+
         results = []
         result = self._encoder.solve()
         # result = ['/conversations.list:GET', 'projection(/conversations.list_response, channels):', 'filter(objs_conversation_9, objs_conversation_9.name):', 'projection(objs_conversation_9, creator):', '/users.info:GET', 'projection(objs_conversation_15, user):', 'projection(/users.info_response, user):', 'filter(objs_user_0, objs_user_0.id):', 'projection(objs_user_0, profile):', 'projection(objs_user.profile, email):']
@@ -296,7 +303,7 @@ class Synthesizer:
         objs = self._doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS)
         for obj_name, obj_def in objs.items():
             # skip temporary types defined by ourselves
-            if re.search(r"obj_ref_\d+", obj_name):
+            if re.search(r"objs_ref_\d+", obj_name):
                 continue
 
             projection_entries = self._create_projection(obj_name, obj_def)
@@ -387,7 +394,7 @@ class Synthesizer:
         objs = self._doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS)
         for obj_name, obj_def in objs.items():
             # skip temporary types defined by ourselves
-            if re.search(r"obj_ref_\d+", obj_name):
+            if re.search(r"objs_ref_\d+", obj_name):
                 continue
 
             filter_entries = self._create_filter(obj_name, obj_name, obj_def)
