@@ -1,40 +1,37 @@
 from collections import defaultdict
-import re
-from synthesizer.hypergraph_encoder import HyperGraphEncoder
-import time
+import multiprocessing as mp
 import itertools
 import pickle
+import re
+import time
+import queue
+from functools import partial
 
-from synthesizer.petrinet_encoder import PetriNetEncoder
-from synthesizer.utils import make_entry_name
-from stats.time_stats import TimeStats, STATS_GRAPH
-from stats.graph_stats import GraphStats
-from synthesizer import params
-from openapi import defs
 from analyzer.entry import TraceEntry, ResponseParameter, RequestParameter
-from schemas.schema_type import SchemaType
+from openapi import defs
 from program.generator import ProgramGenerator
 from program.program import ProgramGraph, all_topological_sorts
+from schemas.schema_type import SchemaType
+from stats.graph_stats import GraphStats
+from stats.time_stats import TimeStats, STATS_GRAPH
+from synthesizer.hypergraph_encoder import HyperGraphEncoder
+from synthesizer.petrinet_encoder import PetriNetEncoder
+from synthesizer.utils import make_entry_name
 import config_keys as keys
 
 DEFAULT_LENGTH_LIMIT = 20
+STATE_FULL = -1
+STATE_NORMAL = 0
 
 class Synthesizer:
     def __init__(self, doc, config, analyzer):
         self._doc = doc
         self._config = config
         self._analyzer = analyzer
-
-        if config["synthesis"]["solver_type"] == "petri net":
-            self._encoder = PetriNetEncoder({})
-        elif config["synthesis"]["solver_type"] == "hypergraph":
-            self._encoder = HyperGraphEncoder({})
-        else:
-            raise Exception("Unknown solver type in config")
-
         self._groups = {}
         self._group_names = {}
         self._landmarks = []
+        self._unique_entries = {}
         self._program_generator = ProgramGenerator({})
         # flags
         self._expand_group = config["synthesis"]["expand_group"]
@@ -84,16 +81,12 @@ class Synthesizer:
         perms = []
         pgraph = ProgramGraph()
         p.to_program_graph(graph=pgraph, var_to_trans={})
-        # print(pgraph._adj)
-        # print(pgraph.all_nodes())
-        # print(pgraph._indegree)
         all_topological_sorts(perms, pgraph, [], {})
         # print("topo sort results:", perms)
         return perms
 
-    def run_n(self, landmarks, inputs, outputs, n):
-        solutions = set()
-        graph = GraphStats()
+    def _run_encoder(self, path_len, results, io_lock, val_lock, 
+        graph, solutions, landmarks, inputs, outputs):
         input_map = defaultdict(int)
         for _, typ in inputs.items():
             input_map[typ.name] += 1
@@ -101,96 +94,142 @@ class Synthesizer:
         output_map = defaultdict(int)
         for typ in outputs:
             output_map[typ.name] += 1
+            
+        solver_type = self._config["synthesis"]["solver_type"]
+        if solver_type == "petri net":
+            encoder = PetriNetEncoder({})
+        elif solver_type == "hypergraph":
+            encoder = HyperGraphEncoder({})
+        else:
+            raise Exception("Unknown solver type in config")
+
+        for e in self._unique_entries.values():
+            encoder._add_transition(e)
 
         start = time.time()
-        self._encoder.init(landmarks, input_map, output_map)
+        path = encoder.get_length_of(
+            path_len, val_lock,
+            landmarks, input_map, output_map,
+        )
+        while path is not None:
+            end = time.time()
+            programs, perms = self._generate_solutions(
+                io_lock, results,
+                graph, inputs, outputs,
+                solutions, path, end - start
+            )
+
+            print("Current queue size", results.qsize(), flush=True)
+            if results.full():
+                print("Result queue is full, terminating all the processes", flush=True)
+                return STATE_FULL
+
+            if programs:
+                encoder.block_prev(perms)
+                path = encoder.solve()
+
+        print("Finished encoder running")
+        return STATE_NORMAL
+
+    def __call__(self, path_len, results, io_lock, val_lock,
+        graph, solutions, landmarks, inputs, outputs, i):
+        print("Start", i)
+        return self._run_encoder(
+            path_len, results, io_lock, val_lock,
+            graph, solutions, landmarks, inputs, outputs
+        )
+
+    def _spawn_encoders(self, graph, landmarks, inputs, outputs, n):
+        solver_num = self._config["synthesis"]["solver_number"]
+        manager = mp.Manager()
+        path_len = manager.Value('i', 0)
+        results = manager.Queue(maxsize=n)
+        io_lock = manager.Lock()
+        val_lock = manager.Lock()
+        solutions = manager.dict({"solutions": set()})
+        func = partial(
+            self,
+            path_len, results, io_lock, val_lock,
+            graph, solutions, landmarks, inputs, outputs
+        )
+
+        with mp.Pool(solver_num) as pool:
+            async_results = pool.imap_unordered(
+                func,
+                range(DEFAULT_LENGTH_LIMIT),
+            )
+
+            for result in async_results:
+                print("Get result", result, flush=True)
+                if result == STATE_FULL:
+                    pool.terminate()
+                    break
+
+        print("paths:", results)
+        return solutions["solutions"]
+
+    def _generate_solutions(self, iolock, results, graph,
+        inputs, outputs, solutions, result, time):
+        programs = []
+        groups = self._expand_groups(result) 
+        for r in itertools.product(*groups):
+            programs += self._program_generator.generate_program(
+                r, inputs, outputs[0]
+            )
+
+        has_new_solution = False
+        all_perms = []
+        with iolock:
+            for p in programs:
+                if p in solutions["solutions"]:
+                    continue
+
+                has_new_solution = True
+                # draw type graphs without transitions
+                p.to_graph(graph)
+                # add solution to the set to prevent duplicants
+                sol_set = solutions["solutions"]
+                sol_set.add(p)
+                solutions["solutions"] = sol_set
+                # write solutions to file
+                self._write_solution(len(solutions["solutions"]), time, p)
+
+                # generate all topological sorts for blocking
+                if self._block_perms:
+                    perms = self._get_topo_sorts(p)
+                    all_perms += perms
+
+        if has_new_solution:
+            try:
+                results.put(result)
+                print(len(solutions["solutions"]), time, flush=True)
+            except queue.Full:
+                return [], []
+        else:
+            pass
+
+        # convert permutations into indices
+        if self._block_perms and has_new_solution:
+            perm_indices = []
+            for perms in all_perms:
+                indices = []
+                for tr in perms:
+                    for idx, r in enumerate(result):
+                        if tr == r[:len(tr)]:
+                            indices.append(idx)
+                            break
+
+                if len(indices) == len(result):
+                    perm_indices.append(indices)
+        else:
+            perm_indices = [list(range(len(result)))]
+
+        return programs, perm_indices
+
+    def run_n(self, landmarks, inputs, outputs, n):
+        graph = GraphStats()
+        solutions = self._spawn_encoders(graph, landmarks, inputs, outputs, n)
         
-        # debug info:
-        # transitions = self._encoder._net.transition()
-        # print("Transition numbers:", len(transitions))
-        # for tr in transitions:
-        #     print(tr)
-
-        results = []
-        result = self._encoder.solve()
-        # result = ['/conversations.list:GET', 'projection(/conversations.list_response, channels):', 'filter(objs_conversation_9, objs_conversation_9.name):', 'projection(objs_conversation_9, creator):', '/users.info:GET', 'projection(objs_conversation_15, user):', 'projection(/users.info_response, user):', 'filter(objs_user_0, objs_user_0.id):', 'projection(objs_user_0, profile):', 'projection(objs_user.profile, email):']
-
-        break_flag = False
-        while len(results) < n:
-            # find the correct path len
-            while result is None:
-                limit = self._config.get(params.LENGTH_LIMIT, DEFAULT_LENGTH_LIMIT)
-                if self._encoder._path_len >= limit:
-                    break_flag = True
-                    break
-
-                self._encoder.increment(landmarks, output_map)
-                result = self._encoder.solve()
-
-            if break_flag:
-                break
-
-            # find the solution for a given path len
-            while result is not None and len(results) < n:
-                # print(result, flush=True)
-                # FIXME: better implementation later
-                end = time.time()
-
-                groups = self._expand_groups(result)
-                programs = []
-                for r in itertools.product(*groups):
-                    programs += self._program_generator.generate_program(
-                        r, inputs, outputs[0]
-                    )
-
-                has_new_solution = False
-                all_perms = []
-                for p in programs:
-                    if p in solutions:
-                        continue
-
-                    has_new_solution = True
-                    # draw type graphs without transitions
-                    p.to_graph(graph)
-                    solutions.add(p)
-                    # write solutions to file
-                    self._write_solution(len(solutions), end-start, p)
-                    # generate all topological sorts for blocking
-                    if self._block_perms:
-                        perms = self._get_topo_sorts(p)
-                        all_perms += perms
-
-                if has_new_solution:
-                    results.append(result)
-                    print(len(solutions), end-start, flush=True)
-                else:
-                    # print("Duplicate solution:", result)
-                    pass
-
-                if len(results) > n:
-                    break
-
-                # print(all_perms)
-                # convert permutations into indices
-                if self._block_perms and has_new_solution:
-                    perm_indices = []
-                    for perms in all_perms:
-                        indices = []
-                        for tr in perms:
-                            for idx, r in enumerate(result):
-                                if tr == r[:len(tr)]:
-                                    indices.append(idx)
-                                    break
-
-                        if len(indices) == len(result):
-                            perm_indices.append(indices)
-                else:
-                    perm_indices = [list(range(len(result)))]
-
-                # print("perms:", perm_indices)
-                self._encoder.block_prev(perm_indices)
-                result = self._encoder.solve()
-
         graph.render(filename="output/programs")
         
         # write solutions
@@ -201,26 +240,7 @@ class Synthesizer:
         with open("data/annotated_entries.pkl", "wb") as f:
             pickle.dump(self._entries, f)
 
-        return results
-
-    # def run_all(self, landmarks, inputs, outputs):
-    #     self._encoder.init(landmarks, inputs, outputs)
-    #     results = []
-    #     result = self._encoder.solve()
-    #     while result is None:
-    #         limit = self._config.get(params.LENGTH_LIMIT, DEFAULT_LENGTH_LIMIT)
-    #         if self._encoder._path_len >= limit:
-    #             break
-
-    #         self._encoder.increment(landmarks, outputs)
-    #         result = self._encoder.solve()
-
-    #     while result is not None:
-    #         results.append(result)
-    #         self._encoder.block_prev()
-    #         result = self._encoder.solve()
-
-    #     return results
+        return solutions
 
     def _add_transitions(self):
         entries = self._create_entries()
@@ -258,11 +278,13 @@ class Synthesizer:
             print(e.response.type, flush=True)
             
         # only add unique entries into the encoder
-        for name, e in unique_entries.items():
-            self._encoder.add_transition(e)
+        # for name, e in unique_entries.items():
+        #     self._add_transition(e)
 
         for name, e in entries.items():
             self._program_generator.add_signature(name, e)
+
+        self._unique_entries = unique_entries
 
     def _create_entries(self):
         entries = {}
