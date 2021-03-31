@@ -1,0 +1,30 @@
+{
+  "config": "../config.json",
+  "benchmarks": [
+    {
+      "landmarks": [],
+      "input_args": {
+        "channel_name": "objs_conversation.name"
+      },
+      "output": "objs_user.profile.email",
+      "solution": [
+        "/conversations.list:GET",
+        "filter(objs_conversation, objs_conversation.name):",
+        "projection(objs_conversation, id):",
+        "/conversations.members:GET",
+        "/users.info:GET",
+        "projection(objs_user, profile):",
+        "projection(objs_user.profile, email):"
+      ],
+      "max_length": 30
+    },
+    {
+      "landmarks": [],
+      "input_args": {
+        "email": "objs_user.profile.email"
+      },
+      "output": "objs_message",
+      "max_length": 25
+    }
+  ]
+}
