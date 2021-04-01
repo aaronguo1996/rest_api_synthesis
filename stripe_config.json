@@ -1,0 +1,53 @@
+{
+    "log_file": "logs/dashboard.stripe.com.20210331.har",
+    "doc_file": "stripe_spec3_sdk_small.json",
+    "enable_debug": true,
+    "debug_output": "debug.log",
+    "hostname": "https://dashboard.stripe.com",
+    "path_to_definitions": "#/components/schemas",
+    "fuzz": {
+        "value_dict": {
+            "token": "sk_test_51IDdwaDLm14arRKVBXJFwwGemXMg6OCDQHKKeZjlnEtq1klmwkPGbgxNYUqbIvYWhSRG4N3MR87oo1V1uhqFUSmR00sm0NQsbn"
+        },
+        "annotation_path": "stripe_annotation.json",
+        "fuzz_depth": 3,
+        "timeout_total": 600,
+        "timeout_per_request": 60,
+        "iterations": 100,
+        "plot_graph": true,
+        "endpoints": [
+            "/v1/prices",
+            "/v1/subscriptions"
+        ]
+    },
+    "analysis": {
+        "params": {
+            "plot_only_input": false
+        },
+        "uninteresting_endpoints": [
+            "experiments.*",
+            "search.modules",
+            "search.autocomplete.*",
+            "api.features",
+            "apps.profile.get",
+            "ajax.*"
+        ],
+        "ignore_field_names": [
+            "text",
+            "blocks",
+            "slack_route",
+            "_x_id",
+            "_x_csid",
+            "_x_version_ts",
+            "_x_sonic",
+            "_x_reason",
+            "_x_gantry",
+            "_x_mode",
+            "token",
+            "ok",
+            "topic",
+            "x-*"
+        ]
+    },
+    "test_suites": []
+}
