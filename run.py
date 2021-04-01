@@ -181,8 +181,8 @@ def main():
         # write traces to the binary file
         # with open('traces.pkl', 'wb') as f:
         #     pickle.dump(entries, f)
-        with open('traces.pkl', 'rb') as f:
-            entries = pickle.load(f)
+        # with open('traces.pkl', 'rb') as f:
+        #     entries = pickle.load(f)
 
         # print("Analyzing provided log file...")
         log_analyzer = analyzer.LogAnalyzer()
@@ -215,9 +215,9 @@ def main():
         if configuration["fuzz"]["plot_graph"]:
             engine.to_graph(endpoints, "dependencies_0")
 
-        engine.saturate_all(
-            endpoints, configuration["fuzz"]["iterations"],
-            configuration["fuzz"]["timeout_per_request"])
+        # engine.saturate_all(
+        #     endpoints, configuration["fuzz"]["iterations"],
+        #     configuration["fuzz"]["timeout_per_request"])
 
         # obj_defs = typeChecker.Type.get_object_def("#/components/schemas")
         # # print(obj_defs["objs_user"])

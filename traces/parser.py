@@ -97,8 +97,8 @@ class LogParser:
                 obj_type = typeChecker.Type(obj_name, obj)
                 if obj_type.is_type_of(response_params):
                     p = ResponseParameter(
-                        self.method, obj_name, self.func_name,
-                        self.path + [obj_name], obj_type, response_params)
+                        method, obj_name, endpoint,
+                        [obj_name], obj_type, response_params)
                     break
         else:
             p = ResponseParameter(method, "", endpoint, [], None, response_params)

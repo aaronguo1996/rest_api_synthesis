@@ -21,18 +21,25 @@ class DSU:
         return self._parents[x]
 
     def union(self, x, y):
-        if x not in self._parents:
-            self._parents[x] = x
-            self._sizes[x] = 1
-            self._nexts[x] = x
-            self._values[x] = set([x.value])
+        try:
+            if x not in self._parents:
+                self._parents[x] = x
+                self._sizes[x] = 1
+                self._nexts[x] = x
+                self._values[x] = set([x.value])
 
-        if y not in self._parents:
-            self._parents[y] = y
-            self._sizes[y] = 1
-            self._nexts[y] = y
-            self._values[y] = set([y.value])
+            if y not in self._parents:
+                self._parents[y] = y
+                self._sizes[y] = 1
+                self._nexts[y] = y
+                self._values[y] = set([y.value])
+        except Exception:
+            print("x:", x)
+            print("y:", y)
+            raise Exception
 
+        if "name" in x.arg_name or "name" in y.arg_name:
+            return
         # if x != y and str(x) == str(y):
         #     self._logger.debug(f"Weird unequal for {x} and {y}")
         #     self._logger.debug(f"Func names: {x.func_name == y.func_name}")

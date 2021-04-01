@@ -484,7 +484,7 @@ class Fuzzer:
             self.write_results(i, results)
 
             # rest between iterations to avoid spoof
-            time.sleep(30)
+            time.sleep(60)
 
     def write_results(self, i, results):
         with open(RESULT_FILE, "ab+") as f:
