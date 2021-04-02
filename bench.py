@@ -26,6 +26,7 @@ from synthesizer.synthesizer import *
 BK_ANALYZER = "analyzer"
 BK_CONFIG = "config"
 BK_DOC = "doc"
+BK_SOLUTION = "solution"
 
 class Bencher:
     def __init__(self):
@@ -141,9 +142,22 @@ class Bencher:
                 bench["max_length"]
             )
 
-            print(res)
+            # the solution is contained as a list of lines in the solution key.
+            if BK_SOLUTION in bench:
+                tgt_sol = "\n".join(bench[BK_SOLUTION])
+                # print(repr(tgt_sol))
 
-            print(f"  • [{i + 1}/{blen}] DONE")
+                # for r in res:
+                #     print(repr(str(synthesizer._program_generator.generate_program(r, {k: SchemaType(v, None) for k, v in bench["input_args"].items()}, SchemaType(bench["output"], None))[0])))
+
+                res_sols = [str(synthesizer._program_generator.generate_program(r, {k: SchemaType(v, None) for k, v in bench["input_args"].items()}, SchemaType(bench["output"], None))[0]) for r in res]
+
+                if tgt_sol in res_sols:
+                    print(f"  • [{i + 1}/{blen}] PASS")
+                else:
+                    print(f"  • [{i + 1}/{blen}] FAIL")
+            else:
+                print(f"  • [{i + 1}/{blen}] NO SOL")
 
     def filter_bench(self, bench_key):
         pass

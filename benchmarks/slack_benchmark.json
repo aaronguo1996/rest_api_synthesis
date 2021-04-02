@@ -8,13 +8,11 @@
       },
       "output": "objs_user.profile.email",
       "solution": [
-        "/conversations.list:GET",
-        "filter(objs_conversation, objs_conversation.name):",
-        "projection(objs_conversation, id):",
-        "/conversations.members:GET",
-        "/users.info:GET",
-        "projection(objs_user, profile):",
-        "projection(objs_user.profile, email):"
+        "(channel_name) => {let x11 = /users.conversations();    ",
+        " let x12 = x11.channels.filter(x => x.latest.name == channel_name);    ",
+        " let x18 = x12.map((x2) => {let x14 = /users.info(user=x2.creator);    ",
+        " return x14.user.profile.email;});    ",
+        " return x18;}"
       ],
       "max_length": 5
     },
