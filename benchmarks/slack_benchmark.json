@@ -1,5 +1,5 @@
 {
-  "config": "../config.json",
+  "config": "config.json",
   "benchmarks": [
     {
       "landmarks": [],
@@ -16,7 +16,7 @@
         "projection(objs_user, profile):",
         "projection(objs_user.profile, email):"
       ],
-      "max_length": 30
+      "max_length": 5
     },
     {
       "landmarks": [],
@@ -24,7 +24,7 @@
         "email": "objs_user.profile.email"
       },
       "output": "objs_message",
-      "max_length": 25
+      "max_length": 5
     }
   ]
 }
