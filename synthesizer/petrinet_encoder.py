@@ -45,6 +45,7 @@ class PetriNetEncoder:
         self._no_transition_fire(self._path_len - 1)
         # self._add_landmarks(landmarks)
         # self._set_final(outputs)
+        # print("current len", self._path_len, flush=True)
 
     @TimeStats(key=STATS_SEARCH)
     def solve(self):
@@ -73,22 +74,29 @@ class PetriNetEncoder:
         # print(z3.Not(z3.And(self._prev_result)))
         self._prev_result = []
 
-    def get_length_of(self, path_len, val_lock, landmarks, inputs, outputs):
-        # [path_len] and [result_queue] are shared between different processes
-        pl = path_len.value
-        with val_lock:
-            path_len.value += 1
-
+    def get_length_of(self, path_len, inputs, outputs):
         start = time.time()
         
         self.init(inputs)
-        for _ in range(pl):
+        for _ in range(path_len):
             self.increment()
         self._set_final(outputs)
 
         print("Finish encoding in", time.time() - start, "seconds")
         print("Searching at len:", self._path_len, flush=True)
-        return self.solve()
+        
+        start = time.time()
+        path = self.solve()
+
+        # self._solver.add(z3.And(self._targets))
+        # with open("constraints.smt", "w") as f:
+        #     f.write(self._solver.to_smt2())
+
+        # raise Exception
+        if path is not None:
+            print("Finding a path in", time.time() - start, "seconds at path length", path_len, flush=True)
+
+        return path
 
     def _add_landmarks(self, landmarks):
         for landmark in landmarks:

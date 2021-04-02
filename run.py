@@ -9,13 +9,15 @@ import random
 from graphviz import Digraph
 
 # analyze traces
-from analyzer import analyzer, dynamic, multiplicity
-from analyzer.dynamic import Goal
+from analyzer import analyzer, dynamic
 from schemas.schema_type import SchemaType
 from openapi import defs
 from openapi.utils import read_doc, get_schema_forest
 import config_keys as keys
 from synthesizer.filtering import run_filter
+from synthesizer.parallel import spawn_encoders
+from globs import init_synthesizer
+from witnesses.engine import WitnessGenerator
 
 # test imports
 from tests.run_test import run_test
@@ -36,6 +38,10 @@ def build_cmd_parser():
         help="Run dynamic analysis")
     parser.add_argument("--filtering", action="store_true",
         help="Filter or rank results from previous run")
+    parser.add_argument("--parallel", action="store_true",
+        help="Run synthesis algorithm in parallel mode")
+    parser.add_argument("--witness", action="store_true",
+        help="Generate witnesses by configuration")
     return parser
 
 def main():
@@ -62,7 +68,7 @@ def main():
 
     print("Reading traces...")
     entries = []
-    with open(os.path.join("data/", "traces_update_bk.pkl"), 'rb') as f:
+    with open(os.path.join("data/witnesses/", "traces_update_bk.pkl"), 'rb') as f:
         entries = pickle.load(f)
 
     # for e in entries:
@@ -131,6 +137,36 @@ def main():
             print("#", i+1)
             print("score:", s)
             print(p.pretty())
+    elif args.parallel:
+        init_synthesizer(doc, configuration, log_analyzer)
+        inputs = {
+            "channel_name": SchemaType("objs_conversation.name", None),
+        }
+        outputs = [
+            SchemaType("objs_user.profile.email", None),
+        ]
+        spawn_encoders(
+            inputs, outputs,
+            configuration["synthesis"]["solver_number"]
+        )
+    elif args.witness:
+        print("Running fuzzer to get more traces...")
+        engine = WitnessGenerator(
+            doc, log_analyzer,
+            configuration["witness"]["value_dict"],
+            configuration["witness"]["annotation_path"],
+            configuration["witness"]["gen_depth"],
+            configuration["path_to_definitions"],
+            configuration.get(keys.KEY_SKIP_FIELDS),
+            configuration["witness"]["plot_graph"],
+        )
+
+        if configuration["witness"]["plot_graph"]:
+            engine.to_graph(endpoints, "dependencies_0")
+
+        engine.saturate_all(
+            endpoints, configuration["witness"]["iterations"],
+            configuration["witness"]["timeout_per_request"])
     else:
         # output the results to json file
         with open(os.path.join("webapp/src/data/", "data.json"), 'w') as f:

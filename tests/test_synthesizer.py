@@ -251,7 +251,7 @@ class SynthesizerTestCase(unittest.TestCase):
             [
                 SchemaType("objs_user.profile.email", None)
             ],
-            40
+            10
         )
         print(result)
         # self.assertIn([

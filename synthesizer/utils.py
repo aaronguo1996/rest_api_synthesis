@@ -1,5 +1,6 @@
 from collections import defaultdict
-import time
+
+DEFAULT_LENGTH_LIMIT = 11
 
 def group_types(types):
     type_dict = defaultdict(int)

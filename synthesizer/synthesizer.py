@@ -4,8 +4,7 @@ import itertools
 import pickle
 import re
 import time
-import queue
-from functools import partial
+import os
 
 from analyzer.entry import TraceEntry, ResponseParameter, RequestParameter
 from openapi import defs
@@ -16,10 +15,9 @@ from stats.graph_stats import GraphStats
 from stats.time_stats import TimeStats, STATS_GRAPH
 from synthesizer.hypergraph_encoder import HyperGraphEncoder
 from synthesizer.petrinet_encoder import PetriNetEncoder
-from synthesizer.utils import make_entry_name
+from synthesizer.utils import make_entry_name, DEFAULT_LENGTH_LIMIT
 import config_keys as keys
 
-DEFAULT_LENGTH_LIMIT = 20
 STATE_FULL = -1
 STATE_NORMAL = 0
 
@@ -36,6 +34,8 @@ class Synthesizer:
         # flags
         self._expand_group = config["synthesis"]["expand_group"]
         self._block_perms = config["synthesis"]["block_perms"]
+        # create experiment folder
+        self._prep_exp_dir()
 
     @TimeStats(key=STATS_GRAPH)
     def init(self):
@@ -46,10 +46,15 @@ class Synthesizer:
         results = self.run_n(landmarks, inputs, outputs, 1)
         return results[0]
 
+    def _prep_exp_dir(self):
+        exp_name = self._config["exp_name"]
+        self._exp_dir = os.path.join("experiment_data/", exp_name)
+        if not os.path.exists(self._exp_dir):
+            os.makedirs(self._exp_dir)
+
     def _write_solution(self, idx, t, p):
-        with open("data/example_results.txt", "a+") as f:
-            f.write(f"#{idx}")
-            f.write("\n")
+        result_path = os.path.join(self._exp_dir, f"results_{idx}.txt")
+        with open(result_path, "a+") as f:
             f.write(f"time: {t: .2f}")
             f.write("\n")
             f.write(f"time breakdown:\n{TimeStats._timing}\n")
@@ -85,91 +90,7 @@ class Synthesizer:
         # print("topo sort results:", perms)
         return perms
 
-    def _run_encoder(self, path_len, results, io_lock, val_lock, 
-        graph, solutions, landmarks, inputs, outputs):
-        input_map = defaultdict(int)
-        for _, typ in inputs.items():
-            input_map[typ.name] += 1
-
-        output_map = defaultdict(int)
-        for typ in outputs:
-            output_map[typ.name] += 1
-            
-        solver_type = self._config["synthesis"]["solver_type"]
-        if solver_type == "petri net":
-            encoder = PetriNetEncoder({})
-        elif solver_type == "hypergraph":
-            encoder = HyperGraphEncoder({})
-        else:
-            raise Exception("Unknown solver type in config")
-
-        for e in self._unique_entries.values():
-            encoder._add_transition(e)
-
-        start = time.time()
-        path = encoder.get_length_of(
-            path_len, val_lock,
-            landmarks, input_map, output_map,
-        )
-        while path is not None:
-            end = time.time()
-            programs, perms = self._generate_solutions(
-                io_lock, results,
-                graph, inputs, outputs,
-                solutions, path, end - start
-            )
-
-            print("Current queue size", results.qsize(), flush=True)
-            if results.full():
-                print("Result queue is full, terminating all the processes", flush=True)
-                return STATE_FULL
-
-            if programs:
-                encoder.block_prev(perms)
-                path = encoder.solve()
-
-        print("Finished encoder running")
-        return STATE_NORMAL
-
-    def __call__(self, path_len, results, io_lock, val_lock,
-        graph, solutions, landmarks, inputs, outputs, i):
-        print("Start", i)
-        return self._run_encoder(
-            path_len, results, io_lock, val_lock,
-            graph, solutions, landmarks, inputs, outputs
-        )
-
-    def _spawn_encoders(self, graph, landmarks, inputs, outputs, n):
-        solver_num = self._config["synthesis"]["solver_number"]
-        manager = mp.Manager()
-        path_len = manager.Value('i', 0)
-        results = manager.Queue(maxsize=n)
-        io_lock = manager.Lock()
-        val_lock = manager.Lock()
-        solutions = manager.dict({"solutions": set()})
-        func = partial(
-            self,
-            path_len, results, io_lock, val_lock,
-            graph, solutions, landmarks, inputs, outputs
-        )
-
-        with mp.Pool(solver_num) as pool:
-            async_results = pool.imap_unordered(
-                func,
-                range(DEFAULT_LENGTH_LIMIT),
-            )
-
-            for result in async_results:
-                print("Get result", result, flush=True)
-                if result == STATE_FULL:
-                    pool.terminate()
-                    break
-
-        print("paths:", results)
-        return solutions["solutions"]
-
-    def _generate_solutions(self, iolock, results, graph,
-        inputs, outputs, solutions, result, time):
+    def _generate_solutions(self, i, inputs, outputs, result, time):
         programs = []
         groups = self._expand_groups(result) 
         for r in itertools.product(*groups):
@@ -177,39 +98,18 @@ class Synthesizer:
                 r, inputs, outputs[0]
             )
 
-        has_new_solution = False
         all_perms = []
-        with iolock:
-            for p in programs:
-                if p in solutions["solutions"]:
-                    continue
+        for p in programs:
+            # write solutions to file
+            self._write_solution(i, time, p)
 
-                has_new_solution = True
-                # draw type graphs without transitions
-                p.to_graph(graph)
-                # add solution to the set to prevent duplicants
-                sol_set = solutions["solutions"]
-                sol_set.add(p)
-                solutions["solutions"] = sol_set
-                # write solutions to file
-                self._write_solution(len(solutions["solutions"]), time, p)
-
-                # generate all topological sorts for blocking
-                if self._block_perms:
-                    perms = self._get_topo_sorts(p)
-                    all_perms += perms
-
-        if has_new_solution:
-            try:
-                results.put(result)
-                print(len(solutions["solutions"]), time, flush=True)
-            except queue.Full:
-                return [], []
-        else:
-            pass
+            # generate all topological sorts for blocking
+            if self._block_perms:
+                perms = self._get_topo_sorts(p)
+                all_perms += perms
 
         # convert permutations into indices
-        if self._block_perms and has_new_solution:
+        if self._block_perms:
             perm_indices = []
             for perms in all_perms:
                 indices = []
@@ -226,12 +126,65 @@ class Synthesizer:
 
         return programs, perm_indices
 
+    def _create_encoder(self):
+        if self._config["synthesis"]["solver_type"] == "petri net":
+            self._encoder = PetriNetEncoder({})
+        elif self._config["synthesis"]["solver_type"] == "hypergraph":
+            self._encoder = HyperGraphEncoder({})
+        else:
+            raise Exception("Unknown solver type in config")
+
+        for e in self._unique_entries.values():
+            self._encoder._add_transition(e)
+
     def run_n(self, landmarks, inputs, outputs, n):
-        graph = GraphStats()
-        solutions = self._spawn_encoders(graph, landmarks, inputs, outputs, n)
+        """Single process version of synthesis
+
+        Args:
+            landmarks ([type]): [description]
+            inputs ([type]): [description]
+            outputs ([type]): [description]
+            n ([type]): [description]
+
+        Returns:
+            [type]: [description]
+        """
+
+        # create an encoder
+        self._create_encoder()
+
+        solutions = set()
+        # graph = GraphStats()
+        input_map = defaultdict(int)
+        for _, typ in inputs.items():
+            input_map[typ.name] += 1
+
+        output_map = defaultdict(int)
+        for typ in outputs:
+            output_map[typ.name] += 1
+
+        start = time.time()
+        self._encoder.init(input_map)
+        self._encoder._set_final(output_map)
         
-        graph.render(filename="output/programs")
-        
+        while len(solutions) < n:
+            result = self._encoder.solve()
+            while result is not None:
+                programs, perms = self._generate_solutions(
+                    0, inputs, outputs, result, 
+                    time.time() - start
+                )
+                solutions = solutions.union(set(programs))
+                self._encoder.block_prev(perms)
+                result = self._encoder.solve()
+
+            self._encoder.increment()
+            if self._encoder._path_len > DEFAULT_LENGTH_LIMIT:
+                print("Exceeding the default length limit")
+                break
+
+            self._encoder._set_final(output_map)
+
         # write solutions
         with open("data/solutions.pkl", "wb") as f:
             pickle.dump(solutions, f)
