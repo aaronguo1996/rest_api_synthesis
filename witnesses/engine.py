@@ -268,24 +268,16 @@ class WitnessGenerator:
         self._paths = self._doc.get(defs.DOC_PATHS)
 
         # resolve dependencies from the spec
-        resolver = DependencyResolver()
+        resolver = DependencyResolver(openapi_doc)
         self._analyzer = analyzer
         groups = analyzer.analysis_result()
 
         with open(ann_path, 'r') as f:
             annotations = json.load(f)
 
-        # print(annotations)
-        dependencies = resolver.get_dependencies_from_annotations(
-            self._paths, 
-            annotations
-        )
-        # print(dependencies)
-        # self._inferred_dependencies = dependencies
+        dependencies = resolver.get_dependencies_from_annotations(annotations)
         self._annotations = dependencies
-
-        self._real_dependencies = resolver.get_dependencies_from_groups(
-            self._paths, groups)
+        self._real_dependencies = resolver.get_dependencies_from_groups(groups)
 
         # value patterns injected by users
         self._value_dict = val_dict
@@ -473,9 +465,15 @@ class WitnessGenerator:
                         if rep and producer.endpoint in endpoints:
                             dot.node(rep, shape="oval")
                             dot.node(ep, shape="rectangle")
-                            dot.node(producer.endpoint, shape="rectangle")
+                            dot.node(
+                                producer.endpoint + "_" + producer.method,
+                                shape="rectangle"
+                            )
                             dot.edge(rep, ep, style="dashed")
-                            dot.edge(producer.endpoint, rep, style="dashed")
+                            dot.edge(
+                                producer.endpoint + "_" + producer.method, 
+                                rep, style="dashed"
+                            )
 
         self._analyzer.to_graph(
             dot,

@@ -9,7 +9,7 @@ import random
 from graphviz import Digraph
 
 # analyze traces
-from analyzer import analyzer, dynamic
+from analyzer import analyzer, dynamic, parser
 from schemas.schema_type import SchemaType
 from openapi import defs
 from openapi.utils import read_doc, get_schema_forest
@@ -66,22 +66,32 @@ def main():
     doc = read_doc(doc_file)
     SchemaType.doc_obj = doc
 
-    print("Reading traces...")
-    entries = []
-    with open(os.path.join("data/witnesses/", "traces_update_bk.pkl"), 'rb') as f:
-        entries = pickle.load(f)
+    print("Loading existing witnesses...")
+    if args.witness:
+        print("Parsing OpenAPI document...")
+        # entries = None
+        log_parser = parser.LogParser(
+            configuration["log_file"], configuration["hostname"], doc)
+        entries = log_parser.parse_entries(
+            configuration["analysis"]["uninteresting_endpoints"],
+            configuration.get(keys.KEY_SKIP_FIELDS),
+        )
+        if configuration["enable_debug"]:
+            # write entries to log file
+            logging.debug("========== Start Logging Parse Results ==========")
+            for e in entries:
+                logging.debug(e)
+    else:
+        with open(os.path.join("data/witnesses/", "traces_update_bk.pkl"), 'rb') as f:
+            entries = pickle.load(f)
 
-    # for e in entries:
-    #     e.response.array_level = 0
-
-    # with open(os.path.join("data/", "traces_update.pkl"), 'wb') as f:
-    #     pickle.dump(entries, f)
     print("Analyzing provided traces...")
     log_analyzer = analyzer.LogAnalyzer()
     log_analyzer.analyze(
         doc.get(defs.DOC_PATHS),
         entries, 
         configuration.get(keys.KEY_SKIP_FIELDS),
+        configuration.get(keys.KEY_BLACKLIST),
         prefilter=configuration.get(keys.KEY_SYNTHESIS).get(keys.KEY_SYN_PREFILTER))
     groups = log_analyzer.analysis_result()
     if enable_debug:

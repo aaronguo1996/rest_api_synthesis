@@ -1,6 +1,4 @@
 graphviz==0.16
-prance
-openapi_spec_validator
 z3-solver
 SNAKES
 seaborn

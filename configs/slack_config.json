@@ -63,6 +63,9 @@
         "ok",
         "topic"
     ],
+    "blacklist": [
+        "/apps.actions.v2.list"
+    ],
     "test_suites": [
         "synthesizer"
     ]

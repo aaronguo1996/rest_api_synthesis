@@ -65,6 +65,7 @@ ANN_ENDPOINT = "endpoint"
 ANN_PATH = "path"
 ANN_ENUM = "enum"
 ANN_COMBINE = "combine"
+ANN_METHOD = "method"
 
 # other definitions
 INDEX_ANY = "[?]"

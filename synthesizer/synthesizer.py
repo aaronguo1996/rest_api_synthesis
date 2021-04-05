@@ -318,12 +318,6 @@ class Synthesizer:
         elif defs.DOC_PROPERTIES in obj_def:
             properties = obj_def.get(defs.DOC_PROPERTIES)
             for name, prop in properties.items():
-                if (prop.get(defs.DOC_TYPE) == "object" or
-                    defs.DOC_PROPERTIES in prop):
-                    projections = self._create_projection(
-                        f"{obj_name}.{name}", prop)
-                    results.update(projections)
-
                 typ_path = obj_name.split('.')
                 # root_typ = typ_path[0]
                 if len(typ_path) > 1:
@@ -362,6 +356,13 @@ class Synthesizer:
                 entry = TraceEntry(endpoint, "", [proj_in], proj_out)
                 results[endpoint+":"] = entry
 
+                # add nested objects
+                if (prop.get(defs.DOC_TYPE) == "object" or
+                    defs.DOC_PROPERTIES in prop):
+                    projections = self._create_projection(
+                        f"{proj_out.type.name}.{name}", prop)
+                    results.update(projections)
+
         return results
 
     def _create_filters(self):
@@ -375,7 +376,6 @@ class Synthesizer:
             filter_entries = self._create_filter(obj_name, obj_name, obj_def)
             filters.update(filter_entries)
 
-        # return self._group_transitions(filters)
         return filters
 
     def _create_filter(self, obj_name, field_name, field_def):
@@ -453,7 +453,10 @@ class Synthesizer:
                     )
                     filter_in = [self._analyzer.find_same_type(fin)
                         for fin in filter_in]
-                    # filter_out = self._analyzer.find_same_type(filter_out)
+                    
+                    if parts is None:
+                        filter_out = self._analyzer.find_same_type(filter_out)
+                        
                     entry = TraceEntry(endpoint, "", filter_in, filter_out)
                     results[endpoint+":"] = entry
 
