@@ -22,6 +22,7 @@ from graphviz import Digraph
 from openapi import defs
 from openapi.utils import read_doc
 from synthesizer.synthesizer import *
+from program.program_equality import compare_program_strings
 
 BK_ANALYZER = "analyzer"
 BK_CONFIG = "config"
@@ -152,9 +153,14 @@ class Bencher:
 
                 res_sols = [str(synthesizer._program_generator.generate_program(r, {k: SchemaType(v, None) for k, v in bench["input_args"].items()}, SchemaType(bench["output"], None))[0]) for r in res]
 
-                if tgt_sol in res_sols:
-                    print(f"  • [{i + 1}/{blen}] PASS")
-                else:
+                #TODO: actually run filterer so that res_sols is actually in order of rank
+                found = False
+                for rank, res_sol in enumerate(res_sols):
+                    if compare_program_strings(tgt_sol, res_sol):
+                        print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
+                        found = True
+                        break
+                if not found:
                     print(f"  • [{i + 1}/{blen}] FAIL")
             else:
                 print(f"  • [{i + 1}/{blen}] NO SOL")
