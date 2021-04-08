@@ -1,10 +1,11 @@
-# definition of types
 import re
+
 from openapi import defs
+from schemas.utils import value_size
 
 class SchemaType:
     doc_obj = {}
-    
+
     def __init__(self, name, obj, parent = None):
         self.name = name
         self.schema = obj
@@ -63,16 +64,16 @@ class SchemaType:
                     score += field_score
 
             return expected_type, score
-        
+
         return None, -1
 
     @staticmethod
     def is_union_type(expected_type):
-        return expected_type.get("oneOf")
-        
+        return expected_type.get("oneOf") or expected_type.get("anyOf")
+
     def of_union_type(self, obj, expected_type):
         union_type = self.is_union_type(expected_type)
-        if union_type:
+        if union_type is not None:
             # print("=====checking union type")
             for i in range(len(union_type)):
                 t = union_type[i]
@@ -90,13 +91,13 @@ class SchemaType:
     def of_regex_type(self, obj, expected_type):
         if isinstance(obj, str) and expected_type.get("type") == "string":
             pattern = expected_type.get("pattern")
+            enum = expected_type.get("enum")
             # print(f"checking string {obj} against pattern {pattern}")
-            if not pattern:
-                return self, 0
-            elif re.search(pattern, obj):
+            if ((pattern and re.search(pattern, obj)) or
+                (enum and obj in enum) or
+                (pattern is None and enum is None)):
                 return self, 1
-    
-        # print(f"checking {obj} for pattern")
+
         return None, -1
 
     def is_type_of(self, obj):
@@ -110,28 +111,27 @@ class SchemaType:
         """
         try:
             # print(f"checking {obj} against {self.schema}")
-            # print("Does this match:", obj, self.schema)
-            if obj is None:
+            if not obj:
                 return self, 0
 
-            expected_type = self.get_ref_type()
-            if SchemaType.is_array_type(expected_type):
-                return self.of_array_type(obj, expected_type)
+            self.get_ref_type()
+            if SchemaType.is_array_type(self.schema):
+                return self.of_array_type(obj, self.schema)
 
-            if SchemaType.is_union_type(expected_type):
+            if SchemaType.is_union_type(self.schema):
                 # print("checking union type")
-                return self.of_union_type(obj, expected_type)
+                return self.of_union_type(obj, self.schema)
 
             if isinstance(self.schema, dict) and defs.DOC_PROPERTIES in self.schema:
                 # print(f"checking {obj} against {self.schema}")
                 score = 0
                 if not isinstance(obj, dict):
                     return None, -1
-                    
+
                 for k, v in obj.items():
                     # if k == "latest":
                     #     print(self.name, k, v)
-                    types = expected_type.get(defs.DOC_PROPERTIES)
+                    types = self.schema.get(defs.DOC_PROPERTIES)
                     if not types: # if no properties is given, assume anything matches
                         continue
 
@@ -140,8 +140,11 @@ class SchemaType:
                         field_type = SchemaType(k, types[k])
                         _, field_score = field_type.is_type_of(v)
                         if field_score < 0:
+                            # if 'aggregate_usage' in obj.keys():
+                            #     print("checking fails with field", k, "in", obj, "with type", self.name)
                             return None, -1
                         else:
+                            # print("checking object succeeds")
                             if field_type.fields:
                                 self.fields = [[k].extend(f) for f in field_type.fields]
                             else:
@@ -160,17 +163,19 @@ class SchemaType:
             else:
                 self.is_object = False
                 if isinstance(obj, str):
-                    return self.of_regex_type(obj, expected_type)
+                    return self.of_regex_type(obj, self.schema)
                 else:
-                    typ = expected_type.get("type")
+
+                    typ = self.schema.get("type")
                     if typ:
                         py_typ = SchemaType.to_python_type(typ)
-                        # print(py_typ)
-                        # print(obj)
-                        if py_typ == dict:
-                            return self, 0
+                        if py_typ is dict:
+                            return self, value_size(obj)
+                        elif isinstance(obj, py_typ):
+                            return self, 1
                         else:
-                            return self, int(isinstance(obj, py_typ)) or -1
+                            # print("checking fails for obj", obj, "with type",)
+                            return self, -1
                     else:
                         return None, -1
         except Exception as e:
@@ -182,11 +187,11 @@ class SchemaType:
     def get_object_def(cls, path):
         # decode the path into list of field names
         obj = cls.doc_obj
-        
+
         fields = path.split('/')
         if fields[0] != "#":
             raise Exception(f"Resolution of non-local reference {path} is not supported.")
-        
+
         for f in fields[1:]:
             if f[0] == '[' and f[-1] == ']':
                 obj = obj[f[1:-1]]
@@ -194,31 +199,36 @@ class SchemaType:
                 obj = obj.get(f, None)
 
             if not obj:
-                raise Exception(f"Cannot find the field {f} in the given object.")            
+                raise Exception(f"Cannot find the field {f} in the given object.")
 
-        if obj.get("type", None) == "object":
-            return obj.get("properties", None)
-        else:
-            return obj
+        return obj
 
     def get_ref_type(self):
         if "$ref" in self.schema:
             ref_path = self.schema["$ref"]
-            return self.get_object_def(ref_path)
-        else:
-            return self.schema
+            self.schema = self.get_object_def(ref_path)
 
     def get_field_schema(self, k):
+        self.get_ref_type()
         if k in self.schema:
             return self.schema.get(k)
+        elif defs.DOC_ONEOF in self.schema or defs.DOC_ANYOF in self.schema:
+            oneofs = self.schema.get(defs.DOC_ONEOF, [])
+            anyofs = self.schema.get(defs.DOC_ANYOF, [])
+            for sch in oneofs + anyofs:
+                typ = SchemaType(self.name, sch)
+                field_sch = typ.get_field_schema(k)
+                if field_sch is not None:
+                    return field_sch
         elif defs.DOC_PROPERTIES in self.schema:
             t = self.schema.get(defs.DOC_PROPERTIES)
-            if k in t:
-                return t.get(k)
-            else:
-                pass
-                # print(f"Cannot find field {k} in type {self.schema}")
-        
+            return t.get(k)
+        # elif (defs.DOC_ITEMS in self.schema and 
+        #     self.schema.get(defs.DOC_TYPE) == "array"):
+        #     sch = self.schema.get(defs.DOC_ITEMS)
+        #     typ = SchemaType(self.name, sch)
+        #     return typ.get_field_schema(k)
+
         return None
 
     @staticmethod
@@ -235,10 +245,11 @@ class SchemaType:
             # TODO: do we want to use the returned obj_type? there is a difference for union types
             obj_type, obj_score = obj_type.is_type_of(value)
             if obj_score > 0:
-                # self.type = obj_type
-                # print("find object type", obj_name, "with score", obj_score)
-                # break
-                obj_candidates.append((obj_type, obj_score))
+                # if a candidate match only a small number of fields, do not add
+                sz = value_size(value)
+                if obj_score >= sz * 0.6:
+                    # print("find object type", obj_name, "with score", obj_score)
+                    obj_candidates.append((obj_type, obj_score))
 
         # return the one with the greatest score
         rank = lambda x: (x[1], int(not re.search("ref_\d+", x[0].name)))
@@ -248,10 +259,11 @@ class SchemaType:
             # TODO: add the type partitioning here or after this returns, record the partitions somewhere
             return obj_candidates[-1][0]
         else:
+            # print("choose nothing")
             return None
 
     def get_oldest_parent(self):
-        if self.parent:
+        if self.parent is not None and "unknown_obj" not in self.parent.name:
             return self.parent.get_oldest_parent()
         else:
             return self

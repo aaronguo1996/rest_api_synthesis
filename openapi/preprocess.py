@@ -1,8 +1,9 @@
 import json
 import re
-from openapi.error import InvalidSwaggerDoc, InvalidSchemaType
-from openapi.request import Connection
+
 from openapi import defs
+from openapi.error import InvalidSwaggerDoc, InvalidSchemaType
+from witnesses.request import Connection
 
 class PreProcessor:
     def __init__(self, doc_path: str):
