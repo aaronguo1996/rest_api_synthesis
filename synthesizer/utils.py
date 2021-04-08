@@ -14,4 +14,4 @@ def group_params(params):
     return group_types(types)
 
 def make_entry_name(endpoint, method):
-    return endpoint + ":" + method.upper()
+    return endpoint + "_" + method.upper()

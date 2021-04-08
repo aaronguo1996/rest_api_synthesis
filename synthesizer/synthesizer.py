@@ -22,7 +22,7 @@ STATE_FULL = -1
 STATE_NORMAL = 0
 
 class Synthesizer:
-    def __init__(self, doc, config, analyzer):
+    def __init__(self, doc, config, analyzer, exp_dir):
         self._doc = doc
         self._config = config
         self._analyzer = analyzer
@@ -34,8 +34,7 @@ class Synthesizer:
         # flags
         self._expand_group = config["synthesis"]["expand_group"]
         self._block_perms = config["synthesis"]["block_perms"]
-        # create experiment folder
-        self._prep_exp_dir()
+        self._exp_dir = exp_dir
 
     @TimeStats(key=STATS_GRAPH)
     def init(self):
@@ -45,12 +44,6 @@ class Synthesizer:
     def run(self, landmarks, inputs, outputs):
         results = self.run_n(landmarks, inputs, outputs, 1)
         return results[0]
-
-    def _prep_exp_dir(self):
-        exp_name = self._config["exp_name"]
-        self._exp_dir = os.path.join("experiment_data/", exp_name)
-        if not os.path.exists(self._exp_dir):
-            os.makedirs(self._exp_dir)
 
     def _write_solution(self, idx, t, p):
         result_path = os.path.join(self._exp_dir, f"results_{idx}.txt")
@@ -64,10 +57,13 @@ class Synthesizer:
     def _expand_groups(self, result):
         groups = []
         for name in result:
+            if "_clone" in name:
+                continue
+
             if self._expand_group:
                 e = self._entries.get(name)
                 if e is None:
-                    raise Exception("Unknown transition")
+                    raise Exception("Unknown transition", name)
 
                 param_typs = [p.type.name for p in e.parameters]
                 if isinstance(e.response.type, list):
@@ -109,8 +105,8 @@ class Synthesizer:
                 all_perms += perms
 
         # convert permutations into indices
+        perm_indices = []
         if self._block_perms:
-            perm_indices = []
             for perms in all_perms:
                 indices = []
                 for tr in perms:
@@ -121,7 +117,8 @@ class Synthesizer:
 
                 if len(indices) == len(result):
                     perm_indices.append(indices)
-        else:
+        
+        if not perm_indices:
             perm_indices = [list(range(len(result)))]
 
         return programs, perm_indices
@@ -170,19 +167,28 @@ class Synthesizer:
         while len(solutions) < n:
             result = self._encoder.solve()
             while result is not None:
+                print("Find path", result, flush=True)
                 programs, perms = self._generate_solutions(
                     0, inputs, outputs, result, 
                     time.time() - start
                 )
+                # print("get programs", programs, flush=True)
                 solutions = solutions.union(set(programs))
+                if len(solutions) >= n:
+                    break
+
                 self._encoder.block_prev(perms)
                 result = self._encoder.solve()
 
-            self._encoder.increment()
             if self._encoder._path_len > DEFAULT_LENGTH_LIMIT:
                 print("Exceeding the default length limit")
                 break
 
+            if len(solutions) >= n:
+                break
+
+            print("No path found, incrementing the path length", flush=True)
+            self._encoder.increment()
             self._encoder._set_final(output_map)
 
         # write solutions
@@ -204,30 +210,49 @@ class Synthesizer:
         self._entries = entries
         unique_entries = self._group_transitions(entries)
 
+        # slack logs
+        # lst = [
+        #     "/conversations.list:GET",
+        #     # "projection(objs_conversation_0, id):",
+        #     "projection(/conversations.list_response, channels):",
+        #     "/conversations.members:GET",
+        #     "/users.info:GET",
+        #     '/users.list:GET',
+        #     # 'filter(objs_conversation_9, objs_conversation_9.name):',
+        #     # "projection(objs_user.profile, email):",
+        #     # "projection(objs_conversation_9, creator):",
+        #     "projection(/users.info_response, user):",
+        #     # "projection(objs_user_0, profile):",
+        #     "projection(/conversations.members_response, members):",
+        #     'projection(/users.conversations_response, channels):',
+        #     # "projection(objs_conversation, name):",
+        #     # "projection(objs_conversation, id):",
+        #     # "projection(objs_user.profile, email):",
+        #     # 'projection(/conversations.members_response, response_metadata):'
+        # ]
+
+        # stripe logs
         lst = [
-            "/conversations.list:GET",
-            # "projection(objs_conversation_0, id):",
-            "projection(/conversations.list_response, channels):",
-            "/conversations.members:GET",
-            "/users.info:GET",
-            '/users.list:GET',
-            # 'filter(objs_conversation_9, objs_conversation_9.name):',
-            # "projection(objs_user.profile, email):",
-            # "projection(objs_conversation_9, creator):",
-            "projection(/users.info_response, user):",
-            # "projection(objs_user_0, profile):",
-            "projection(/conversations.members_response, members):",
-            'projection(/users.conversations_response, channels):',
-            # "projection(objs_conversation, name):",
-            # "projection(objs_conversation, id):",
-            # "projection(objs_user.profile, email):",
-            # 'projection(/conversations.members_response, response_metadata):'
+            "/v1/products_POST",
+            "/v1/customers_GET",
+            "/v1/customers/{customer}_GET",
+            "/v1/prices_POST",
+            "/v1/invoiceitems_POST",
+            "projection(customer, email)_",
+            "projection(product, id)_",
+            "projection(price, id)_",
+            "/v1/subscriptions_POST",
+            "projection(charge, invoice)_",
+            "projection(invoice, id)_",
+            "/v1/invoices_GET",
+            "projection(subscription, latest_invoice)_",
+            "/v1/subscriptions/{subscription_exposed_id}_POST",
         ]
         for name in lst:
             e = self._entries.get(name)
             print('-----')
             print(name)
-            print([p.type.name for p in e.parameters])
+            print([(p.arg_name, p.type.name) for p in e.parameters])
             print(e.response.type, flush=True)
             
         # only add unique entries into the encoder
@@ -252,6 +277,9 @@ class Synthesizer:
                 continue
 
             for method, method_def in ep_def.items():
+                if method.lower() == "delete": # do not handle delete for now
+                    continue
+
                 results = self._create_entry(endpoint, method, method_def)
                 # print("Endpoint:", endpoint, "Results:", results)
                 for entry in results:
@@ -318,12 +346,6 @@ class Synthesizer:
         elif defs.DOC_PROPERTIES in obj_def:
             properties = obj_def.get(defs.DOC_PROPERTIES)
             for name, prop in properties.items():
-                if (prop.get(defs.DOC_TYPE) == "object" or
-                    defs.DOC_PROPERTIES in prop):
-                    projections = self._create_projection(
-                        f"{obj_name}.{name}", prop)
-                    results.update(projections)
-
                 typ_path = obj_name.split('.')
                 # root_typ = typ_path[0]
                 if len(typ_path) > 1:
@@ -360,7 +382,15 @@ class Synthesizer:
                 proj_in = self._analyzer.find_same_type(proj_in)
                 proj_out = self._analyzer.find_same_type(proj_out)
                 entry = TraceEntry(endpoint, "", [proj_in], proj_out)
-                results[endpoint+":"] = entry
+                result_key = make_entry_name(endpoint, "")
+                results[result_key] = entry
+
+                # add nested objects
+                if (prop.get(defs.DOC_TYPE) == "object" or
+                    defs.DOC_PROPERTIES in prop):
+                    projections = self._create_projection(
+                        f"{proj_out.type.name}.{name}", prop)
+                    results.update(projections)
 
         return results
 
@@ -375,7 +405,6 @@ class Synthesizer:
             filter_entries = self._create_filter(obj_name, obj_name, obj_def)
             filters.update(filter_entries)
 
-        # return self._group_transitions(filters)
         return filters
 
     def _create_filter(self, obj_name, field_name, field_def):
@@ -453,8 +482,12 @@ class Synthesizer:
                     )
                     filter_in = [self._analyzer.find_same_type(fin)
                         for fin in filter_in]
-                    # filter_out = self._analyzer.find_same_type(filter_out)
+                    
+                    if parts is None:
+                        filter_out = self._analyzer.find_same_type(filter_out)
+                        
                     entry = TraceEntry(endpoint, "", filter_in, filter_out)
-                    results[endpoint+":"] = entry
+                    result_key = make_entry_name(endpoint, "")
+                    results[result_key] = entry
 
         return results

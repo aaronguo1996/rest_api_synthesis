@@ -1,19 +1,20 @@
-from witnesses.error import EndpointNotFoundError, ExceedDepthLimit
-from witnesses.dependencies import DependencyResolver, EndpointProducer, EnumProducer
-from openapi import defs
-from openapi.request import Connection
-from analyzer.entry import ErrorResponse, RequestParameter, ResponseParameter, TraceEntry
-
-from xeger import Xeger
-import logging
-import random
-import json
-import os
-import pickle
-import time
-from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from graphviz import Digraph
+from urllib.parse import urlparse
+from xeger import Xeger
+import json
+import logging
+import os
+import pickle
+import random
+import time
+
+from analyzer.entry import ErrorResponse, RequestParameter, ResponseParameter, TraceEntry
+from openapi import defs
+from witnesses.dependencies import DependencyResolver, EndpointProducer, EnumProducer
+from witnesses.error import EndpointNotFoundError, ExceedDepthLimit
+from witnesses.request import Connection
+from synthesizer.utils import make_entry_name
 
 RESULT_FILE = os.path.join("output/", "results.pkl")
 
@@ -23,14 +24,14 @@ class Result:
         self.endpoint = endpoint
         self.return_code = code
         
-        if code in defs.SUCCESS_CODES:
+        if code < defs.CODE_ERROR:
             self.has_error = False
             self.response_body = json.loads(response)
         else:
             self.has_error = True
             self.response_body = {"error": response}
 
-        if not self.response_body.get("ok"):
+        if self.response_body.get("error") is not None:
             self.has_error = True
 
         self.request_params = params
@@ -51,7 +52,8 @@ class Result:
 
 class BasicGenerator:
     def __init__(self, hostname, base_path, endpoint, method, ep_method_def,
-        value_dict, real_dependencies, annotations, depth_limit):
+        token, skip_fields, value_dict, 
+        real_dependencies, annotations, depth_limit):
         # create a logger for this module
         self._logger = logging.getLogger(__name__)
         self._endpoint = endpoint
@@ -64,7 +66,8 @@ class BasicGenerator:
         self._generateing_depth_limit = depth_limit
         self._real_dependencies = real_dependencies
         self._annotations = annotations
-        # self._inferred_dependencies = inferred_dependencies
+        self._token = token
+        self._skip_fields = skip_fields
 
     def _random_from_type(self, param_name, param_type):
         x = Xeger(limit=20)
@@ -89,15 +92,16 @@ class BasicGenerator:
         elif param_type == defs.TYPE_OBJECT:
             return {}
         else:
-            raise Exception("Cannot generate random values for type", param_type)
+            print("Cannot generate random values for type", param_type, "with name", param_name)
+            return None
 
     def _generate_get(self, depth):
         params = self._ep_method_def.get(defs.DOC_PARAMS, [])
-        return self._generate_params(depth + 1, params)
+        return self._generate_params(depth + 1, params, 2)
 
     def _generate_post(self, depth):
         header_params = self._ep_method_def.get(defs.DOC_PARAMS, [])
-        headers = self._generate_params(depth + 1, header_params)
+        headers = self._generate_params(depth + 1, header_params, 2)
         
         request_body = self._ep_method_def.get(defs.DOC_REQUEST)
         body = {}
@@ -117,7 +121,7 @@ class BasicGenerator:
                     defs.DOC_REQUIRED: param_name in requires,
                 })
                 body_param_lst.append(param)
-            body = self._generate_params(depth + 1, body_param_lst)    
+            body = self._generate_params(depth + 1, body_param_lst, 2)    
 
         body.update(headers)
         return body
@@ -137,12 +141,22 @@ class BasicGenerator:
             # parameters are defined in the "parameters" section
             params = self._generate_get(depth)
             code, response = self._conn.send_and_recv(
-                self._endpoint, {}, params)
+                self._endpoint,
+                self._method.upper(),
+                {
+                    defs.HEADER_AUTH: f"{defs.HEADER_BEARER} {self._token}",
+                },
+                params)
         elif self._method.upper() == defs.METHOD_POST:
             # parameters are defined in both the "parameters" and "requestBody"
             params = self._generate_post(depth)
             code, response = self._conn.send_and_recv(
-                self._endpoint, {}, params)
+                self._endpoint,
+                self._method.upper(),
+                {
+                    defs.HEADER_AUTH: f"{defs.HEADER_BEARER} {self._token}",
+                },
+                params)
         else:
             raise Exception("Unsupported method for generateing:", self._method)
 
@@ -157,10 +171,11 @@ class BasicGenerator:
 
 class SaturationThread(BasicGenerator):
     def __init__(self, hostname, base_path, endpoint, method, ep_method_def, 
-        value_dict, real_dependencies, annotations, analyzer, depth_limit):
+        token, skip_fields, value_dict, 
+        real_dependencies, annotations, analyzer, depth_limit):
         super().__init__(
             hostname, base_path,
-            endpoint, method, ep_method_def, value_dict,
+            endpoint, method, ep_method_def, token, skip_fields, value_dict,
             real_dependencies, annotations, depth_limit)
         self._analyzer = analyzer
 
@@ -195,19 +210,27 @@ class SaturationThread(BasicGenerator):
             return producer
 
     # get params from bank
-    def _generate_params(self, _, params):
+    def _generate_params(self, _, params, n):
         param_dict = {}
+
+        req_params = []
+        opt_params = []
         for param_obj in params:
             required = param_obj.get(defs.DOC_REQUIRED)
+            if required:
+                req_params.append(param_obj)
+            else:
+                opt_params.append(param_obj)
 
-            # # skip optional arguments for now
-            # if not required:
-            #     continue
-            # randomly choose one of these optional arguments
-            if not required and random.random() > 0.25:
+        picked_num = random.randint(0, n)
+        picked_num = min(picked_num, len(opt_params))
+        picked_opt_params = random.sample(opt_params, picked_num)
+
+        for param_obj in req_params + picked_opt_params:
+            param_name = param_obj.get(defs.DOC_NAME)
+            if param_name in self._skip_fields:
                 continue
 
-            param_name = param_obj.get(defs.DOC_NAME)
             param_schema = param_obj.get(defs.DOC_SCHEMA)
             if param_schema: # for parameters
                 param_type = param_schema.get(defs.DOC_TYPE)
@@ -254,42 +277,37 @@ class SaturationThread(BasicGenerator):
                 self._logger.debug(f"No dependency found for {(self._endpoint, param_name)}. Trying random values.")
                 param_val = self._random_from_type(param_name, param_type)
 
-            param_dict[param_name] = param_val
+            if param_val is not None:
+                param_dict[param_name] = param_val
 
         return param_dict
 
 class WitnessGenerator:
-    def __init__(self, openapi_doc, analyzer, val_dict, ann_path, 
+    def __init__(self, openapi_doc, analyzer, token, val_dict, ann_path, exp_dir,
         depth_limit=3, path_to_defs="#/components/schemas", 
-        skip_fields=[], plot_graph = False):
+        skip_fields=[], plot_freq = 1):
         self._logger = logging.getLogger(__name__)
         # parse the spec into dict
         self._doc = openapi_doc
         self._paths = self._doc.get(defs.DOC_PATHS)
 
         # resolve dependencies from the spec
-        resolver = DependencyResolver()
+        resolver = DependencyResolver(openapi_doc)
         self._analyzer = analyzer
         groups = analyzer.analysis_result()
 
         with open(ann_path, 'r') as f:
             annotations = json.load(f)
 
-        # print(annotations)
-        dependencies = resolver.get_dependencies_from_annotations(
-            self._paths, 
-            annotations
-        )
-        # print(dependencies)
-        # self._inferred_dependencies = dependencies
+        dependencies = resolver.get_dependencies_from_annotations(annotations)
         self._annotations = dependencies
-
-        self._real_dependencies = resolver.get_dependencies_from_groups(
-            self._paths, groups)
+        self._real_dependencies = resolver.get_dependencies_from_groups(groups)
 
         # value patterns injected by users
+        self._token = token
         self._value_dict = val_dict
         self._depth_limit = depth_limit
+        self._exp_dir = exp_dir
 
         # start a new connection for generateing
         servers = self._doc.get("servers")
@@ -305,7 +323,7 @@ class WitnessGenerator:
 
         self._error_buckets = set()
         self._covered_endpoints = set()
-        self._plot_graph = plot_graph
+        self._plot_freq = plot_freq
         # self._annotations = annotations
 
     def _add_new_result(self, result: Result):
@@ -322,7 +340,7 @@ class WitnessGenerator:
             response = ResponseParameter(
                 result.method, "", result.endpoint, [], True, 0, None, result.response_body)
 
-        witness_path = 'data/witnesses/traces.pkl'
+        witness_path = os.path.join(self._exp_dir, 'traces.pkl')
         with open(witness_path, 'rb') as f:
             entries = pickle.load(f)
             print(len(entries))
@@ -340,7 +358,7 @@ class WitnessGenerator:
         if result.has_error:
             return
 
-        responses = response.flatten(self._path_to_defs, self._skip_fields)
+        responses, _ = response.flatten(self._path_to_defs, self._skip_fields)
         for r in responses:
             self._analyzer.insert(r)
 
@@ -356,10 +374,15 @@ class WitnessGenerator:
                         raise EndpointNotFoundError(ep)
 
                     for method, ep_method_def in ep_def.items():
+                        if method == "delete": # TODO: skip delete for now
+                            continue
+
                         self._logger.debug(f"Submit job for {method} {ep}")
                         t = generate_type(
                             self._hostname, self._base_path, 
                             ep, method, ep_method_def,
+                            self._token,
+                            self._skip_fields,
                             self._value_dict, 
                             self._real_dependencies,
                             self._annotations,
@@ -379,7 +402,11 @@ class WitnessGenerator:
                 if generate_result:
                     self._add_new_result(generate_result)
 
-            if self._plot_graph:
+            resolver = DependencyResolver(self._doc)
+            groups = self._analyzer.analysis_result()
+            self._real_dependencies = resolver.get_dependencies_from_groups(groups)
+
+            if i % self._plot_freq == 0:
                 self.to_graph(endpoints, f"dependencies_{i}")
 
             self.get_coverage(i, results)
@@ -473,9 +500,15 @@ class WitnessGenerator:
                         if rep and producer.endpoint in endpoints:
                             dot.node(rep, shape="oval")
                             dot.node(ep, shape="rectangle")
-                            dot.node(producer.endpoint, shape="rectangle")
+                            dot.node(
+                                make_entry_name(producer.endpoint, producer.method),
+                                shape="rectangle"
+                            )
                             dot.edge(rep, ep, style="dashed")
-                            dot.edge(producer.endpoint, rep, style="dashed")
+                            dot.edge(
+                                make_entry_name(producer.endpoint, producer.method), 
+                                rep, style="dashed"
+                            )
 
         self._analyzer.to_graph(
             dot,

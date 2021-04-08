@@ -3,6 +3,7 @@ import itertools
 import functools
 import re
 import copy
+from synthesizer.utils import make_entry_name
 
 from program.program import (Program, VarExpr, ProjectionExpr,
                              FilterExpr, MapExpr, AssignExpr, AppExpr)
@@ -32,8 +33,10 @@ class ProgramGenerator:
             # in_typ = in_typ.name
             self._add_typed_var(typ_subst, VarExpr(name, in_typ), in_typ, 0)
 
-        results = []
         for trans in transitions:
+            if "_clone" in trans:
+                continue
+
             sig = self._signatures.get(trans)
             if not sig:
                 raise Exception(f"Unknown transition name {trans}")
@@ -74,7 +77,10 @@ class ProgramGenerator:
         name_counts = defaultdict(int)
         name_counts.clear()
         for tr in transitions:
-            name = re.search(r"(.*):.*", tr).group(1)
+            if "_clone" in tr:
+                continue
+            
+            name = tr # re.search(r"(.*):.*", tr).group(1)
             name_counts[name] += 1
 
         real_counts = defaultdict(int)
@@ -113,9 +119,9 @@ class ProgramGenerator:
 
         for expr in exprs:
             if isinstance(expr, ProjectionExpr):
-                name = f"projection({expr._obj.type}, {expr._field})"
+                name = f"projection({expr._obj.type}, {expr._field})_"
             elif isinstance(expr, FilterExpr):
-                name = f"filter({expr._obj.type}, {expr._obj.type}.{expr._field})"
+                name = f"filter({expr._obj.type}, {expr._obj.type}.{expr._field})_"
             elif isinstance(expr, AppExpr):
                 name = expr._fun
             else:
@@ -249,7 +255,8 @@ class ProgramGenerator:
                 map_pairs += arg_maps
                 named_args.append((arg_name, arg))
 
-            map_body = AppExpr(sig.endpoint, named_args)
+            f = make_entry_name(sig.endpoint, sig.method)
+            map_body = AppExpr(f, named_args)
             for arg, x in reversed(map_pairs):
                 map_body = MapExpr(arg, Program([x], [map_body]))
 

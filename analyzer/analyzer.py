@@ -5,6 +5,7 @@ from schemas.schema_type import SchemaType
 from analyzer.entry import ErrorResponse, ResponseParameter, RequestParameter
 from analyzer.utils import get_representative
 from openapi import defs
+from synthesizer.utils import make_entry_name
 
 class DSU:
     # TODO: record types for each param here
@@ -38,16 +39,19 @@ class DSU:
             self._nexts[y] = y
             self._values[y] = set([y.value])
 
-        # hard code some rules that should not be included
+        # hard code rules for Slack, FIXME: check the type
         if (("name" in y.arg_name and isinstance(y, ResponseParameter) and y.type and "objs_message" in y.type.name) or 
             ("name" in x.arg_name and isinstance(x, ResponseParameter) and x.type and "objs_message" in x.type.name)):
             return
 
+        # hard code rules for Stripe
+        # if ((isinstance(x, ResponseParameter) and x.path == ['data', '[?]', 'data', 'object', 'id']) or
+        #     (isinstance(y, ResponseParameter) and y.path == ['data', '[?]', 'data', 'object', 'id'])):
+        #     return
+
         xr, yr = self.find(x), self.find(y)
-        # group = self.get_group(xr)
-        # rep1, _ = get_representative(group)
-        # group = self.get_group(yr)
-        # rep2, _ = get_representative(group)
+        # if xr != yr:
+        #     print("union", xr, yr)
 
         if self._sizes[xr] < self._sizes[yr]:
             self._parents[yr] = xr
@@ -71,6 +75,7 @@ class DSU:
         return groups
 
     def get_value_bank(self, x):
+        print("[get_value_bank] root for", x, "is", self.find(x))
         return self._values.get(self.find(x), set())
 
     def get_group(self, x):
@@ -95,6 +100,7 @@ class LogAnalyzer:
         self.dsu = DSU()
         self.type_fields = {}
         self.type_partitions = {}
+        self.type_aliases = {}
         # temporary field
         self._checked_fields = {}
 
@@ -160,14 +166,11 @@ class LogAnalyzer:
                 self.type_partitions[t] = new_partitions
 
 
-    def analyze(self, paths, entries, skip_fields, path_to_defs="#/components/schemas", prefilter=False):
+    def analyze(self, paths, entries, skip_fields, blacklist, path_to_defs="#/components/schemas", prefilter=False):
         '''
             Match the value of each request argument or response parameter
             in a log entry and union the common ones
         '''
-        blacklist = [
-            '/apps.actions.v2.list'
-        ]
         params = []
         for entry in entries:
             # do not add error responses to DSU
@@ -197,7 +200,10 @@ class LogAnalyzer:
                         .get(defs.DOC_SCHEMA) \
                         .get(defs.DOC_PROPERTIES)
 
-            responses = entry.response.flatten(path_to_defs, skip_fields)
+            responses, aliases = entry.response.flatten(
+                path_to_defs, skip_fields
+            )
+            self.type_aliases.update(aliases)
 
             def correct_value(p, typ):
                 if typ == "integer":
@@ -232,15 +238,14 @@ class LogAnalyzer:
             self.insert(p)
 
     def insert(self, param):
-        # if param.arg_name == "fields":
-        #     print("fields:", value)
-
         if param.value is None:
             return
 
         # skip empty values, integers and booleans for merge, 
         # but add them as separate nodes, they are meaningless
         if not param.value or isinstance(param.value, int) or isinstance(param.value, bool):
+            # print(param.func_name, param.arg_name, param.value)
+            param.value = str(param.value)
             self.dsu.union(param, param)
             return
 
@@ -249,19 +254,8 @@ class LogAnalyzer:
             self.value_to_param[value] = param
 
         root = self.value_to_param[value]
-
-        # group = self.dsu.get_group(root)
-        # rep, _ = get_representative(group)
-
-        # if rep == "defs_group_id" and (param.arg_name == "topic" or param.arg_name == "value"):
-        #     self.dsu.union(param, param)
-        #     return
-
-        # print("union", root, root.type, param, param.type, param.value)
-        # print(self.dsu.get_group(param))
         
         self.dsu.union(root, param)
-        # print(self.dsu.get_group(param))
 
     def analysis_result(self):
         return self.dsu.groups()
@@ -286,39 +280,59 @@ class LogAnalyzer:
                 # pick the first as the representative
                 # print("not response, choosing", group[0])
                 rep = group[0].arg_name
-            
-            # if not rep or rep == "blocks":
-            #     print(f"not rep in group {group}")
+
+            # for debug
+            if rep == "line_item.id":
+                group_params = []
+                for param in group:
+                    if isinstance(param, ResponseParameter):
+                        group_params.append((param.func_name, param.method, param.path, param.value))
+                    else:
+                        group_params.append((param.func_name, param.method, ["REQUEST", param.arg_name], param.value))
+
+                sorted(group_params)
+                for p in group_params:
+                    print(p)
 
             dot.node(rep, label=rep, shape="oval")
 
             for param in group:
-                dot.node(param.func_name, label=param.func_name, shape='rectangle')
+                trans = make_entry_name(param.func_name, param.method)
+                dot.node(trans, label=trans, shape='rectangle')
                 if isinstance(param, ResponseParameter):
                     # add an edge between the method and its return type
-
                     if '[' not in rep and not re.search("image_.*", rep):
                         if param.type:
+                            if "unknown_" in param.type.name:
+                                continue
+
                             p = param.type.get_oldest_parent()
+                            # if trans == "/v1/customers/{customer}_GET":
+                            #     print(trans, "connected with", rep, "by parameter", param.arg_name, param.value)
+
                             if p.name == param.type.name:
-                                edges.add((param.func_name, rep))
+                                edges.add((trans, rep))
                             else:
                                 projection = f"projection ({param.type.name})"
                                 dot.node(projection, label=projection, shape='rectangle')
                                 edges.add((p.name, projection))
                                 edges.add((projection, rep))
-                                edges.add((param.func_name, p.name))
+                                edges.add((trans, p.name))
                         else:
-                            edges.add((param.func_name, rep))
+                            edges.add((trans, rep))
                 else:
+                    if trans == "/v1/customers/{customer}_GET":
+                        print(rep, "connected with", trans, "by parameter", param.arg_name, param.value)
                     # add an edge between parameter name and the method
                     if '[' not in rep and not re.search("image_.*", rep):
-                        edges.add((rep, param.func_name))
+                        edges.add((rep, trans))
 
         for v1, v2 in edges:
             # print(v1, v2)
-            if ((v1[0] == '/' and v1 not in endpoints) or 
-                (v2[0] == '/' and v2 not in endpoints)):
+            f1 = '_'.join(v1.split('_')[:-1])
+            f2 = '_'.join(v2.split('_')[:-1])
+            if ((v1[0] == '/' and f1 not in endpoints) or 
+                (v2[0] == '/' and f2 not in endpoints)):
                 continue
 
             dot.edge(v1, v2, style="solid")
@@ -418,11 +432,8 @@ class LogAnalyzer:
     def _find_descendant(self, param):
         params = self.dsu._parents.keys()
         for p in params:
-            # if isinstance(p, ResponseParameter) and "response_metadata" in p.path:
-            #     print("find descendent", p)
             if (isinstance(p, ResponseParameter) and
                 p.func_name == param.func_name and
-                # p.arg_name == param.arg_name and
                 p.method.upper() == param.method.upper() and
                 param.path == p.path[:len(param.path)]):
 
@@ -444,9 +455,20 @@ class LogAnalyzer:
         return values
 
     def find_same_type(self, param):
+        typ_name = self.type_aliases.get(param.type.name)
+        if param.type.name == "charge.invoice":
+            print("find type alias", typ_name)
+
+        if typ_name is not None:
+            param.type = SchemaType(typ_name, None)
+            return param
+        else:
+            typ_name = param.type.name
+
         params = self.dsu._parents.keys()
         for p in params:
-            if p.type and p.type.name == param.type.name:
+            if (isinstance(p, ResponseParameter) and
+                p.type and p.type.name == typ_name):
                 group = self.dsu.get_group(p)
                 _, rep_type = get_representative(group)
                 # TODO: we do not want to find the parent of this type, correct?
@@ -477,7 +499,7 @@ class LogAnalyzer:
                     if fields is None: # we add all partitions that we can find
                         parts = self.type_partitions.get(param_type.name)
                         if parts is None:
-                            print("not partition available for type when fields not available", param_type)
+                            # print("no partition available for type when fields not available", param_type)
                             param.type = param_type
                         else:
                             param.type = [
@@ -488,7 +510,7 @@ class LogAnalyzer:
                         # get all the partitions that cover the fields
                         partitions = self.type_partitions.get(param_type.name)
                         if partitions is None:
-                            print("not partition available for type when fields available", param_type)
+                            # print("no partition available for type when fields available", param_type)
                             param.type = param_type
                         else:
                             indices = []

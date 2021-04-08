@@ -33,6 +33,7 @@
         "block_perms": true,
         "solver_type": "petri net",
         "solver_number": 4,
+        "solution_number": 300,
         "enable_prefilter": false
     },
     "endpoints": [
@@ -62,6 +63,9 @@
         "token",
         "ok",
         "topic"
+    ],
+    "blacklist": [
+        "/apps.actions.v2.list"
     ],
     "test_suites": [
         "synthesizer"

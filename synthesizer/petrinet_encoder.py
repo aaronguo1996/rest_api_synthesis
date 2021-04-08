@@ -36,6 +36,7 @@ class PetriNetEncoder:
         # self._add_landmarks(landmarks)
         self._set_initial(inputs)
         # self._set_final(outputs)
+        self._add_copy_transitions()
 
     @TimeStats(key=STATS_ENCODE)
     def increment(self):
@@ -121,7 +122,6 @@ class PetriNetEncoder:
         for trans in transitions:
             entry = self._entries.get(trans.name)
             tr_idx = self._trans_to_variable.get(trans.name)
-            
             # precondition: enough tokens in input places
             pre = []
             # postcondition: token number changes
@@ -134,9 +134,13 @@ class PetriNetEncoder:
                 # count required and optional arguments
                 required = 0
                 optional = 0
-                for param in entry.parameters:
-                    required += int(str(param.type) == place.name and param.is_required)
-                    optional += int(str(param.type) == place.name and not param.is_required)
+
+                if entry is None:
+                    required = 1
+                else:
+                    for param in entry.parameters:
+                        required += int(str(param.type) == place.name and param.is_required)
+                        optional += int(str(param.type) == place.name and not param.is_required)
 
                 cur = self._place_to_variable.get((place.name, t))
                 pre.append(Int(cur) >= required)
@@ -166,7 +170,10 @@ class PetriNetEncoder:
                         else:
                             output_changes += Int(nxt) - Int(cur)
                 else: # required outputs
-                    tokens[place.name] = (req_in - 1, opt_in, 0)
+                    if entry is None:
+                        tokens[place.name] = (req_in - 2, opt_in, 0)
+                    else:
+                        tokens[place.name] = (req_in - 1, opt_in, 0)
 
             if output_changes is not None:
                 post.append(output_changes > 0)
@@ -194,6 +201,17 @@ class PetriNetEncoder:
             if trans_fire != []:
                 self._solver.add(
                     z3.Implies(z3.Not(z3.Or(trans_fire)), Int(cur) == Int(nxt)))
+
+    def _add_copy_transitions(self):
+        places = self._net.place()
+        for place in places:
+            trans_name = place.name + "_clone"
+            trans_idx = len(self._trans_to_variable)
+            self._trans_to_variable[trans_name] = trans_idx
+            self._variable_to_trans.append(trans_name)
+            self._net.add_transition(Transition(trans_name))
+            self._net.add_input(place.name, trans_name, Value(1))
+            self._net.add_output(place.name, trans_name, Value(2))
 
     def _set_initial(self, typs):
         for t, c in typs.items():

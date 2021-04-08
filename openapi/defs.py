@@ -43,8 +43,10 @@ PARAM_BODY = "body"
 # definitions of network protocol
 HEADER_CONTENT = "Content-type"
 HEADER_ACCEPT = "Accept"
+HEADER_AUTH = "Authorization"
 HEADER_JSON = "application/json"
 HEADER_FORM = "application/x-www-form-urlencoded"
+HEADER_BEARER = "Bearer"
 
 # definitions of http method
 METHOD_GET = "GET"
@@ -57,6 +59,7 @@ CODE_OK = 200
 CODE_CREATED = 201
 CODE_NO_CONTENT = 204
 SUCCESS_CODES = [200, 201, 204]
+CODE_ERROR = 400
 
 # definitions of annotation keys
 ANN_CONSUMER = "consumer"
@@ -65,6 +68,7 @@ ANN_ENDPOINT = "endpoint"
 ANN_PATH = "path"
 ANN_ENUM = "enum"
 ANN_COMBINE = "combine"
+ANN_METHOD = "method"
 
 # other definitions
 INDEX_ANY = "[?]"

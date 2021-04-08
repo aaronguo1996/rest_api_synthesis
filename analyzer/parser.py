@@ -2,12 +2,34 @@ import json
 import re
 from urllib.parse import urlparse
 
-from openapi import log, typeChecker
-from analyzer.entry import TraceEntry
+from schemas.schema_type import SchemaType
+from analyzer.entry import TraceEntry, RequestParameter, ResponseParameter
 
 JSON_TYPE = "application/json"
 HOSTNAME_PREFIX = "https://"
 HOSTNAME_PREFIX_LEN = len(HOSTNAME_PREFIX)
+
+def match_with_path(path, url):
+    # print("matching", url, "with", path)
+    path_segments = path.split('/')
+    url_segments = url.split('/')
+    if len(path_segments) != len(url_segments):
+        return None
+
+    path_params = []
+    for p, u in zip(path_segments, url_segments):
+        if len(p) >= 2 and p[0] == '{' and p[-1] == '}':
+            param = p[1:-1]
+            path_params.append({
+                "name": param,
+                "value": u,
+            })
+        elif p == u:
+            continue
+        else:
+            return None
+
+    return path_params
 
 class LogParser:
     def __init__(self, log_file, hostname, doc,
@@ -16,9 +38,10 @@ class LogParser:
         self.hostname = hostname
         self.sanitize_hostname()
         self.path_to_defs = path_to_defs
+        self.doc = doc
 
         # update the class variable doc_obj for typeChecker
-        typeChecker.Type.doc_obj = doc
+        SchemaType.doc_obj = doc
 
     def parse_entries(self, skips, skip_fields):
         '''
@@ -44,13 +67,13 @@ class LogParser:
             raise Exception("Request not found in the log entry")
 
         # strip out the hostname part and get the real endpoint
-        servers = typeChecker.Type.doc_obj.get("servers")
+        servers = SchemaType.doc_obj.get("servers")
         server = servers[0].get("url")
         server_result = urlparse(server)
         base_path = server_result.path
         url_obj = urlparse(request.get("url", ""))
         endpoint = url_obj.path
-        if base_path == endpoint[:len(base_path)]:
+        if base_path != "/" and base_path == endpoint[:len(base_path)]:
             endpoint = endpoint[len(base_path):]
 
         if not endpoint:
@@ -67,8 +90,20 @@ class LogParser:
 
         # get all the query data and body data
         parameters = []
-
-        request_params = request.get("queryString", [])
+        
+        # match the endpoint names with those in the doc and get path params
+        endpoints = self.doc.get("paths")
+        path_params = None
+        for path, path_def in endpoints.items():
+            if method.lower() in path_def:
+                path_params = match_with_path(path, endpoint)
+                if path_params is not None:
+                    # print("Find path", path, "for entry", endpoint)
+                    endpoint = path
+                    break
+        
+        request_params = path_params or []
+        request_params += request.get("queryString", [])
         
         post_data = request.get("postData", {})
         if "params" in post_data:
@@ -84,27 +119,25 @@ class LogParser:
 
         request_params = [ x for x in request_params if x["name"] not in skip_fields]
         for rp in request_params:
-            p = log.RequestParameter(method, rp["name"], endpoint, True, None, rp["value"])
+            p = RequestParameter(method, rp["name"], endpoint, True, None, rp["value"])
             parameters.append(p)
 
         response_text = entry["response"]["content"]["text"]
         response_params = json.loads(response_text)
         
+        # print(endpoint, "returns", response_params)
+
         p = None
         if "ok" not in response_params:
-            obj_defs = typeChecker.Type.get_object_def(self.path_to_defs)
-            for obj_name, obj in obj_defs.items():
-                obj_type = typeChecker.Type(obj_name, obj)
-                if obj_type.is_type_of(response_params):
-                    p = log.ResponseParameter(
-                        self.method, obj_name, self.func_name,
-                        self.path + [obj_name], True, False,
-                        obj_type, response_params
-                    )
-                    break
-        if p is None:
-            p = log.ResponseParameter(method, "", endpoint, [], True, False, None, response_params)
-
+            # print("Inferring types for", endpoint)
+            resp_type = SchemaType.infer_type_for(
+                self.path_to_defs, skip_fields, response_params)
+            p = ResponseParameter(
+                method, "", endpoint, [], True, 0, resp_type, response_params)
+        else:
+            p = ResponseParameter(
+                method, "", endpoint, [], True, 0, None, response_params)
+        
         return TraceEntry(endpoint, method, parameters, p)
 
     def _resolve_entries(self, entries, skips, skip_fields):
