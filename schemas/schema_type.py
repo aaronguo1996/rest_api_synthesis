@@ -140,8 +140,8 @@ class SchemaType:
                         field_type = SchemaType(k, types[k])
                         _, field_score = field_type.is_type_of(v)
                         if field_score < 0:
-                            if 'aggregate_usage' in obj.keys():
-                                print("checking fails with field", k, "in", obj, "with type", self.name)
+                            # if 'aggregate_usage' in obj.keys():
+                            #     print("checking fails with field", k, "in", obj, "with type", self.name)
                             return None, -1
                         else:
                             # print("checking object succeeds")

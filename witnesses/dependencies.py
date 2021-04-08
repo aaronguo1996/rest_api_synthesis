@@ -83,7 +83,7 @@ class DependencyResolver:
                     # TODO: construct a definition with the information we know
                     ep_method_def = None
                 else:
-                    ep_method_def = ep_def.get(resp.method)
+                    ep_method_def = ep_def.get(resp.method.lower())
                 
                 producer = EndpointProducer(
                     endpoint, resp.method, ep_method_def, resp.path)
@@ -112,14 +112,14 @@ class DependencyResolver:
                     else:
                         ep = producer.get(defs.ANN_ENDPOINT)
                         method = producer.get(defs.ANN_METHOD)
-                        path = producer.get(defs.ANN_PATH)
+                        path = producer.get(defs.ANN_PATH).split('/')
                         # get the definition from doc
                         paths = self._doc.get(defs.DOC_PATHS)
                         ep_def = paths.get(ep)
-                        ep_method_def = ep_def.get(method)
+                        ep_method_def = ep_def.get(method.lower())
                         # create the producer for this
                         producer = EndpointProducer(
-                            endpoint, method, ep_method_def, path
+                            ep, method, ep_method_def, path
                         )
                         valid_producers.add(producer)
 

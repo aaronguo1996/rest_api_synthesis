@@ -45067,7 +45067,8 @@
                     },
                     "required": [
                       "address",
-                      "name"
+                      "name",
+                      "customer"
                     ],
                     "title": "shipping",
                     "type": "object"
@@ -45112,6 +45113,10 @@
                     "type": "string"
                   }
                 },
+                "required": [
+                  "amount",
+                  "currency"
+                ],
                 "type": "object"
               }
             }
@@ -54304,7 +54309,8 @@
                   }
                 },
                 "required": [
-                  "customer"
+                  "customer",
+                  "price"
                 ],
                 "type": "object"
               }
@@ -70926,6 +70932,9 @@
                     "x-stripeBypassValidation": true
                   }
                 },
+                "required": [
+                  "type"
+                ],
                 "type": "object"
               }
             }
@@ -73240,7 +73249,9 @@
                   }
                 },
                 "required": [
-                  "currency"
+                  "currency",
+                  "product",
+                  "unit_amount"
                 ],
                 "type": "object"
               }
@@ -76369,7 +76380,7 @@
             "description": "Only return refunds for the charge specified by this charge ID.",
             "in": "query",
             "name": "charge",
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string"
             },
@@ -76612,6 +76623,9 @@
                     "type": "boolean"
                   }
                 },
+                "required": [
+                  "charge"
+                ],
                 "type": "object"
               }
             }

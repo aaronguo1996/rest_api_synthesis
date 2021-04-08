@@ -5,6 +5,7 @@ from schemas.schema_type import SchemaType
 from analyzer.entry import ErrorResponse, ResponseParameter, RequestParameter
 from analyzer.utils import get_representative
 from openapi import defs
+from synthesizer.utils import make_entry_name
 
 class DSU:
     # TODO: record types for each param here
@@ -38,7 +39,7 @@ class DSU:
             self._nexts[y] = y
             self._values[y] = set([y.value])
 
-        # hard code rules for Slack
+        # hard code rules for Slack, FIXME: check the type
         if (("name" in y.arg_name and isinstance(y, ResponseParameter) and y.type and "objs_message" in y.type.name) or 
             ("name" in x.arg_name and isinstance(x, ResponseParameter) and x.type and "objs_message" in x.type.name)):
             return
@@ -74,6 +75,7 @@ class DSU:
         return groups
 
     def get_value_bank(self, x):
+        print("[get_value_bank] root for", x, "is", self.find(x))
         return self._values.get(self.find(x), set())
 
     def get_group(self, x):
@@ -242,6 +244,8 @@ class LogAnalyzer:
         # skip empty values, integers and booleans for merge, 
         # but add them as separate nodes, they are meaningless
         if not param.value or isinstance(param.value, int) or isinstance(param.value, bool):
+            # print(param.func_name, param.arg_name, param.value)
+            param.value = str(param.value)
             self.dsu.union(param, param)
             return
 
@@ -277,6 +281,7 @@ class LogAnalyzer:
                 # print("not response, choosing", group[0])
                 rep = group[0].arg_name
 
+            # for debug
             if rep == "line_item.id":
                 group_params = []
                 for param in group:
@@ -292,7 +297,7 @@ class LogAnalyzer:
             dot.node(rep, label=rep, shape="oval")
 
             for param in group:
-                trans = param.func_name + "_" + param.method
+                trans = make_entry_name(param.func_name, param.method)
                 dot.node(trans, label=trans, shape='rectangle')
                 if isinstance(param, ResponseParameter):
                     # add an edge between the method and its return type
@@ -451,6 +456,15 @@ class LogAnalyzer:
 
     def find_same_type(self, param):
         typ_name = self.type_aliases.get(param.type.name)
+        if param.type.name == "charge.invoice":
+            print("find type alias", typ_name)
+
+        if typ_name is not None:
+            param.type = SchemaType(typ_name, None)
+            return param
+        else:
+            typ_name = param.type.name
+
         params = self.dsu._parents.keys()
         for p in params:
             if (isinstance(p, ResponseParameter) and
@@ -485,7 +499,7 @@ class LogAnalyzer:
                     if fields is None: # we add all partitions that we can find
                         parts = self.type_partitions.get(param_type.name)
                         if parts is None:
-                            print("not partition available for type when fields not available", param_type)
+                            # print("no partition available for type when fields not available", param_type)
                             param.type = param_type
                         else:
                             param.type = [
@@ -496,7 +510,7 @@ class LogAnalyzer:
                         # get all the partitions that cover the fields
                         partitions = self.type_partitions.get(param_type.name)
                         if partitions is None:
-                            print("not partition available for type when fields available", param_type)
+                            # print("no partition available for type when fields available", param_type)
                             param.type = param_type
                         else:
                             indices = []

@@ -14,6 +14,7 @@ from schemas.schema_type import SchemaType
 from openapi import defs
 from openapi.utils import read_doc, get_schema_forest
 import config_keys as keys
+from synthesizer.synthesizer import Synthesizer
 from synthesizer.filtering import run_filter
 from synthesizer.parallel import spawn_encoders
 from globs import init_synthesizer
@@ -38,11 +39,21 @@ def build_cmd_parser():
         help="Run dynamic analysis")
     parser.add_argument("--filtering", action="store_true",
         help="Filter or rank results from previous run")
+    parser.add_argument("--synthesis", action="store_true",
+        help="Run synthesis algorithm in single process mode")
     parser.add_argument("--parallel", action="store_true",
         help="Run synthesis algorithm in parallel mode")
     parser.add_argument("--witness", action="store_true",
         help="Generate witnesses by configuration")
     return parser
+
+def prep_exp_dir(config):
+    exp_name = config["exp_name"]
+    exp_dir = os.path.join("experiment_data/", exp_name)
+    if not os.path.exists(exp_dir):
+        os.makedirs(exp_dir)
+
+    return exp_dir
 
 def main():
     cmd_parser = build_cmd_parser()
@@ -66,8 +77,11 @@ def main():
     doc = read_doc(doc_file)
     SchemaType.doc_obj = doc
 
+    exp_dir = prep_exp_dir(configuration)
+
     print("Loading existing witnesses...")
-    if args.witness:
+    trace_file = os.path.join(exp_dir, 'traces.pkl')
+    if args.witness and not os.path.exists(trace_file):
         print("Parsing OpenAPI document...")
         # entries = None
         log_parser = parser.LogParser(
@@ -81,9 +95,15 @@ def main():
             logging.debug("========== Start Logging Parse Results ==========")
             for e in entries:
                 logging.debug(e)
+
+        with open(trace_file, 'wb') as f:
+            pickle.dump(entries, f)
+
+        print("Write", len(entries), "entries into file")
     else:
-        with open(os.path.join("data/witnesses/", "traces_update_bk.pkl"), 'rb') as f:
+        with open(trace_file, 'rb') as f:
             entries = pickle.load(f)
+        print("Read", len(entries), "entries from file")
 
     print("Analyzing provided traces...")
     log_analyzer = analyzer.LogAnalyzer()
@@ -148,7 +168,7 @@ def main():
             print("score:", s)
             print(p.pretty())
     elif args.parallel:
-        init_synthesizer(doc, configuration, log_analyzer)
+        init_synthesizer(doc, configuration, log_analyzer, exp_dir)
         inputs = {
             "channel_name": SchemaType("objs_conversation.name", None),
         }
@@ -159,19 +179,46 @@ def main():
             inputs, outputs,
             configuration["synthesis"]["solver_number"]
         )
+    elif args.synthesis:
+        synthesizer = Synthesizer(doc, configuration, log_analyzer, exp_dir)
+        synthesizer.init()
+        solutions = synthesizer.run_n(
+            [],
+            {
+                # "product_name": SchemaType("product.name", None),
+                # "customer_id": SchemaType("customer.id", None),
+                # "cur": SchemaType("fee.currency", None),
+                # "amt": SchemaType("/v1/prices:unit_amount:POST", None),
+                "subscription_id": SchemaType("subscription.id", None),
+                # "payment": SchemaType("/v1/subscriptions/{subscription_exposed_id}:default_payment_method:POST", None),
+            },
+            [
+                # SchemaType("invoiceitem", None)
+                # SchemaType("charge", None)
+                SchemaType("refund", None)
+                # SchemaType("subscription", None)
+            ],
+            2 #configuration["synthesis"]["solution_num"]
+        )
+
+        for prog in solutions:
+            print(prog.pretty())
+
     elif args.witness:
-        print("Running fuzzer to get more traces...")
+        print("Getting more traces...")
         engine = WitnessGenerator(
             doc, log_analyzer,
+            configuration["witness"]["token"],
             configuration["witness"]["value_dict"],
             configuration["witness"]["annotation_path"],
+            exp_dir,
             configuration["witness"]["gen_depth"],
             configuration["path_to_definitions"],
             configuration.get(keys.KEY_SKIP_FIELDS),
-            configuration["witness"]["plot_graph"],
+            configuration["witness"]["plot_every"],
         )
 
-        if configuration["witness"]["plot_graph"]:
+        if configuration["analysis"]["plot_graph"]:
             engine.to_graph(endpoints, "dependencies_0")
 
         engine.saturate_all(

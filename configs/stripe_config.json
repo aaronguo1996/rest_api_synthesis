@@ -1,4 +1,5 @@
 {
+    "exp_name": "stripe_api_test",
     "log_file": "data/logs/dashboard.stripe.com.20210331.har",
     "doc_file": "data/openapi/stripe_spec3_sdk_large.json",
     "enable_debug": true,
@@ -18,21 +19,22 @@
         ]   
     },
     "witness": {
+        "token": "sk_test_51IDdwaDLm14arRKVBXJFwwGemXMg6OCDQHKKeZjlnEtq1klmwkPGbgxNYUqbIvYWhSRG4N3MR87oo1V1uhqFUSmR00sm0NQsbn",
         "value_dict": {
-            "token": "sk_test_51IDdwaDLm14arRKVBXJFwwGemXMg6OCDQHKKeZjlnEtq1klmwkPGbgxNYUqbIvYWhSRG4N3MR87oo1V1uhqFUSmR00sm0NQsbn"
         },
         "annotation_path": "configs/stripe_annotation.json",
         "gen_depth": 3,
         "timeout_total": 600,
         "timeout_per_request": 60,
-        "iterations": 0,
-        "plot_graph": true
+        "iterations": 1,
+        "plot_every": 10
     },
     "synthesis": {
         "expand_group": true,
         "block_perms": true,
         "solver_type": "petri net",
         "solver_number": 4,
+        "solution_number": 300,
         "enable_prefilter": false
     },
     "endpoints": [
@@ -73,7 +75,8 @@
         "ok",
         "topic",
         "x-*",
-        "expand%5B%5D"
+        "expand%5B%5D",
+        "expand"
     ],
     "blacklist": [
         "/v1/search",

@@ -75,26 +75,18 @@ class ResponseParameter(Parameter):
 
             if (self.type is not None and 
                 "unknown_obj" not in self.type.name and
-                obj_type is not None): # when we know its type
+                obj_type is not None and # when we know its type
+                self.type.name != obj_type.name):
                 aliases[self.type.name] = obj_type.name
                 
             if obj_type is not None:
                 if self.type is None:
-                    # if self.arg_name == "customer_default_source" and self.func_name == "/v1/subscriptions":
-                    #     print("get None type for this field")
-
                     self.type = obj_type
                 else:
                     self.type.name = obj_type.name
                     self.type.schema = obj_type.schema
 
-            # if self.arg_name == "customer_default_source" and self.func_name == "/v1/subscriptions":
-            #     print("get parent type", self.type.parent, "when value is", self.value)
-
             if self.type is None:
-                # if self.arg_name == "customer_default_source" and self.func_name == "/v1/subscriptions":
-                #     print(f"assigning type for {self.value}")
-
                 assigned_type = self._assign_type(self.value)
                 self.type = SchemaType("unknown_obj", assigned_type)
 
@@ -161,12 +153,13 @@ class ResponseParameter(Parameter):
                 results += it_results
                 aliases.update(it_aliases)
         else:
-            # if self.arg_name == "type" and self.value == "ach_credit_transfer":
-            #     print("ach_credit_transfer has type", self.type)
-
             if self.type is None:
                 self.type = SchemaType.infer_type_for(
                     path_to_defs, skip_fields, self.value)
+
+            # if we see a scalar value for the same type name,
+            # invalidate its definition as an object
+            aliases[self.type.name] = None
 
             return [self], aliases
 
@@ -262,9 +255,8 @@ class TraceEntry:
         """
         entry_params = []
         
-        # print(endpoint)
         # read parameters
-        parameters = entry_def.get(defs.DOC_PARAMS)
+        parameters = entry_def.get(defs.DOC_PARAMS, {})
         for p in parameters:
             name = p.get(defs.DOC_NAME)
             if name in skip_fields:
@@ -277,7 +269,7 @@ class TraceEntry:
 
         # read request body
         request_params = entry_def.get(defs.DOC_REQUEST)
-        if request_params:
+        if request_params is not None:
             request_body = request_params \
                 .get(defs.DOC_CONTENT) \
                 .get(defs.HEADER_FORM)
@@ -299,20 +291,6 @@ class TraceEntry:
                     name in requires,
                 )
                 entry_params.append(param)
-
-        entry_response = ResponseParameter(
-            method, "", endpoint, [], True, 0,
-            SchemaType(endpoint+"_response", None), None
-        )
-
-        entry_param = RequestParameter(
-            method, "", endpoint, True,
-            SchemaType(endpoint+"_response", None), None
-        )
-
-        results = [
-            TraceEntry(endpoint, method, entry_params, entry_response)
-        ]
 
         # read responses
         responses = entry_def.get(defs.DOC_RESPONSES)
@@ -350,18 +328,41 @@ class TraceEntry:
 
             response_params = response_schema.get(defs.DOC_PROPERTIES)
 
-        for name, rp in response_params.items():
-            if name in skip_fields:
-                continue
+        if response_params is None:
+            entry_response = ResponseParameter(
+                method, "", endpoint, [], True, 0, None, None
+            )
 
-            # print("name:", name)
-            param = ResponseParameter.from_openapi(
-                endpoint, method, name,
-                name in requires, int(rp.get(defs.DOC_TYPE) == "array"))
+            results = [
+                TraceEntry(endpoint, method, entry_params, entry_response)
+            ]
+        else:
+            entry_response = ResponseParameter(
+                method, "", endpoint, [], True, 0,
+                SchemaType(endpoint+"_response", None), None
+            )
 
-            e = TraceEntry(
-                f"projection({endpoint}_response, {name})",
-                "", [entry_param], param)
-            results.append(e)
+            response_param = RequestParameter(
+                method, "", endpoint, True,
+                SchemaType(endpoint+"_response", None), None
+            )
+
+            results = [
+                TraceEntry(endpoint, method, entry_params, entry_response)
+            ]
+
+            for name, rp in response_params.items():
+                if name in skip_fields:
+                    continue
+
+                # print("name:", name)
+                param = ResponseParameter.from_openapi(
+                    endpoint, method, name,
+                    name in requires, int(rp.get(defs.DOC_TYPE) == "array"))
+
+                e = TraceEntry(
+                    f"projection({endpoint}_response, {name})",
+                    "", [response_param], param)
+                results.append(e)
 
         return results
