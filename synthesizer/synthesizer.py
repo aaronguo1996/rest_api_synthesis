@@ -162,8 +162,9 @@ class Synthesizer:
 
         start = time.time()
         self._encoder.init(input_map)
-        self._encoder._set_final(output_map)
-        
+        self._encoder.set_final(output_map)
+        # self._encoder.add_all_constraints()
+
         while len(solutions) < n:
             result = self._encoder.solve()
             while result is not None:
@@ -189,7 +190,8 @@ class Synthesizer:
 
             print("No path found, incrementing the path length", flush=True)
             self._encoder.increment()
-            self._encoder._set_final(output_map)
+            self._encoder.set_final(output_map)
+            # self._encoder.add_all_constraints()
 
         # write solutions
         with open("data/solutions.pkl", "wb") as f:
