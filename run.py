@@ -167,15 +167,15 @@ def main():
     exp_dir = prep_exp_dir(configuration)
 
     print("Loading witnesses...")
-    if args.dynamic or args.witness:
+    if args.dynamic or args.witness or args.filtering:
         entries = parse_entries(doc, configuration, exp_dir)
 
-        if args.dynamic:
-            run_dynamic(configuration, entries, "/conversations.list", 500)
-        
-        if args.witness:
-            generate_witnesses(configuration, doc, exp_dir, entries, endpoints)
-        
+    if args.dynamic:
+        run_dynamic(configuration, entries, "/conversations.list", 500)
+    
+    elif args.witness:
+        generate_witnesses(configuration, doc, exp_dir, entries, endpoints)
+    
     else:
         with open(os.path.join(exp_dir, "graph.pkl"), "rb") as f:
             log_analyzer = pickle.load(f)
@@ -232,19 +232,21 @@ def main():
                 [],
                 {
                     # "product_name": SchemaType("product.name", None),
-                    # "customer_id": SchemaType("customer.id", None),
+                    "product_id": SchemaType("product.id", None),
+                    "customer_id": SchemaType("customer.id", None),
                     # "cur": SchemaType("fee.currency", None),
                     # "amt": SchemaType("/v1/prices:unit_amount:POST", None),
-                    "subscription_id": SchemaType("subscription.id", None),
+                    # "subscription_id": SchemaType("subscription.id", None),
                     # "payment": SchemaType("/v1/subscriptions/{subscription_exposed_id}:default_payment_method:POST", None),
                 },
                 [
                     # SchemaType("invoiceitem", None)
                     # SchemaType("charge", None)
-                    SchemaType("refund", None)
-                    # SchemaType("subscription", None)
+                    # SchemaType("refund", None)
+                    SchemaType("subscription", None)
+                    # SchemaType("payment_source.last4", None)
                 ],
-                2 #configuration["synthesis"]["solution_num"]
+                5 #configuration["synthesis"]["solution_num"]
             )
 
             for prog in solutions:
