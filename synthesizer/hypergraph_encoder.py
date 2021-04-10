@@ -1,8 +1,10 @@
 import z3
+import re
 from z3 import Bool, Int, Solver
 from snakes.nets import *
-from synthesizer.utils import group_params, make_entry_name
+
 from stats.time_stats import TimeStats, STATS_ENCODE, STATS_SEARCH
+from synthesizer.utils import group_params, make_entry_name
 
 class HyperGraphEncoder:
     def __init__(self, path_entries):
@@ -16,7 +18,6 @@ class HyperGraphEncoder:
         self._targets = []
         self._prev_result = []
         self._net = PetriNet('net')
-        self.create_petrinet()
 
     @TimeStats(key=STATS_ENCODE)
     def init(self, landmarks, inputs, outputs):
@@ -58,6 +59,18 @@ class HyperGraphEncoder:
         else:
             self._targets = []
             return None
+
+    def get_length_of(self, path_len, val_lock, landmarks, inputs, outputs):
+        # @path_len@ and @result_queue@ are shared between different processes
+        pl = path_len.value
+        with val_lock:
+            path_len.value += 1
+
+        self.init(landmarks, inputs, outputs)
+        for _ in range(pl):
+            self.increment(landmarks, outputs)
+
+        return self.solve()
 
     def block_prev(self, indices):
         for permutation in indices:
@@ -177,12 +190,13 @@ class HyperGraphEncoder:
             self._targets.append(Int(f"t{t}") >= 0)
             self._targets.append(Int(f"t{t}") < len(self._trans_to_variable))
 
-    def add_transition(self, entry):
+    def _add_transition(self, entry):
         trans_name = make_entry_name(entry.endpoint, entry.method)
         self._entries[trans_name] = entry
         trans_idx = len(self._trans_to_variable)
         self._trans_to_variable[trans_name] = trans_idx
         self._variable_to_trans.append(trans_name)
+
         self._net.add_transition(Transition(trans_name))
 
         params = group_params(entry.parameters)
@@ -203,7 +217,3 @@ class HyperGraphEncoder:
             if not self._net.has_place(param):
                 self._net.add_place(Place(param))
             self._net.add_output(param, trans_name, Value(1))
-
-    def create_petrinet(self):
-        for entry in self._entries:
-            self.add_transition(entry)

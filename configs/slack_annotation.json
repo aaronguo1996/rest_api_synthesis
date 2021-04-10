@@ -1,0 +1,178 @@
+[
+    {
+        "consumer": "user",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/users.list",
+                "path": "members/[?]/id"
+            },
+            {
+                "endpoint": "/users.info",
+                "path": "user/id"
+            },
+            {
+                "endpoint": "/conversations.list",
+                "path": "channels/[?]/creator"
+            },
+            {
+                "endpoint": "/conversations.members",
+                "path": "members/[?]"
+            }
+        ]
+    },
+    {
+        "consumer": "users",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/users.list",
+                "path": "members/[?]/id"
+            },
+            {
+                "endpoint": "/users.info",
+                "path": "user/id"
+            },
+            {
+                "endpoint": "/conversations.list",
+                "path": "channels/[?]/creator"
+            },
+            {
+                "endpoint": "/conversations.members",
+                "path": "members/[?]"
+            }
+        ]
+    },
+    {
+        "consumer": "email",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/users.list",
+                "path": "members/[?]/profile/email"
+            },
+            {
+                "endpoint": "/users.info",
+                "path": "user/profile/email"
+            }
+        ]
+    },
+    {
+        "consumer": "cursor",
+        "endpoint": "/users.list",
+        "producer": [
+            {
+                "endpoint": "/users.list",
+                "path": "response_metadata/next_cursor"
+            }
+        ]
+    },
+    {
+        "consumer": "cursor",
+        "endpoint": "/conversations.list",
+        "producer": [
+            {
+                "endpoint": "/conversations.list",
+                "path": "response_metadata/next_cursor"
+            }
+        ]
+    },
+    {
+        "consumer": "channel",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/conversations.list",
+                "path": "channels/[?]/id"
+            },
+            {
+                "endpoint": "/conversations.info",
+                "path": "channel/id"
+            },
+            {
+                "endpoint": "/conversations.open",
+                "path": "channel/id"
+            }
+        ]
+    },
+    {
+        "consumer": "types",
+        "endpoint": "/conversations.list",
+        "producer": [
+            {
+                "enum": ["public_channel", "private_channel", "mpim", "im"],
+                "combine": true
+            }
+        ]
+    },
+    {
+        "consumer": "latest",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/chat.postMessage",
+                "path": "ts"
+            },
+            {
+                "endpoint": "/conversations.history",
+                "path": "messages/[?]/ts"
+            }
+        ]
+    },
+    {
+        "consumer": "oldest",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/chat.postMessage",
+                "path": "ts"
+            },
+            {
+                "endpoint": "/conversations.history",
+                "path": "messages/[?]/ts"
+            }
+        ]
+    },
+    {
+        "consumer": "ts",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/chat.postMessage",
+                "path": "ts"
+            },
+            {
+                "endpoint": "/conversations.history",
+                "path": "messages/[?]/ts"
+            }
+        ]
+    },
+    {
+        "consumer": "timestamp",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/chat.postMessage",
+                "path": "ts"
+            },
+            {
+                "endpoint": "/conversations.history",
+                "path": "messages/[?]/ts"
+            }
+        ]
+    },
+    {
+        "consumer": "team",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/users.list",
+                "path": "members/[?]/team_id"
+            },
+            {
+                "endpoint": "/users.info",
+                "path": "user/team_id"
+            }
+        ]
+    }
+]

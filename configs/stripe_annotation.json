@@ -1,0 +1,183 @@
+[
+    {
+        "consumer": "subscription_exposed_id",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/subscriptions",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/subscriptions",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "price",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/prices",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/prices",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "customer",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/customers",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/customers",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "invoice",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/invoices",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/invoices",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "charge",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/charges",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/charges",
+                "method": "post",
+                "path": "id"
+            },
+            {
+                "endpoint": "/v1/charges/{charge}",
+                "method": "get",
+                "path": "id"
+            },
+            {
+                "endpoint": "/v1/charges/{charge}",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "invoiceitem",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/invoiceitems",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/invoiceitems",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "price",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/prices",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/prices",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "refund",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/refunds",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/refunds",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "intent",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/payment_intents",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/payment_intents",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "id",
+        "endpoint": "/v1/customers/{customer}/sources/{id}",
+        "producer": [
+            {
+                "endpoint": "/v1/customers/{customer}/sources",
+                "method": "get",
+                "path": "data/[?]/id"
+            }
+        ]
+    },
+    {
+        "consumer": "id",
+        "endpoint": "/v1/products/{id}",
+        "producer": [
+            {
+                "endpoint": "/v1/products",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/products",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    }
+]

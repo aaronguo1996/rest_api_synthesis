@@ -252,3 +252,4 @@ dist
 *.pkl
 *.txt
 .vscode/
+experiment_data/

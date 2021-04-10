@@ -1,72 +1,149 @@
 import z3
+import re
 from z3 import Int, Solver
 from snakes.nets import *
-from synthesizer.utils import group_params, make_entry_name
+import time
+import subprocess
+
 from stats.time_stats import TimeStats, STATS_ENCODE, STATS_SEARCH
+from synthesizer.utils import group_params, make_entry_name
+from synthesizer.underapprox import Approximation
 
 # preprocess the spec file and canonicalize the parameters and responses
 class PetriNetEncoder:
     def __init__(self, path_entries):
         self._entries = path_entries
-        self._net = PetriNet('net')
+        self._net = PetriNet("net")
         self._place_to_variable = {}
         self._trans_to_variable = {}
         self._variable_to_trans = []
         self._path_len = 0
         self._solver = Solver()
-        self._solver.set(unsat_core=True)
-        self._targets = []
+        # self._solver.set(unsat_core=True)
         self._prev_result = []
-
-        self.create_petrinet()
+        self._approx = Approximation(self._net)
+        self._constraints = {
+            "permanent": [],
+            "temporary": [],
+        }
+        # self.create_petrinet()
 
     @TimeStats(key=STATS_ENCODE)
-    def init(self, landmarks, inputs, outputs):
+    def init(self, inputs):
         self._solver.reset()
         self._path_len = 0
-        self._targets = []
         self._prev_result = []
 
         # variables
         self._add_variables(self._path_len)
 
-        self._add_landmarks(landmarks)
+        # self._add_landmarks(landmarks)
         self._set_initial(inputs)
-        self._set_final(outputs)
+        # self._set_final(outputs)
+        self._add_copy_transitions()
+        # run the approximation
+        print("before approximation:", len(self._net.transition()))
+        input_places = inputs.keys()
+        self._reachables = self._approx.approx_reachability(
+            input_places, set(), set()
+        )
+        # self._reachables = None
+        print("after approximation:", len(self._reachables))
 
     @TimeStats(key=STATS_ENCODE)
-    def increment(self, landmarks, outputs):
+    def increment(self):
         self._path_len += 1
         self._add_variables(self._path_len)
         self._fire_transitions(self._path_len - 1)
         self._no_transition_fire(self._path_len - 1)
-        self._add_landmarks(landmarks)
-        self._set_final(outputs)
+        # self._add_landmarks(landmarks)
+        # self._set_final(outputs)
+        # print("current len", self._path_len, flush=True)
+        # reset the temporary constraint when path length changes
+        self._constraints["temporary"] = []
 
-        print("Current len:", self._path_len, flush=True)
+    def check_constraints_binding(self):
+        # constraints
+        for c in self._constraints["permanent"]:
+            self._solver.add(c)
+
+        for c in self._constraints["temporary"]:
+            self._solver.add(c)
+
+    def check_constraints_cmd(self):
+        query = ""
+        for t in range(self._path_len):
+            query += f"(declare-fun t{t} () Int) "
+
+        for i in range(len(self._place_to_variable)):
+            query += f"(declare-fun k!{i} () Int) "
+
+        # constraints
+        for c in self._constraints["permanent"]:
+            query += f"(assert {c.sexpr()}) "
+
+        for c in self._constraints["temporary"]:
+            query += f"(assert {c.sexpr()}) "
+            
+        query += "(check-sat) "
+        
+        # get values
+        for t in range(self._path_len):
+            query += f"(get-value (t{t})) "
+
+        query += "\n"
+        # f.flush()
+
+        try:
+            output = subprocess.check_output(["z3", "-in"], input=query.encode())
+            results = output.decode('utf-8').split('\n')
+            # print(results)
+            sat_result = results[0]
+            path_results = results[1:]
+
+            # if len(path_results) != self._path_len:
+            #     raise Exception("Mismatched path length")
+            
+            path = []
+            for t, r in enumerate(path_results):
+                if r:
+                    path_idx = re.search(f"\(\(t{t} (\d+)\)\)", r).group(1)
+                    path.append(int(path_idx))
+
+            return sat_result, path
+        except subprocess.CalledProcessError as grepexc:                                                                                                   
+            print("error code", grepexc.returncode, grepexc.output)
+            return "unsat", None
 
     @TimeStats(key=STATS_SEARCH)
-    def solve(self):
-        # print(self._targets)
-        result = self._solver.check(self._targets)
-        if self._path_len > 0 and result == z3.sat:
-            m = self._solver.model()
-            # print(m)
-            # print(m[Int(31)]) # 0
-            # print(m[Int(37)]) # 0
-            # print(m[Int(1007)]) # 1
-            # print(m[Int(1983)]) # 0
-            # print(m[Int(1013)]) # 0
-            # print(m[Int(1989)]) # 1
+    def solve(self, mode="cmd"):
+        start = time.time()
+        if mode == "cmd":
+            result, path = self.check_constraints_cmd()
+        else:
+            result = self._solver.check()
+            if result == z3.sat:
+                result = "sat"
+                m = self._solver.model()
+                path = []
+                for t in range(self._path_len):
+                    path.append(m[Int(f"t{t}")].as_long())
+
+        print("Check time:", time.time() - start, flush=True)
+        start = time.time()
+        if self._path_len > 0 and result == "sat":
             results = []
-            for i in range(self._path_len):
-                tr = m[Int(f"t{i}")].as_long()
+            for tr in path:
                 self._prev_result.append(tr)
                 results.append(self._variable_to_trans[tr])
+            print("Model time:", time.time() - start, flush=True)
             return results
         else:
             self._targets = []
-            return None
+            results = None
+
+        self._solver.reset()
+        return results
 
     def block_prev(self, indices):
         for permutation in indices:
@@ -74,16 +151,41 @@ class PetriNetEncoder:
             blocks = []
             for i in range(self._path_len):
                 blocks.append(Int(f"t{i}") == transitions[i])
-            self._targets.append(z3.Not(z3.And(blocks)))
+            self._constraints["temporary"].append(z3.Not(z3.And(blocks)))
 
         # print(z3.Not(z3.And(self._prev_result)))
         self._prev_result = []
+
+    def get_length_of(self, path_len, inputs, outputs):
+        start = time.time()
+        
+        self.init(inputs)
+        for _ in range(path_len):
+            self.increment()
+        self.set_final(outputs)
+        self.add_all_constraints()
+
+        print("Finish encoding in", time.time() - start, "seconds")
+        print("Searching at len:", self._path_len, flush=True)
+        
+        start = time.time()
+        path = self.solve()
+
+        # self._solver.add(z3.And(self._targets))
+        # with open("constraints.smt", "w") as f:
+        #     f.write(self._solver.to_smt2())
+
+        # raise Exception
+        if path is not None:
+            print("Finding a path in", time.time() - start, "seconds at path length", path_len, flush=True)
+
+        return path
 
     def _add_landmarks(self, landmarks):
         for landmark in landmarks:
             idx = self._trans_to_variable.get(landmark)
             fires = [Int(f"t{i}") == idx for i in range(self._path_len)]
-            self._targets.append(
+            self._constraints["temporary"].append(
                 z3.Or(fires)
             )
 
@@ -95,14 +197,20 @@ class PetriNetEncoder:
                 # if t==0: print(key)
                 i = len(self._place_to_variable)
                 self._place_to_variable[key] = i
-                self._solver.add(Int(i) >= 0)
+                self._constraints["permanent"].append(Int(i) >= 0)
 
     def _fire_transitions(self, t):
         transitions = self._net.transition()
         for trans in transitions:
             entry = self._entries.get(trans.name)
             tr_idx = self._trans_to_variable.get(trans.name)
-            
+
+            if self._reachables and trans.name not in self._reachables:
+                self._constraints["permanent"].append(
+                    z3.Not(Int(f"t{t}") == tr_idx)
+                )
+                continue
+
             # precondition: enough tokens in input places
             pre = []
             # postcondition: token number changes
@@ -115,9 +223,13 @@ class PetriNetEncoder:
                 # count required and optional arguments
                 required = 0
                 optional = 0
-                for param in entry.parameters:
-                    required += int(str(param.type) == place.name and param.is_required)
-                    optional += int(str(param.type) == place.name and not param.is_required)
+
+                if entry is None:
+                    required = 1
+                else:
+                    for param in entry.parameters:
+                        required += int(str(param.type) == place.name and param.is_required)
+                        optional += int(str(param.type) == place.name and not param.is_required)
 
                 cur = self._place_to_variable.get((place.name, t))
                 pre.append(Int(cur) >= required)
@@ -147,7 +259,10 @@ class PetriNetEncoder:
                         else:
                             output_changes += Int(nxt) - Int(cur)
                 else: # required outputs
-                    tokens[place.name] = (req_in - 1, opt_in, 0)
+                    if entry is None:
+                        tokens[place.name] = (req_in - 2, opt_in, 0)
+                    else:
+                        tokens[place.name] = (req_in - 1, opt_in, 0)
 
             if output_changes is not None:
                 post.append(output_changes > 0)
@@ -158,16 +273,9 @@ class PetriNetEncoder:
                 post.append(Int(nxt) <= Int(cur) - required + opt_out)
                 post.append(Int(nxt) >= Int(cur) - required - opt_in)
 
-            self._solver.add(
+            self._constraints["permanent"].append(
                 z3.Implies(Int(f"t{t}") == tr_idx, z3.And(pre + post))
             )
-
-            # lst = ['/users.list:GET', 'projection(/users.list_response, members):', '/users.conversations:GET', 'projection(/users.conversations_response, channels):', 'filter(objs_conversation_9, objs_conversation.name):', 'projection(objs_user_0, profile):', 'projection(objs_user.profile, email):']
-            # lst = ['projection(objs_conversation_15, user):', 'projection(objs_conversation_9, creator):']
-            # lst = ['projection(/conversations.members_response, members):']
-            # if trans.name in lst:
-            #     print(trans.name)
-            #     print(z3.Implies(Int(f"t{t}") == tr_idx, z3.And(pre + post)), flush=True)
 
     def _no_transition_fire(self, t):
         places = self._net.place()
@@ -180,39 +288,56 @@ class PetriNetEncoder:
                 for trans in pre.union(post)]
             trans_fire = [Int(f"t{t}") == i for i in trans_ind]
             if trans_fire != []:
-                self._solver.add(
+                self._constraints["permanent"].append(
                     z3.Implies(z3.Not(z3.Or(trans_fire)), Int(cur) == Int(nxt)))
+
+    def _add_copy_transitions(self):
+        places = self._net.place()
+        for place in places:
+            trans_name = place.name + "_clone"
+            trans_idx = len(self._trans_to_variable)
+            self._trans_to_variable[trans_name] = trans_idx
+            self._variable_to_trans.append(trans_name)
+            self._net.add_transition(Transition(trans_name))
+            self._net.add_input(place.name, trans_name, Value(1))
+            self._net.add_output(place.name, trans_name, Value(2))
 
     def _set_initial(self, typs):
         for t, c in typs.items():
             tv = self._place_to_variable.get((t, 0))
-            self._solver.add(Int(tv) == c)
+            self._constraints["permanent"].append(Int(tv) == c)
             # print(tv)
 
         for (k, t), v in self._place_to_variable.items():
             if t == 0 and k not in typs:
-                self._solver.add(Int(v) == 0)
+                self._constraints["permanent"].append(Int(v) == 0)
 
-    def _set_final(self, typs):
+    def set_final(self, typs):
         for t, c in typs.items():
             tv = self._place_to_variable.get((t, self._path_len))
-            self._targets.append(Int(tv) == c)
+            self._constraints["temporary"].append(Int(tv) == c)
             # print(tv)
 
         for (k, t), v in self._place_to_variable.items():
             if t == self._path_len and k not in typs:
-                self._targets.append(Int(v) == 0)
+                self._constraints["temporary"].append(Int(v) == 0)
 
         for t in range(self._path_len):
-            self._targets.append(Int(f"t{t}") >= 0)
-            self._targets.append(Int(f"t{t}") < len(self._trans_to_variable))
+            self._constraints["temporary"].append(
+                Int(f"t{t}") >= 0
+            )
+            self._constraints["temporary"].append(
+                Int(f"t{t}") < len(self._trans_to_variable)
+            )
 
-    def add_transition(self, entry):
+    def _add_transition(self, entry):
         trans_name = make_entry_name(entry.endpoint, entry.method)
+        # print(trans_name)
         self._entries[trans_name] = entry
         trans_idx = len(self._trans_to_variable)
         self._trans_to_variable[trans_name] = trans_idx
         self._variable_to_trans.append(trans_name)
+
         self._net.add_transition(Transition(trans_name))
 
         params = group_params(entry.parameters)
@@ -233,8 +358,3 @@ class PetriNetEncoder:
             if not self._net.has_place(param):
                 self._net.add_place(Place(param))
             self._net.add_output(param, trans_name, Value(1))
-
-    def create_petrinet(self):
-        for entry in self._entries:
-            self.add_transition(entry)
-            

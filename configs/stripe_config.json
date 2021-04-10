@@ -1,0 +1,88 @@
+{
+    "exp_name": "stripe_api_test",
+    "log_file": "data/logs/dashboard.stripe.com.20210331.har",
+    "doc_file": "data/openapi/stripe_spec3_sdk_large.json",
+    "enable_debug": true,
+    "debug_output": "debug.log",
+    "hostname": "https://dashboard.stripe.com",
+    "path_to_definitions": "#/components/schemas",
+    "analysis": {
+        "plot_only_input": false,
+        "plot_graph": true,
+        "uninteresting_endpoints": [
+            "experiments.*",
+            "search.modules",
+            "search.autocomplete.*",
+            "api.features",
+            "apps.profile.get",
+            "ajax.*"
+        ]   
+    },
+    "witness": {
+        "token": "sk_test_51IDdwaDLm14arRKVBXJFwwGemXMg6OCDQHKKeZjlnEtq1klmwkPGbgxNYUqbIvYWhSRG4N3MR87oo1V1uhqFUSmR00sm0NQsbn",
+        "value_dict": {
+        },
+        "annotation_path": "configs/stripe_annotation.json",
+        "gen_depth": 3,
+        "timeout_total": 600,
+        "timeout_per_request": 60,
+        "iterations": 0,
+        "plot_every": 10
+    },
+    "synthesis": {
+        "expand_group": true,
+        "block_perms": true,
+        "solver_type": "petri net",
+        "solver_number": 4,
+        "solution_number": 300,
+        "enable_prefilter": false
+    },
+    "endpoints": [
+        "/v1/charges",
+        "/v1/charges/{charge}",
+        "/v1/customers",
+        "/v1/customers/{customer}",
+        "/v1/customers/{customer}/sources/{id}",
+        "/v1/invoiceitems",
+        "/v1/invoiceitems/{invoiceitem}",
+        "/v1/invoices",
+        "/v1/invoices/{invoice}",
+        "/v1/invoices/{invoice}/send",
+        "/v1/prices",
+        "/v1/prices/{price}",
+        "/v1/products",
+        "/v1/products/{id}",
+        "/v1/payment_methods",
+        "/v1/payment_intents",
+        "/v1/payment_intents/{intent}/confirm",
+        "/v1/refunds",
+        "/v1/refunds/{refund}",
+        "/v1/subscriptions",
+        "/v1/subscriptions/{subscription_exposed_id}"
+    ],
+    "ignore_field_names": [
+        "text",
+        "blocks",
+        "slack_route",
+        "_x_id",
+        "_x_csid",
+        "_x_version_ts",
+        "_x_sonic",
+        "_x_reason",
+        "_x_gantry",
+        "_x_mode",
+        "token",
+        "ok",
+        "topic",
+        "x-*",
+        "expand%5B%5D",
+        "expand"
+    ],
+    "blacklist": [
+        "/v1/search",
+        "/v1/notes",
+        "/v1/events",
+        "/v1/search/radar/related_payments"
+    ],
+    "test_suites": []
+}

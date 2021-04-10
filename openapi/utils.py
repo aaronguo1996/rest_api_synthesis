@@ -1,15 +1,14 @@
 import re
-from prance import ResolvingParser, ValidationError
+import json
 
 from openapi import defs
 from openapi.preprocess import PreProcessor
 
 def read_doc(doc_path):
-    try:
-        parser = ResolvingParser(doc_path)
-        # spec with all the references resolved
-        return parser.specification
-    except ValidationError: # allow other exceptions to be thrown
+    with open(doc_path, 'r') as f:
+        spec = json.load(f)
+
+    if spec.get(defs.DOC_VERSION) == defs.DOC_V2:
         path_segs = doc_path.split('/')
         old_filename = path_segs[-1]
         name_segs = old_filename.split('.')
@@ -18,6 +17,8 @@ def read_doc(doc_path):
         new_path = '/'.join(path_segs[:-1] + [new_filename])
         preprocessor.preprocess(new_path)
         return read_doc(new_path)
+    else:
+        return spec
 
 def schema_to_json(name, schema):
     if defs.DOC_PROPERTIES in schema:

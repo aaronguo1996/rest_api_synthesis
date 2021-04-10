@@ -32,7 +32,7 @@ class AppExpr(Expression):
 
     def __str__(self):
         arg_strs = [f"{x}={arg}" for x, arg in self._args]
-        return f"{self._fun}({','.join(arg_strs)})"
+        return f"{self._fun}({', '.join(arg_strs)})"
 
     def __eq__(self, other):
         if not isinstance(other, AppExpr):
@@ -615,7 +615,7 @@ class AssignExpr(Expression):
         self._rhs = expr
 
     def __str__(self):
-        return f"let {self._lhs} = {self._rhs};"
+        return f"{self._lhs} <- {self._rhs}"
 
     def __eq__(self, other):
         if not isinstance(other, AssignExpr):
@@ -690,7 +690,7 @@ class AssignExpr(Expression):
         return match, trans
 
     def pretty(self, hang):
-        return f"{SPACE * hang}let {self._lhs} = {self._rhs.pretty(hang)};"
+        return f"{SPACE * hang}let {self._lhs} = {self._rhs.pretty(hang)} in"
 
 class ProgramGraph:
     def __init__(self):
@@ -753,9 +753,9 @@ class Program:
     def __str__(self):
         expr_strs = [str(expr) + '    \n' for expr in self._expressions[:-1]]
         return (
-            f"({','.join(self._inputs)}) => {{"
+            f"\\{' '.join(self._inputs)} -> {{"
             f"{' '.join(expr_strs)}"
-            f" return {self._expressions[-1]};}}"
+            f" return {self._expressions[-1]}}}"
         )
 
     def __eq__(self, other):
@@ -949,9 +949,9 @@ class Program:
         expr_strs = [expr.pretty(hang + 1) + newline for expr in self._expressions]
         
         return (
-            f"({','.join(self._inputs)}) => {{{newline}"
+            f"(\\', '.join(self._inputs)) -> {{{newline}"
             f"{''.join(expr_strs[:-1])}"
-            f"{indent}return {expr_strs[-1][:-1]};{newline}"
+            f"{indent}return {expr_strs[-1][:-1]}{newline}"
             f"{SPACE * hang}}}"
         )
 
