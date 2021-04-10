@@ -10,6 +10,7 @@
 #
 #####
 
+import argparse
 from glob import glob
 import os
 from os.path import abspath, exists, join
@@ -30,8 +31,9 @@ BK_DOC = "doc"
 BK_SOLUTION = "solution"
 
 class Bencher:
-    def __init__(self):
+    def __init__(self, output_file=None):
         self.benches = {}
+        self.output_file = output_file
 
     def run_benches(self, folder="benchmarks"):
         self.read_benches(folder)
@@ -168,6 +170,21 @@ class Bencher:
     def filter_bench(self, bench_key):
         pass
 
-if __name__ == '__main__':
-    b = Bencher()
+def build_cmd_parser():
+    '''
+        All arguments
+    '''
+    parser = argparse.ArgumentParser()
+    parser.add_argument("output", nargs='?',
+        help="Path to output latex table to")
+    return parser
+
+def main():
+    cmd_parser = build_cmd_parser()
+    args = cmd_parser.parse_args()
+
+    b = Bencher(args.output)
     b.run_benches()
+
+if __name__ == '__main__':
+    main()
