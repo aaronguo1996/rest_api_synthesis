@@ -234,28 +234,28 @@ class Synthesizer:
         # ]
 
         # stripe logs
-        lst = [
-            "/v1/products_POST",
-            "/v1/customers_GET",
-            "/v1/customers/{customer}_GET",
-            "/v1/prices_POST",
-            "/v1/invoiceitems_POST",
-            "projection(customer, email)_",
-            "projection(product, id)_",
-            "projection(price, id)_",
-            "/v1/subscriptions_POST",
-            "projection(charge, invoice)_",
-            "projection(invoice, id)_",
-            "/v1/invoices_GET",
-            "projection(subscription, latest_invoice)_",
-            "/v1/subscriptions/{subscription_exposed_id}_POST",
-        ]
-        for name in lst:
-            e = self._entries.get(name)
-            print('-----')
-            print(name)
-            print([(p.arg_name, p.type.name) for p in e.parameters])
-            print(e.response.type, flush=True)
+        # lst = [
+        #     "/v1/products_POST",
+        #     "/v1/customers_GET",
+        #     "/v1/customers/{customer}_GET",
+        #     "/v1/prices_POST",
+        #     "/v1/invoiceitems_POST",
+        #     "projection(customer, email)_",
+        #     "projection(product, id)_",
+        #     "projection(price, id)_",
+        #     "/v1/subscriptions_POST",
+        #     "projection(charge, invoice)_",
+        #     "projection(invoice, id)_",
+        #     "/v1/invoices_GET",
+        #     "projection(subscription, latest_invoice)_",
+        #     "/v1/subscriptions/{subscription_exposed_id}_POST",
+        # ]
+        # for name in lst:
+        #     e = self._entries.get(name)
+        #     print('-----')
+        #     print(name)
+        #     print([(p.arg_name, p.type.name) for p in e.parameters])
+        #     print(e.response.type, flush=True)
             
         # only add unique entries into the encoder
         # for name, e in unique_entries.items():
