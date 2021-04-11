@@ -27,6 +27,7 @@ from graphviz import Digraph
 from openapi import defs
 from openapi.utils import read_doc
 from synthesizer.synthesizer import *
+from program.program import ProjectionExpr
 from program.program_equality import compare_program_strings
 
 BK_CONFIG = "config"
@@ -158,6 +159,9 @@ class Bencher:
         #     configuration.get(keys.KEY_BLACKLIST),
         #     prefilter=configuration.get(keys.KEY_SYNTHESIS).get(keys.KEY_SYN_PREFILTER))
 
+        # initialize table 2, part 0
+        self.table2[key] = []
+
         blen = len(self.benches[bench_key][BK_BENCHES])
 
         print(f"• run {blen} benches")
@@ -186,10 +190,9 @@ class Bencher:
                 self.table1[key]["transitions"] = len(synthesizer._encoder._net.transition())
 
             # initialize table 2, part 1
-            
             arr = {
-                "name": self.benches[bench_key]["name"],
-                "desc": self.benches[bench_key]["desc"],
+                "name": bench["name"],
+                "desc": bench["desc"],
                 "ast_size": "",
                 "endpoint_calls": "",
                 "projects": "",
@@ -200,6 +203,19 @@ class Bencher:
             # the solution is contained as a list of lines in the solution key.
             if BK_SOLUTION in bench:
                 tgt_sol = "\n".join(bench[BK_SOLUTION])
+
+                res_no_re = [str(synthesizer._program_generator.generate_program(r, {k: SchemaType(v, None) for k, v in bench["input_args"].items()}, SchemaType(bench["output"], None))[0]) for r in solutions]
+
+                found = False
+                for rank, res_sol in enumerate(res_no_re):
+                    if compare_program_strings(tgt_sol, res_sol):
+                        found = True
+                        arr["rank_no_re"] = rank
+                        # TODO: fixme
+                        # arr["ast_size"] = # nodes in program graph?
+                        # arr["projects"] = len(filter(lambda x: isinstance(x, ProjectionExpr), solutions[rank]._expressions))
+                        # arr["endpoint_calls"] = len(filter(lambda x: isinstance(x, AppExpr), solutions[rank]._expressions))
+                        break
 
                 # We need to rank our solutions by running filtering first.
                 random.seed(1)
@@ -220,13 +236,14 @@ class Bencher:
 
                 res = sorted(results, key=lambda x: x[-1], reverse=True)
 
-                res_sols = [str(synthesizer._program_generator.generate_program(r, {k: SchemaType(v, None) for k, v in bench["input_args"].items()}, SchemaType(bench["output"], None))[0]) for r in res]
+                res_sols = [str(synthesizer._program_generator.generate_program(r, {k: SchemaType(v, None) for k, v in bench["input_args"].items()}, SchemaType(bench["output"], None))[0]) for r, _ in res]
 
                 found = False
                 for rank, res_sol in enumerate(res_sols):
                     if compare_program_strings(tgt_sol, res_sol):
                         print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
                         found = True
+                        arr["rank"] = rank
                         break
                 if not found:
                     print(f"  • [{i + 1}/{blen}] FAIL")
