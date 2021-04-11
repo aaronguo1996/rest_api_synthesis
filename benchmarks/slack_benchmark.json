@@ -2,11 +2,13 @@
   "config": "configs/slack_config.json",
   "benchmarks": [
     {
+      "name": "b",
+      "desc": "d",
       "landmarks": [],
       "input_args": {
         "email": "objs_user_profile.email"
       },
-      "output": "objs_message",
+      "output": "objs_user_profile.skype",
       "max_length": 5
     }
   ]

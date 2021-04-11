@@ -11,6 +11,7 @@
 #####
 
 import argparse
+from collections import namedtuple
 from glob import glob
 import os
 from os.path import abspath, exists, join
@@ -45,9 +46,23 @@ class SuppressPrint:
         sys.stdout.close()
         sys.stdout = self._original_stdout
 
+# Entry1 = namedtuple('Entry1', 'endpoints, avg_num_args, obj_size, endpoints_covered, annotations, places, transitions')
+# Entry2 = namedtuple('Entry2', 'id, name, desc, ast_size, endpoint_calls, projects, rank, rank_no_re')
+
+def avg(lst):
+    return sum(lst) / len(lst)
+
 class Bencher:
     def __init__(self):
         self.benches = {}
+
+        # map from api to entry
+        self.table1 = {}
+        # map from api to list of benches for each api
+        self.table2 = {}
+
+    def tkey(self, bench_key):
+        return self.benches[bench_key][BK_CONFIG]["exp_name"].split("_")[0]
 
     def run_benches(self, folder="benchmarks"):
         self.read_benches(folder)
@@ -58,7 +73,7 @@ class Bencher:
             print()
 
     def read_benches(self, folder="benchmarks"):
-        "Reads a list JSON bench files from a folder"
+        "Reads a list JSON bench files from a folder, populating table1"
 
         files = [f for f in glob(f"{folder}/*.json")]
 
@@ -77,7 +92,18 @@ class Bencher:
 
                 print(f"✓ {inf}: read")
 
+            # set self.benches
             self.benches[inf] = js
+
+            # populate table 1, part 1
+            # for the name, we use the first part of the experiment name when split by _s.
+            key = self.tkey(inf)
+            self.table1[key] = {}
+
+            # to get number of annotations, open the annotations file
+            with open(js[BK_CONFIG]["witness"]["annotation_path"]) as af:
+                a = json.load(af)
+                self.table1[key]["annotations"] = len(a)
 
         print()
 
@@ -102,6 +128,8 @@ class Bencher:
         doc = read_doc(doc_file)
         SchemaType.doc_obj = doc
 
+        print(doc)
+
         endpoints = configuration.get(keys.KEY_ENDPOINTS)
         if not endpoints:
             endpoints = doc.get(defs.DOC_PATHS).keys()
@@ -110,6 +138,13 @@ class Bencher:
 
         print("  • Loading witnesses...")
         entries = parse_entries(doc, configuration, exp_dir)
+
+        # initialize table 1, part 2
+        key = self.tkey(bench_key)
+        self.table1[key]["avg_num_args"] = avg([len(x.parameters) for x in entries])
+        self.table1[key]["obj_size"] = avg([len(d.get(defs.DOC_PROPERTIES)) if defs.DOC_PROPERTIES in d else 0 for n, d in doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS).items() if d.get(defs.DOC_TYPE) == "object"])
+        self.table1[key]["endpoints"] = len(endpoints)
+        self.table1[key]["endpoints_covered"] = len({x.endpoint for x in entries})
 
         log_analyzer = None
         with open(os.path.join(exp_dir, "graph.pkl"), "rb") as f:
@@ -144,6 +179,24 @@ class Bencher:
                 bench["max_length"]
             )
 
+            # initialize table 1, part 3
+            # here, we report statistics on the petri net if they haven't been yet.
+            if "places" not in self.table1[key]:
+                self.table1[key]["places"] = len(synthesizer._encoder._net.place())
+                self.table1[key]["transitions"] = len(synthesizer._encoder._net.transition())
+
+            # initialize table 2, part 1
+            
+            arr = {
+                "name": self.benches[bench_key]["name"],
+                "desc": self.benches[bench_key]["desc"],
+                "ast_size": "",
+                "endpoint_calls": "",
+                "projects": "",
+                "rank": "",
+                "rank_no_re": "",
+            }
+                
             # the solution is contained as a list of lines in the solution key.
             if BK_SOLUTION in bench:
                 tgt_sol = "\n".join(bench[BK_SOLUTION])
@@ -180,7 +233,36 @@ class Bencher:
             else:
                 print(f"  • [{i + 1}/{blen}] NO SOL")
 
-    def filter_bench(self, bench_key):
+            self.table2[key].append(arr)
+
+    def print_table1(self, output=None):
+        res = r"""% auto-generated: ./bench.py, table 1
+\resizebox{\textwidth}{!}{\begin{tabular}{lrrrrrrr}
+  \toprule
+  & \multicolumn{3}{c}{API size} & \multicolumn{2}{c}{Sub-API size} & \multicolumn{2}{c}{TNN size} \\
+  \cmidrule(lr){2-4} \cmidrule(lr){5-6} \cmidrule(lr){7-8}
+  API & \# endpoints & Avg. endpoint args & Avg. object size & \# endpoints covered & \# annotations & \# places & \# transitions \\
+  \midrule
+"""
+        for api, rest in self.table1.items():
+            avg_num_args = round(rest['avg_num_args'], 2)
+            obj_size = round(rest['obj_size'], 2)
+            res += f"  {api.capitalize()} & {rest['endpoints']} & {avg_num_args} & {obj_size} & {rest['endpoints_covered']} & {rest['annotations']} & {rest['places']} & {rest['transitions']}"
+            res += r" \\"
+            res += "\n"
+
+        res += r"""  \botrule
+\end{tabular}}
+"""
+
+        print(res)
+
+        if output:
+            with open(join(output, "table1.tex"), "w") as of:
+                of.write(res)
+                print(f"written to {join(output, 'table1.tex')}")
+
+    def print_table2():
         pass
 
 def build_cmd_parser():
@@ -198,6 +280,7 @@ def main():
 
     b = Bencher()
     b.run_benches()
+    b.print_table1(args.output)
 
 if __name__ == '__main__':
     main()

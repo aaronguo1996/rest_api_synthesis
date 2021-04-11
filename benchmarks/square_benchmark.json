@@ -1,6 +1,8 @@
 {
   "benchmarks": [
     {
+      "name": "b",
+      "desc": "d",
       "landmarks": [],
       "input_args": {
         "channel_name": "objs_conversation.name"
@@ -26,6 +28,8 @@
       "max_length": 30
     },
     {
+      "name": "b",
+      "desc": "d",
       "landmarks": [],
       "input_args": {
         "email": "objs_user.profile.email"
