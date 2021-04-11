@@ -10763,3 +10763,48 @@ defaultdict(<class 'float'>, {'graph': 4.5710484981536865, 'encode': 21.97734761
     }) in
     x10
 }
+time:  38.81
+time breakdown:
+defaultdict(<class 'float'>, {'graph': 6.050419807434082, 'encode': 16.212997674942017, 'search': 21.8319993019104})
+(\', '.join(self._inputs)) -> {
+    let x0 = /v1/subscriptions/{subscription_exposed_id}_POST(subscription_exposed_id=subscription_id) in
+    let x1 = /v1/invoices/{invoice}_GET(invoice=x0.latest_invoice) in
+    let x2 = /v1/refunds/{refund}_GET(refund=x1.charge) in
+    return x2
+}
+time:  46.12
+time breakdown:
+defaultdict(<class 'float'>, {'graph': 6.050419807434082, 'encode': 16.212997674942017, 'search': 29.141917943954468})
+(\', '.join(self._inputs)) -> {
+    let x0 = /v1/subscriptions/{subscription_exposed_id}_POST(subscription_exposed_id=subscription_id) in
+    let x1 = /v1/invoices/{invoice}_GET(invoice=x0.latest_invoice) in
+    let x2 = /v1/refunds/{refund}_POST(refund=x1.charge) in
+    return x2
+}
+time:  53.40
+time breakdown:
+defaultdict(<class 'float'>, {'graph': 6.050419807434082, 'encode': 16.212997674942017, 'search': 36.41749882698059})
+(\', '.join(self._inputs)) -> {
+    let x0 = /v1/subscriptions/{subscription_exposed_id}_POST(subscription_exposed_id=subscription_id) in
+    let x1 = /v1/invoices/{invoice}_GET(invoice=x0.latest_invoice) in
+    let x2 = /v1/refunds_POST(charge=x1.charge) in
+    return x2
+}
+time:  60.66
+time breakdown:
+defaultdict(<class 'float'>, {'graph': 6.050419807434082, 'encode': 16.212997674942017, 'search': 43.671128034591675})
+(\', '.join(self._inputs)) -> {
+    let x0 = /v1/subscriptions/{subscription_exposed_id}_POST(subscription_exposed_id=subscription_id) in
+    let x1 = /v1/invoices/{invoice}_POST(invoice=x0.latest_invoice) in
+    let x2 = /v1/refunds/{refund}_GET(refund=x1.charge) in
+    return x2
+}
+time:  67.99
+time breakdown:
+defaultdict(<class 'float'>, {'graph': 6.050419807434082, 'encode': 16.212997674942017, 'search': 51.00307273864746})
+(\', '.join(self._inputs)) -> {
+    let x0 = /v1/subscriptions/{subscription_exposed_id}_POST(subscription_exposed_id=subscription_id) in
+    let x1 = /v1/invoices/{invoice}_POST(invoice=x0.latest_invoice) in
+    let x2 = /v1/refunds_POST(charge=x1.charge) in
+    return x2
+}
