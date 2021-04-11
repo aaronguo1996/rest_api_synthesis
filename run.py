@@ -57,7 +57,8 @@ def prep_exp_dir(config):
 
 def parse_entries(doc, configuration, exp_dir):
     trace_file = os.path.join(exp_dir, 'traces.pkl')
-    if not os.path.exists(trace_file):
+    # if not os.path.exists(trace_file):
+    if True:
         print("Parsing OpenAPI document...")
         # entries = None
         log_parser = parser.LogParser(
