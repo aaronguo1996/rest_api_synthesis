@@ -4,6 +4,7 @@ import re
 from openapi import defs
 from openapi.error import InvalidSwaggerDoc, InvalidSchemaType
 from witnesses.request import Connection
+import requests
 
 class PreProcessor:
     def __init__(self, doc_path: str):
@@ -213,13 +214,8 @@ class PreProcessor:
         return doc
 
     def _to_openapi_v3(self, doc):
-        conn = Connection("converter.swagger.io", "/api")
-        _, response = conn.send_and_recv(
-            "/convert", 
-            {defs.HEADER_CONTENT: defs.HEADER_JSON}, 
-            doc
-        )
-        # print(response[1])
+        # TODO: this is broken
+        r = requests.post("https://converter.swagger.io/api/convert", data=doc, headers={defs.HEADER_CONTENT: defs.HEADER_JSON})
         return json.loads(response)
 
     def _write_to_file(self, doc, output_file):

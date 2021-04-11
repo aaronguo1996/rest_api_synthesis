@@ -179,8 +179,8 @@ class SchemaType:
                     else:
                         return None, -1
         except Exception as e:
-            print(e)
-            print("Failed to check type for", obj, "against", self.schema)
+            # print(e)
+            # print("Failed to check type for", obj, "against", self.schema)
             return None, -1
 
     @classmethod
