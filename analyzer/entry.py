@@ -131,21 +131,21 @@ class ResponseParameter(Parameter):
                     self.type = SchemaType(
                         "unknown_list",
                         self._assign_type(self.value))
-                
+
                 if item_type is None:
                     item_type = SchemaType(
-                        self.type.name, 
+                        self.type.name,
                         self.type.schema.get("items"),
                         self.type.parent)
-                
+
                 item_type.parent = self.type.parent
 
                 if self.type is not None and item_type.name != "unknown_obj":
                     aliases[self.type.name] = item_type.name
-                
+
                 p = ResponseParameter(
                     self.method, defs.INDEX_ANY, self.func_name,
-                    self.path + [defs.INDEX_ANY], self.is_required, 
+                    self.path + [defs.INDEX_ANY], self.is_required,
                     self.array_level + 1,
                     item_type, self.value[i])
 
@@ -257,6 +257,7 @@ class TraceEntry:
         
         # read parameters
         parameters = entry_def.get(defs.DOC_PARAMS, {})
+        print(parameters)
         for p in parameters:
             name = p.get(defs.DOC_NAME)
             if name in skip_fields:

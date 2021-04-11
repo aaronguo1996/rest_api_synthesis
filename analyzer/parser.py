@@ -132,12 +132,15 @@ class LogParser:
             # print("Inferring types for", endpoint)
             resp_type = SchemaType.infer_type_for(
                 self.path_to_defs, skip_fields, response_params)
+            # print("hhh", resp_type)
             p = ResponseParameter(
                 method, "", endpoint, [], True, 0, resp_type, response_params)
         else:
             p = ResponseParameter(
                 method, "", endpoint, [], True, 0, None, response_params)
         
+        # print([p.type for p in parameters])
+        # print(p.type)
         return TraceEntry(endpoint, method, parameters, p)
 
     def _resolve_entries(self, entries, skips, skip_fields):

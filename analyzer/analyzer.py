@@ -31,13 +31,19 @@ class DSU:
             self._parents[x] = x
             self._sizes[x] = 1
             self._nexts[x] = x
-            self._values[x] = set([x.value])
+            try:
+                self._values[x] = set([x.value])
+            except:
+                self._values[x] = set([str(x.value)])
 
         if y not in self._parents:
             self._parents[y] = y
             self._sizes[y] = 1
             self._nexts[y] = y
-            self._values[y] = set([y.value])
+            try:
+                self._values[y] = set([y.value])
+            except:
+                self._values[y] = set([str(y.value)])
 
         # hard code rules for Slack, FIXME: check the type
         if (("name" in y.arg_name and isinstance(y, ResponseParameter) and y.type and "objs_message" in y.type.name) or 
