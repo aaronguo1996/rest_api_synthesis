@@ -34,21 +34,11 @@ class PetriNetEncoder:
         self._path_len = 0
         self._prev_result = []
 
-        # variables
+        # variables and constraints
         self._add_variables(self._path_len)
-
-        # self._add_landmarks(landmarks)
         self._set_initial(inputs)
-        # self._set_final(outputs)
         self._add_copy_transitions()
-        # run the approximation
-        print("before approximation:", len(self._net.transition()))
-        input_places = inputs.keys()
-        self._reachables = self._approx.approx_reachability(
-            input_places, set(), set()
-        )
-        # self._reachables = None
-        print("after approximation:", len(self._reachables))
+        self._run_approximation(inputs)
 
     @TimeStats(key=STATS_ENCODE)
     def increment(self):
@@ -56,11 +46,33 @@ class PetriNetEncoder:
         self._add_variables(self._path_len)
         self._fire_transitions(self._path_len - 1)
         self._no_transition_fire(self._path_len - 1)
-        # self._add_landmarks(landmarks)
-        # self._set_final(outputs)
         # print("current len", self._path_len, flush=True)
         # reset the temporary constraint when path length changes
         self._constraints["temporary"] = []
+
+    def _run_approximation(self, inputs):
+        print("before approximation:", len(self._net.transition()))
+        # on top of the input types, 
+        # we also need to add output types of transitions with no required args
+        self._reachables = set()
+        input_places = list(inputs.keys())
+        null_places = []
+        for trans, e in self._entries.items():
+            no_required = True
+            for p in e.parameters:
+                if p.is_required:
+                    no_required = False
+                    break
+
+            if no_required:
+                null_places.append(e.response.type.name)
+                self._reachables.add(trans)
+
+        reachables = self._approx.approx_reachability(
+            input_places + null_places, set(), set()
+        )
+        self._reachables = self._reachables.union(reachables)
+        print("after approximation:", len(self._reachables))
 
     def check_constraints_binding(self):
         # constraints
