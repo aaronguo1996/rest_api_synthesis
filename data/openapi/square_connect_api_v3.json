@@ -25215,9 +25215,6 @@
               "$ref": "#/components/schemas/InvoicePaymentRequest"
             }
           },
-          "delivery_method": {
-            "waahhh": "waaahhhh"
-          },
           "invoice_number": {
             "maxLength": 191,
             "minLength": 1,
