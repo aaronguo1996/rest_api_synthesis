@@ -237,13 +237,18 @@ def main():
                     # "customer_id": SchemaType("customer.id", None),
                     # "cur": SchemaType("fee.currency", None),
                     # "amt": SchemaType("/v1/prices:unit_amount:POST", None),
-                    "subscription_id": SchemaType("subscription.id", None),
+                    # "location_id": SchemaType("Location.id", None),
+                    # "subscription": SchemaType("Subscription", None),
+                    # "subscription_plan_id": SchemaType("CatalogObject.id", None)
+                    # "customer_id": SchemaType("Customer.id", None)
+                    # "subscription_id": SchemaType("subscription.id", None),
                     # "payment": SchemaType("/v1/subscriptions/{subscription_exposed_id}:default_payment_method:POST", None),
                 },
                 [
                     # SchemaType("invoiceitem", None)
                     # SchemaType("charge", None)
-                    SchemaType("refund", None)
+                    # SchemaType("refund", None)
+                    SchemaType("Subscription", None)
                     # SchemaType("subscription", None)
                     # SchemaType("payment_source.last4", None)
                 ],
