@@ -2,6 +2,7 @@ import re
 
 from openapi import defs
 from schemas.utils import value_size
+from openapi.utils import blacklist
 
 class SchemaType:
     doc_obj = {}
@@ -238,7 +239,7 @@ class SchemaType:
         obj_candidates = []
         for obj_name, obj in obj_defs.items():
             # skip added helper types
-            if obj_name in skip_fields or re.search("ref_\d+", obj_name):
+            if obj_name in skip_fields or blacklist(obj_name):
                 continue
 
             obj_type = SchemaType(obj_name, obj)
