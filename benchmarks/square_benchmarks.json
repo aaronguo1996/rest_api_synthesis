@@ -1,0 +1,89 @@
+{
+    "benchmarks": [
+        {
+            "name": "3.1",
+            "desc": "List invoices that match location and customer id",
+            "landmarks": [],
+            "input_args": {
+                "customer_id": "Customer.id",
+                "location_id": "Location.id"
+            },
+            "output": [
+                "Invoice"
+            ],
+            "solution": [
+            ],
+            "max_length": 10
+        },
+        {
+            "name": "3.2",
+            "desc": "Find subscription from location, customer, and plan id",
+            "landmarks": [],
+            "input_args": {
+                "customer_id": "Customer.id",
+                "location_id": "Location.id",
+                "subscription_plan_id": "CatalogObject.id"
+            },
+            "output": [
+                "Subscription"
+            ],
+            "solution": [
+                "\\subscription_plan_id, location_id, customer_id -> {",
+                    "let x7 = /v2/subscriptions/search_POST() in",
+                    "let x8 = x7.subscriptions.filter(x => x.customer_id == customer_id) in",
+                    "let x9 = x8.filter(x => x.location_id == location_id) in",
+                    "let x10 = x9.filter(x => x.plan_id == subscription_plan_id) in",
+                    "return x10",
+                "}"
+            ],
+            "max_length": 10
+        },
+        {
+            "name": "3.3",
+            "desc": "could be doable if we can get item_data out of catalog object",
+            "landmarks": [],
+            "input_args": {
+                "customer_id": "Customer.id",
+                "location_id": "Location.id",
+                "item_type": "CatalogObject.type"
+            },
+            "output": [
+                "Subscription"
+            ],
+            "solution": [
+            ],
+            "max_length": 10
+        },
+        {
+            "name": "3.4",
+            "desc": "could be doable if we can get discount_data out of catalog object",
+            "landmarks": [],
+            "input_args": {
+                "customer_id": "Customer.id",
+                "location_id": "Location.id",
+                "item_type": "CatalogObject.type"
+            },
+            "output": [
+                "Subscription"
+            ],
+            "solution": [
+            ],
+            "max_length": 10
+        },
+        {
+            "name": "3.5",
+            "desc": "Delete catalog objects with names",
+            "landmarks": [],
+            "input_args": {
+                "name": "CatalogItem.name",
+                "type": "CatalogObject.type"
+            },
+            "output": [
+                "Subscription"
+            ],
+            "solution": [
+            ],
+            "max_length": 10
+        }
+    ]
+}
