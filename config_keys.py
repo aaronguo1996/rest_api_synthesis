@@ -1,3 +1,4 @@
+KEY_EXP_NAME = "exp_name"
 KEY_SKIP_FIELDS = "ignore_field_names"
 KEY_DOC_FILE = "doc_file"
 KEY_ENDPOINTS = "endpoints"

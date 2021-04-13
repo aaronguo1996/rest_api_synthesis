@@ -5,18 +5,22 @@
         "producer": [
             {
                 "endpoint": "/users.list",
+                "method": "get",
                 "path": "members/[?]/id"
             },
             {
                 "endpoint": "/users.info",
+                "method": "get",
                 "path": "user/id"
             },
             {
                 "endpoint": "/conversations.list",
+                "method": "get",
                 "path": "channels/[?]/creator"
             },
             {
                 "endpoint": "/conversations.members",
+                "method": "get",
                 "path": "members/[?]"
             }
         ]
@@ -27,18 +31,22 @@
         "producer": [
             {
                 "endpoint": "/users.list",
+                "method": "get",
                 "path": "members/[?]/id"
             },
             {
                 "endpoint": "/users.info",
+                "method": "get",
                 "path": "user/id"
             },
             {
                 "endpoint": "/conversations.list",
+                "method": "get",
                 "path": "channels/[?]/creator"
             },
             {
                 "endpoint": "/conversations.members",
+                "method": "get",
                 "path": "members/[?]"
             }
         ]
@@ -49,10 +57,12 @@
         "producer": [
             {
                 "endpoint": "/users.list",
+                "method": "get",
                 "path": "members/[?]/profile/email"
             },
             {
                 "endpoint": "/users.info",
+                "method": "get",
                 "path": "user/profile/email"
             }
         ]
@@ -63,6 +73,7 @@
         "producer": [
             {
                 "endpoint": "/users.list",
+                "method": "get",
                 "path": "response_metadata/next_cursor"
             }
         ]
@@ -73,6 +84,7 @@
         "producer": [
             {
                 "endpoint": "/conversations.list",
+                "method": "get",
                 "path": "response_metadata/next_cursor"
             }
         ]
@@ -83,14 +95,17 @@
         "producer": [
             {
                 "endpoint": "/conversations.list",
+                "method": "get",
                 "path": "channels/[?]/id"
             },
             {
                 "endpoint": "/conversations.info",
+                "method": "get",
                 "path": "channel/id"
             },
             {
                 "endpoint": "/conversations.open",
+                "method": "post",
                 "path": "channel/id"
             }
         ]
@@ -111,10 +126,12 @@
         "producer": [
             {
                 "endpoint": "/chat.postMessage",
+                "method": "post",
                 "path": "ts"
             },
             {
                 "endpoint": "/conversations.history",
+                "method": "get",
                 "path": "messages/[?]/ts"
             }
         ]
@@ -125,10 +142,12 @@
         "producer": [
             {
                 "endpoint": "/chat.postMessage",
+                "method": "post",
                 "path": "ts"
             },
             {
                 "endpoint": "/conversations.history",
+                "method": "get",
                 "path": "messages/[?]/ts"
             }
         ]
@@ -139,10 +158,12 @@
         "producer": [
             {
                 "endpoint": "/chat.postMessage",
+                "method": "post",
                 "path": "ts"
             },
             {
                 "endpoint": "/conversations.history",
+                "method": "get",
                 "path": "messages/[?]/ts"
             }
         ]
@@ -153,10 +174,12 @@
         "producer": [
             {
                 "endpoint": "/chat.postMessage",
+                "method": "post",
                 "path": "ts"
             },
             {
                 "endpoint": "/conversations.history",
+                "method": "get",
                 "path": "messages/[?]/ts"
             }
         ]
@@ -167,10 +190,12 @@
         "producer": [
             {
                 "endpoint": "/users.list",
+                "method": "get",
                 "path": "members/[?]/team_id"
             },
             {
                 "endpoint": "/users.info",
+                "method": "get",
                 "path": "user/team_id"
             }
         ]

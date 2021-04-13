@@ -1,4 +1,5 @@
 import re
+from itertools import chain
 
 from analyzer.multiplicity import MUL_ONE_ONE, MUL_ZERO_MORE, MUL_ZERO_ONE
 from analyzer.dynamic import Goal
@@ -23,6 +24,9 @@ class Expression:
 
     def pretty(self, hang):
         return f"{SPACE * hang}" + self.__str__()
+
+    def collect_exprs(self):
+        raise NotImplementedError
 
 class AppExpr(Expression):
     def __init__(self, fun, args, typ=None):
@@ -61,6 +65,13 @@ class AppExpr(Expression):
         args = [(x, arg.apply_subst(subst)) for x, arg in self._args]
         return AppExpr(self._fun, args, self.type)
 
+    def collect_exprs(self):
+        res = [self]
+        for _, arg in self._args:
+            res += arg.collect_exprs()
+
+        return res
+            
     def to_graph(self, graph):
         # print(self)
         nodes = [arg.to_graph(graph) for _, arg in self._args]
@@ -189,6 +200,9 @@ class VarExpr(Expression):
 
         return ret
 
+    def collect_exprs(self):
+        return [self]
+
     def to_graph(self, graph):
         # print(self)
         if self.type:
@@ -259,6 +273,9 @@ class ProjectionExpr(Expression):
             self._field,
             self.type,
         )
+
+    def collect_exprs(self):
+        res = [self] ++ self._obj.collect_exprs()
 
     def to_graph(self, graph):
         # print(self)
@@ -364,6 +381,14 @@ class FilterExpr(Expression):
             self._is_val_list,
             self.type,
         )
+
+    def collect_exprs(self):
+        res = [self] ++ self._obj.collect_exprs()
+        # if self._is_val_list:
+        #     return res ++ chain(*[x.collect_exprs() for x in self._val])
+        # else:
+        #     return res ++ self._val.collect_exprs()
+        return res ++ self._val.collect_exprs()
 
     def to_graph(self, graph):
         # print(self)
@@ -510,6 +535,9 @@ class MapExpr(Expression):
             self.type,
         )
 
+    def collect_exprs(self):
+        return [self] ++ self._obj.collect_exprs() ++ self._prog.collect_exprs()
+
     def body(self):
         expr = self._prog.to_expression({self._prog._inputs[0]: self._obj})
         return expr
@@ -649,6 +677,9 @@ class AssignExpr(Expression):
             self._lhs,
             self._rhs.apply_subst(subst),
         )
+
+    def collect_exprs(self):
+        return [self] ++ self._rhs.collect_exprs()
 
     def to_graph(self, graph):
         # print(self)
@@ -800,6 +831,10 @@ class Program:
             exprs.append(expr)
 
         return Program(self._inputs, exprs)
+
+    def collect_exprs(self):
+        expr = self.to_expression({})
+        return expr.collect_exprs()
 
     def get_vars(self):
         all_vars = set()
