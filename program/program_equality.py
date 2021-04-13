@@ -3,10 +3,8 @@ import re
 def replace_variables(progstr):
     vnames = re.findall("x\d+", progstr)
     varnames = []
-    dups = set()
     for vname in vnames:
-        if not vname in dups:
-            dups.add(vname)
+        if not vname in varnames:
             varnames.append(vname)
 
     for i, vname in enumerate(varnames):

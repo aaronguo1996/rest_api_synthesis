@@ -54,13 +54,15 @@ def avg(lst):
     return sum(lst) / len(lst)
 
 class Bencher:
-    def __init__(self):
+    def __init__(self, repeat):
         self.benches = {}
 
         # map from api to entry
         self.table1 = {}
         # map from api to list of benches for each api
         self.table2 = {}
+
+        self.repeat = repeat
 
     def tkey(self, bench_key):
         return self.benches[bench_key][BK_CONFIG]["exp_name"].split("_")[0]
@@ -128,8 +130,6 @@ class Bencher:
         doc_file = configuration.get(keys.KEY_DOC_FILE)
         doc = read_doc(doc_file)
         SchemaType.doc_obj = doc
-
-        print(doc)
 
         endpoints = configuration.get(keys.KEY_ENDPOINTS)
         if not endpoints:
@@ -204,7 +204,7 @@ class Bencher:
             if BK_SOLUTION in bench:
                 tgt_sol = "\n".join(bench[BK_SOLUTION])
 
-                res_no_re = [str(synthesizer._program_generator.generate_program(r, {k: SchemaType(v, None) for k, v in bench["input_args"].items()}, SchemaType(bench["output"], None))[0]) for r in solutions]
+                res_no_re = [str(r) for r in solutions]
 
                 found = False
                 for rank, res_sol in enumerate(res_no_re):
@@ -230,13 +230,14 @@ class Bencher:
                 for p in solutions:
                     score = run_filter(
                         log_analyzer, dyn_analysis, 
-                        {"channel_name": "objs_message.name"}, p, True
+                        {"channel_name": "objs_message.name"}, p, True,
+                        repeat=self.repeat if self.repeat else 5
                     )
                     results.append((p, score))
 
                 res = sorted(results, key=lambda x: x[-1], reverse=True)
 
-                res_sols = [str(synthesizer._program_generator.generate_program(r, {k: SchemaType(v, None) for k, v in bench["input_args"].items()}, SchemaType(bench["output"], None))[0]) for r, _ in res]
+                res_sols = [str(r) for r, _ in res]
 
                 found = False
                 for rank, res_sol in enumerate(res_sols):
@@ -289,13 +290,15 @@ def build_cmd_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("output", nargs='?',
         help="Path to output latex table to")
+    parser.add_argument("--repeat", type=int, nargs='?',
+        help="Number of times to repeat filtering")
     return parser
 
 def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
 
-    b = Bencher()
+    b = Bencher(args.repeat)
     b.run_benches()
     b.print_table1(args.output)
 
