@@ -272,7 +272,7 @@ class Bencher:
             res += r" \\"
             res += "\n"
 
-        res += r"""  \botrule
+        res += r"""  \bottomrule
 \end{tabular}}
 """
 
@@ -300,7 +300,7 @@ class Bencher:
                 res += r" \\"
                 res += "\n"
 
-        res += r"""    \botrule
+        res += r"""    \bottomrule
   \end{tabular}
 }
 """
