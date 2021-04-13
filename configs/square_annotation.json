@@ -1,13 +1,2 @@
 [
-    {
-        "consumer": "CatalogObject.id",
-        "endpoint": null,
-        "producer": [
-            {
-                "endpoint": "/v2/catalog/batch-delete",
-                "method": "post",
-                "path": "deleted_object_ids"
-            }
-        ]
-    }
 ]

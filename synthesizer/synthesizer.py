@@ -252,10 +252,15 @@ class Synthesizer:
         #     "/v1/subscriptions/{subscription_exposed_id}_POST",
         # ]
         lst = [
-            "/v2/subscriptions/search_POST",
-            "projection(Subscription, plan_id)_",
-            "filter(Subscription, Subscription.plan_id)_",
-            "projection(/v2/subscriptions/search_response, subscriptions)_"
+            # "/v2/catalog/object/{object_id}_DELETE",
+            "projection(OrderLineItem, name)_",
+            # "projection(Transaction, id)_",
+            # "/v2/invoices/search_POST"
+            # "projection(Tender, note)_",
+            # "filter(Subscription, Subscription.plan_id)_",
+            # "filter(Subscription, Subscription.plan_id)_",
+            # "projection(/v2/subscriptions/search_response, subscriptions)_",
+            # "projection(/v2/invoices/search_response, invoices)_"
         ]
 
         for name in lst:

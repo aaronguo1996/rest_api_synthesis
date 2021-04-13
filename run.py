@@ -240,8 +240,12 @@ def main():
                     # "subscription": SchemaType("Subscription", None),
                     # "subscription_plan_id": SchemaType("CatalogObject.id", None),
                     # "subscription_plan_id": SchemaType("CatalogObject.id", None)
-                    "location_id": SchemaType("Location.id", None),
-                    "customer_id": SchemaType("Customer.id", None)
+                    "customer_name": SchemaType("Customer.given_name", None),
+                    # "order": SchemaType("Customer.id", None),
+                    # "name": SchemaType("DeviceCode.name", None),
+                    # "order_id": SchemaType("Transaction.id", None),
+                    # "type": SchemaType("CatalogObject.type", None)
+                    # "customer_id": SchemaType("Customer.id", None)
                     # "subscription_id": SchemaType("subscription.id", None),
                     # "payment": SchemaType("/v1/subscriptions/{subscription_exposed_id}:default_payment_method:POST", None),
                 },
@@ -249,7 +253,7 @@ def main():
                     # SchemaType("invoiceitem", None)
                     # SchemaType("charge", None)
                     # SchemaType("refund", None)
-                    SchemaType("Invoice", None)
+                    SchemaType("Customer", None)
                     # SchemaType("subscription", None)
                     # SchemaType("payment_source.last4", None)
                 ],
