@@ -4,6 +4,7 @@ import re
 from openapi import defs
 from openapi.error import InvalidSwaggerDoc, InvalidSchemaType
 from witnesses.request import Connection
+import requests
 
 class PreProcessor:
     def __init__(self, doc_path: str):
@@ -220,7 +221,6 @@ class PreProcessor:
             doc
         )
         # print(response[1])
-        return json.loads(response)
 
     def _write_to_file(self, doc, output_file):
         with open(output_file, 'w+') as output:

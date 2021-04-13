@@ -2,3 +2,4 @@ graphviz==0.16
 z3-solver
 SNAKES
 seaborn
+jsonref

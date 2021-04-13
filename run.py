@@ -57,7 +57,8 @@ def prep_exp_dir(config):
 
 def parse_entries(doc, configuration, exp_dir):
     trace_file = os.path.join(exp_dir, 'traces.pkl')
-    if not os.path.exists(trace_file):
+    # if not os.path.exists(trace_file):
+    if True:
         print("Parsing OpenAPI document...")
         # entries = None
         log_parser = parser.LogParser(
@@ -236,13 +237,23 @@ def main():
                     # "customer_id": SchemaType("customer.id", None),
                     # "cur": SchemaType("fee.currency", None),
                     # "amt": SchemaType("/v1/prices:unit_amount:POST", None),
-                    "subscription_id": SchemaType("subscription.id", None),
+                    # "subscription": SchemaType("Subscription", None),
+                    # "subscription_plan_id": SchemaType("CatalogObject.id", None),
+                    # "subscription_plan_id": SchemaType("CatalogObject.id", None)
+                    "customer_name": SchemaType("Customer.given_name", None),
+                    # "order": SchemaType("Customer.id", None),
+                    # "name": SchemaType("DeviceCode.name", None),
+                    # "order_id": SchemaType("Transaction.id", None),
+                    # "type": SchemaType("CatalogObject.type", None)
+                    # "customer_id": SchemaType("Customer.id", None)
+                    # "subscription_id": SchemaType("subscription.id", None),
                     # "payment": SchemaType("/v1/subscriptions/{subscription_exposed_id}:default_payment_method:POST", None),
                 },
                 [
                     # SchemaType("invoiceitem", None)
                     # SchemaType("charge", None)
-                    SchemaType("refund", None)
+                    # SchemaType("refund", None)
+                    SchemaType("Customer", None)
                     # SchemaType("subscription", None)
                     # SchemaType("payment_source.last4", None)
                 ],

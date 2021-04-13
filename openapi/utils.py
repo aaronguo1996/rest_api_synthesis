@@ -3,10 +3,11 @@ import json
 
 from openapi import defs
 from openapi.preprocess import PreProcessor
+import jsonref
 
 def read_doc(doc_path):
     with open(doc_path, 'r') as f:
-        spec = json.load(f)
+        spec = jsonref.load(f)
 
     if spec.get(defs.DOC_VERSION) == defs.DOC_V2:
         path_segs = doc_path.split('/')
@@ -58,3 +59,6 @@ def get_schema_forest(doc):
         if not re.search("objs_ref_\d+", k)]
     return [schema for schema in schema_json 
         if isinstance(schema, dict) and "children" in schema]
+
+def blacklist(obj_name):
+    return re.search("ref_\d+", obj_name) or re.search("(.*Request)|(.*Response)", obj_name)

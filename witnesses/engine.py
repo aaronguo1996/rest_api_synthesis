@@ -519,3 +519,4 @@ class WitnessGenerator:
 
         render_filename = os.path.join("output/", filename)
         dot.render(render_filename, view=False)
+

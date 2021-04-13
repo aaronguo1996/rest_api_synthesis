@@ -8,6 +8,7 @@ import os
 
 from analyzer.entry import TraceEntry, ResponseParameter, RequestParameter
 from openapi import defs
+from openapi.utils import blacklist
 from program.generator import ProgramGenerator
 from program.program import ProgramGraph, all_topological_sorts
 from schemas.schema_type import SchemaType
@@ -250,13 +251,24 @@ class Synthesizer:
         #     "projection(subscription, latest_invoice)_",
         #     "/v1/subscriptions/{subscription_exposed_id}_POST",
         # ]
-        # for name in lst:
-        #     e = self._entries.get(name)
-        #     print('-----')
-        #     print(name)
-        #     print([(p.arg_name, p.type.name) for p in e.parameters])
-        #     print(e.response.type, flush=True)
-            
+        lst = [
+            # "/v2/catalog/object/{object_id}_DELETE",
+            "projection(OrderLineItem, name)_",
+            # "projection(Transaction, id)_",
+            # "/v2/invoices/search_POST"
+            # "projection(Tender, note)_",
+            # "filter(Subscription, Subscription.plan_id)_",
+            # "filter(Subscription, Subscription.plan_id)_",
+            # "projection(/v2/subscriptions/search_response, subscriptions)_",
+            # "projection(/v2/invoices/search_response, invoices)_"
+        ]
+
+        for name in lst:
+            e = self._entries.get(name)
+            print('-----')
+            print(name)
+            print([(p.arg_name, p.type.name) for p in e.parameters])
+            print(e.response.type, flush=True)
         # only add unique entries into the encoder
         # for name, e in unique_entries.items():
         #     self._add_transition(e)
@@ -308,7 +320,7 @@ class Synthesizer:
         objs = self._doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS)
         for obj_name, obj_def in objs.items():
             # skip temporary types defined by ourselves
-            if re.search(r"objs_ref_\d+", obj_name):
+            if blacklist(obj_name):
                 continue
 
             projection_entries = self._create_projection(obj_name, obj_def)
@@ -401,7 +413,7 @@ class Synthesizer:
         objs = self._doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS)
         for obj_name, obj_def in objs.items():
             # skip temporary types defined by ourselves
-            if re.search(r"objs_ref_\d+", obj_name):
+            if blacklist(obj_name):
                 continue
 
             filter_entries = self._create_filter(obj_name, obj_name, obj_def)
