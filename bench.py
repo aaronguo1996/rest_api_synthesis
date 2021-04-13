@@ -193,11 +193,11 @@ class Bencher:
             arr = {
                 "name": bench["name"],
                 "desc": bench["desc"],
-                "ast_size": "",
-                "endpoint_calls": "",
-                "projects": "",
-                "rank": "",
-                "rank_no_re": "",
+                "ast_size": "N/A",
+                "endpoint_calls": "N/A",
+                "projects": "N/A",
+                "rank": "N/A",
+                "rank_no_re": "N/A",
             }
                 
             # the solution is contained as a list of lines in the solution key.
@@ -211,10 +211,7 @@ class Bencher:
                     if compare_program_strings(tgt_sol, res_sol):
                         found = True
                         arr["rank_no_re"] = rank
-                        # TODO: fixme
-                        # arr["ast_size"] = # nodes in program graph?
-                        # arr["projects"] = len(filter(lambda x: isinstance(x, ProjectionExpr), solutions[rank]._expressions))
-                        # arr["endpoint_calls"] = len(filter(lambda x: isinstance(x, AppExpr), solutions[rank]._expressions))
+
                         break
 
                 # We need to rank our solutions by running filtering first.
@@ -245,6 +242,12 @@ class Bencher:
                         print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
                         found = True
                         arr["rank"] = rank
+
+                        ns = res[rank].collect_exprs()
+                        arr["ast_size"] = len(ns)
+                        arr["projects"] = len(filter(lambda x: isinstance(x, ProjectionExpr), ns))
+                        arr["endpoint_calls"] = len(filter(lambda x: isinstance(x, AppExpr), ns))
+
                         break
                 if not found:
                     print(f"  • [{i + 1}/{blen}] FAIL")
@@ -280,8 +283,34 @@ class Bencher:
                 of.write(res)
                 print(f"written to {join(output, 'table1.tex')}")
 
-    def print_table2():
-        pass
+    def print_table2(self, output=None):
+        res = r"""% auto-generated: ./bench.py, table 2
+\resizebox{\textwidth}{!}{
+  \begin{tabular}{llp{5cm}rrrrr}
+    \toprule
+    & \multicolumn{2}{c}{Benchmark info} & \multicolumn{3}{c}{Solution stats} & \multicolumn{2}{c}{Solution rank} \\
+    \cmidrule(lr){2-3} \cmidrule(lr){4-6} \cmidrule(lr){7-8}
+    API & Name & Description & AST Size & \# endpoint calls & \# projections & Without RE & With RE \\
+    \midrule
+"""
+        for api, bench_results in self.table2.items():
+            res += api.capitalize() + " "
+            for r in bench_results:
+                res += f"& {r['name']} & {r['desc']} & {r['ast_size']} & {r['endpoint_calls']} & {r['projects']} & {r['rank_no_re']} & {r['rank']} "
+                res += r" \\"
+                res += "\n"
+
+        res += r"""    \botrule
+  \end{tabular}
+}
+"""
+
+        print(res)
+
+        if output:
+            with open(join(output, "table2.tex"), "w") as of:
+                of.write(res)
+                print(f"written to {join(output, 'table2.tex')}")
 
 def build_cmd_parser():
     '''
@@ -301,6 +330,7 @@ def main():
     b = Bencher(args.repeat)
     b.run_benches()
     b.print_table1(args.output)
+    b.print_table2(args.output)
 
 if __name__ == '__main__':
     main()
