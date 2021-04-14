@@ -253,7 +253,7 @@ class Synthesizer:
         # ]
         lst = [
             # "/v2/catalog/object/{object_id}_DELETE",
-            "projection(OrderLineItem, name)_",
+            # "projection(OrderLineItem, name)_",
             # "projection(Transaction, id)_",
             # "/v2/invoices/search_POST"
             # "projection(Tender, note)_",

@@ -1,0 +1,168 @@
+{
+  "config": "configs/stripe_config.json",
+  "benchmarks": [
+    {
+      "name": "2.1",
+      "landmarks": [],
+      "input_args": {
+        "customer_id": "customer.id",
+        "product_id": "product.id"
+      },
+      "output": [
+        "subscription"
+      ],
+      "solution": [],
+      "max_length": 10
+    },
+    {
+      "name": "2.2",
+      "landmarks": [],
+      "input_args": {
+        "customer_id": "customer.id",
+        "currency": "fee.currency",
+        "amount": "price.unit_amount"
+      },
+      "output": [
+        "payment_intent"
+      ],
+      "solution": [],
+      "max_length": 10
+    },
+    {
+      "name": "2.3",
+      "landmarks": [],
+      "input_args": {
+        "customer_id": "customer.id",
+        "product_id": "product.id"
+      },
+      "output": [
+        "subscription"
+      ],
+      "solution": [],
+      "max_length": 10
+    },
+    {
+      "name": "2.4",
+      "landmarks": [],
+      "input_args": {
+        "product_name": "product.name",
+        "customer_id": "customer.id",
+        "currency": "fee.currency",
+        "unit_amount": "/v1/prices:unit_amount:POST"
+      },
+      "output": [
+        "invoiceitem"
+      ],
+      "solution": [],
+      "max_length": 10
+    },
+    {
+      "name": "2.5",
+      "landmarks": [],
+      "input_args": {
+        "customer_id": "customer.id",
+        "price_id": "price.id"
+      },
+      "output": [
+        "invoiceitem"
+      ],
+      "solution": [],
+      "max_length": 10
+    },
+    {
+      "name": "2.6",
+      "landmarks": [],
+      "input_args": {
+        "customer_email": "customer.email"
+      },
+      "output": [
+        "customer"
+      ],
+      "solution": [],
+      "max_length": 10
+    },
+    {
+      "name": "2.7",
+      "landmarks": [],
+      "input_args": {
+        "customer_id": "customer.id"
+      },
+      "output": [
+        "charge"
+      ],
+      "solution": [],
+      "max_length": 10
+    },
+    {
+      "name": "2.8",
+      "landmarks": [],
+      "input_args": {
+        "subscription_id": "subscription.id"
+      },
+      "output": [
+        "refund"
+      ],
+      "solution": [],
+      "max_length": 10
+    },
+    {
+      "name": "2.9",
+      "landmarks": [],
+      "input_args": {
+      },
+      "output": [
+        "customer.email"
+      ],
+      "solution": [],
+      "max_length": 10
+    },
+    {
+      "name": "2.10",
+      "landmarks": [],
+      "input_args": {
+        "product_id": "product.id"
+      },
+      "output": [
+        "customer.email"
+      ],
+      "solution": [],
+      "max_length": 10
+    },
+    {
+      "name": "2.11",
+      "landmarks": [],
+      "input_args": {
+        "customer_id": "customer.id"
+      },
+      "output": [
+        "card.last4"
+      ],
+      "solution": [],
+      "max_length": 10
+    },
+    {
+      "name": "2.12",
+      "landmarks": [],
+      "input_args": {
+        "payment_method": "payment_method"
+      },
+      "output": [
+      ],
+      "solution": [],
+      "max_length": 10
+    },
+    {
+      "name": "2.13",
+      "landmarks": [],
+      "input_args": {
+        "payment_method": "payment_method"
+      },
+      "output": [
+        "customer.id",
+        "subscription"
+      ],
+      "solution": [],
+      "max_length": 10
+    }
+  ]
+}

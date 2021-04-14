@@ -10,6 +10,8 @@ def replace_variables(progstr):
     for i, vname in enumerate(varnames):
         progstr = str.replace(progstr, vname, f"x{i}")
 
+    progstr = re.sub("\s", "", progstr)
+    progstr = re.sub("\n", "", progstr)
     return progstr
 
 def compare_program_strings(progstr_a, progstr_b):

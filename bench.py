@@ -27,6 +27,7 @@ from graphviz import Digraph
 from openapi import defs
 from openapi.utils import read_doc
 from synthesizer.synthesizer import *
+from synthesizer.filtering import run_filter
 from program.program import ProjectionExpr
 from program.program_equality import compare_program_strings
 
@@ -69,7 +70,7 @@ class Bencher:
 
     def run_benches(self, folder="benchmarks"):
         self.read_benches(folder)
-        
+
         for bench_key in self.benches.keys():
             self.run_bench(bench_key)
 
@@ -179,7 +180,7 @@ class Bencher:
             solutions = synthesizer.run_n(
                 bench["landmarks"],
                 {k: SchemaType(v, None) for k, v in bench["input_args"].items()},
-                [SchemaType(bench["output"], None)],
+                [SchemaType(out, None) for out in bench["output"]],
                 bench["max_length"]
             )
 
@@ -238,15 +239,20 @@ class Bencher:
 
                 found = False
                 for rank, res_sol in enumerate(res_sols):
+                    print(res_sol)
                     if compare_program_strings(tgt_sol, res_sol):
                         print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
                         found = True
                         arr["rank"] = rank
 
-                        ns = res[rank].collect_exprs()
-                        arr["ast_size"] = len(ns)
-                        arr["projects"] = len(filter(lambda x: isinstance(x, ProjectionExpr), ns))
-                        arr["endpoint_calls"] = len(filter(lambda x: isinstance(x, AppExpr), ns))
+                        #TODO: FIX THIS PLS
+                        try:
+                            ns = res[rank].collect_exprs()
+                            arr["ast_size"] = len(ns)
+                            arr["projects"] = len(filter(lambda x: isinstance(x, ProjectionExpr), ns))
+                            arr["endpoint_calls"] = len(filter(lambda x: isinstance(x, AppExpr), ns))
+                        except:
+                            pass
 
                         break
                 if not found:

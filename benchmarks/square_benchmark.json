@@ -1,0 +1,243 @@
+{
+    "config": "configs/square_config.json",
+    "benchmarks": [
+        {
+            "name": "3.1",
+            "desc": "List invoices that match location id",
+            "landmarks": [],
+            "input_args": {
+                "location_id": "Location.id"
+            },
+            "output": [
+                "Invoice"
+            ],
+            "solution": [
+                "\\location_id -> {",
+                    "x0 <- /v2/invoices_GET(location_id=location_id)",
+                    "return x0.invoice",
+                    "}"
+            ],
+            "max_length": 10
+        },
+        {
+            "name": "3.2",
+            "desc": "Find subscription from location, customer, and plan id",
+            "landmarks": [],
+            "input_args": {
+                "customer_id": "Customer.id",
+                "location_id": "Location.id",
+                "subscription_plan_id": "CatalogObject.id"
+            },
+            "output": [
+                "Subscription"
+            ],
+            "solution": [
+                "\\subscription_plan_id, customer_id, location_id -> {",
+                    "x7 <- /v2/subscriptions/search_POST()",
+                    "x8 <- x7.subscriptions.filter(x => x.customer_id == customer_id)",
+                    "x9 <- x8.filter(x => x.plan_id == subscription_plan_id)",
+                    "x10 <- x9.filter(x => x.location_id == location_id)",
+                    "return x10",
+                    "}"
+            ],
+            "max_length": 10
+        },
+        {
+            "name": "3.3",
+            "desc": "Get all items tax applies to",
+            "note": "Can't do because catalogobject is an overloaded type in the square api",
+            "landmarks": [],
+            "input_args": {
+                "tax_id": "CatalogObject.id"
+            },
+            "output": [
+                "CatalogObject"
+            ],
+            "solution": [
+                "\\tax_id -> {",
+                    "x1 <- /v2/catalog/batch-retrieve_POST()",
+                    "x2 <- x1.filter(x => x.tax_id == tax_id)",
+                    "return x2",
+                    "}"
+            ],
+            "max_length": 10
+        },
+        {
+            "name": "3.4",
+            "desc": "List discounts in catalog",
+            "landmarks": [],
+            "input_args": {
+            },
+            "output": [
+                "CatalogDiscount.name"
+            ],
+            "solution": [
+                "\\ => {",
+                    "x1 <- /v2/catalog/batch-retrieve_POST()",
+                    "x2 <- x1.map(x => x.discount_type)",
+                    "return x2",
+                    "}"
+            ],
+            "max_length": 10
+        },
+        {
+            "name": "3.5",
+            "desc": "Delete catalog items with [names]",
+            "landmarks": [],
+            "input_args": {
+                "item_type": "CatalogObject.type",
+                "names": "CatalogDiscount.name"
+            },
+            "output": [
+                "unknown_obj.deleted_object_ids"
+            ],
+            "solution": [
+                "\\item_type, names => {",
+                    "x1 <- names.map(name => {",
+                        "x2 <- /v2/catalog/search-catalog-items_POST({",
+                            "object_types: [item_type],",
+                            "query: {",
+                                "exact_query: {",
+                                    "attribute_name: \"name\",",
+                                    "attribute_value: name",
+                                    "}",
+                                    "}",
+                                    "})",
+                                    "x3 <- x2.items.map(x => x.id)",
+                                    "x4 <- /v2/catalog/batch-delete({",
+                                        "object_ids: x3",
+                                        "})",
+                                        "return x4",
+                                        "})",
+                                        "return x1",
+                                        "}"
+            ],
+            "max_length": 15
+        },
+        {
+            "name": "3.6",
+            "desc": "Delete all catalog items",
+            "landmarks": [],
+            "input_args": {
+            },
+            "output": [
+                "unknown_obj.deleted_object_ids"
+            ],
+            "solution": [
+                "\\ -> {",
+                    "x1 <- /v2/catalog/batch-retrieve_POST()",
+                    "x2 <- x1.map(x => /v2/catalog/batch-delete_POST(object_ids = x))",
+                    "return x12",
+                    "}"
+            ],
+            "max_length": 10
+        },
+        {
+            "name": "3.7",
+            "desc": "Add order details to order",
+            "landmarks": [],
+            "input_args": {
+                "location_id": "Location.id",
+                "order_ids": "OrderLineItem.uid",
+                "updates": "OrderLineItem"
+            },
+            "output": [
+                "OrderLineItem"
+            ],
+            "solution": [
+                "\\location_id, order_ids, updates => {",
+                    "x1 <- order_ids.map(ids => {",
+                        "x2 <- /v2/orders_POST(order = update);",
+                        "return x2;",
+                        "});",
+                        "return x1;",
+                        "}"
+            ],
+            "max_length": 10
+        },
+        {
+            "name": "3.8",
+            "desc": "Get payment notes",
+            "landmarks": [],
+            "input_args": {
+            },
+            "output": [
+                "Tender.note"
+            ],
+            "solution": [
+                "\\ -> {",
+                    "x1 <- /v2/payments_GET()",
+                    "x2 <- x1.payments.map(\\x0 -> {",
+                        "return x0.note",
+                        "})",
+                        "return x2",
+                        "}"
+            ],
+            "max_length": 10
+        },
+        {
+            "name": "3.9",
+            "desc": "Get payment notes",
+            "landmarks": [],
+            "input_args": {
+                "location_id": "Location.id"
+            },
+            "output": [
+                "Transaction.order_id"
+            ],
+            "solution": [
+                "\\location_id -> {",
+                    "x1 <- /v2/locations/{location_id}/transactions_GET(location_id=location_id)",
+                    "x2 <- x1.transactions.map(\\x0 -> {",
+                        "return x0.order_id",
+                        "})",
+                        "return x2",
+                        "}"
+            ],
+            "max_length": 10
+        },
+        {
+            "name": "3.10",
+            "desc": "Get product details (names of orders) from transaction id",
+            "landmarks": [],
+            "input_args": {
+                "location_id": "Location.id",
+                "transaction_id": "Transaction.id"
+            },
+            "output": [
+                "DeviceCode.name"
+            ],
+            "solution": [
+                "\\location_id, transaction_id => {",
+                    "x1 <- /v2/orders/batch-retrieve_POST(locationId = location_id, orderIds = [transaction_id])",
+                    "x2 <- x1.map(order => {",
+                        "x3 <- order.line_items.map(item => item.name)",
+                        "return x3",
+                        "})",
+                        "return x2;",
+                        "}"
+            ],
+            "max_length": 10
+        },
+        {
+            "name": "3.11",
+            "desc": "Search customers by name",
+            "landmarks": [],
+            "input_args": {
+                "location_id": "Location.id"
+            },
+            "output": [
+                "Transaction.order_id"
+            ],
+            "solution": [
+                "\\customer_name -> {",
+                    "x1 <- /v2/customers_GET()",
+                    "x2 <- x1.customers.filter(x => x.given_name == customer_name)",
+                    "return x2",
+                    "}"
+            ],
+            "max_length": 10
+        }
+
+    ]
+}
