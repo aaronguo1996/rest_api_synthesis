@@ -55,7 +55,7 @@ def avg(lst):
     return sum(lst) / len(lst)
 
 class Bencher:
-    def __init__(self, repeat):
+    def __init__(self, repeat, bench):
         self.benches = {}
 
         # map from api to entry
@@ -64,6 +64,7 @@ class Bencher:
         self.table2 = {}
 
         self.repeat = repeat
+        self.bench = bench
 
     def tkey(self, bench_key):
         return self.benches[bench_key][BK_CONFIG]["exp_name"].split("_")[0]
@@ -79,7 +80,7 @@ class Bencher:
     def read_benches(self, folder="benchmarks"):
         "Reads a list JSON bench files from a folder, populating table1"
 
-        files = [f for f in glob(f"{folder}/*.json")]
+        files = [f for f in glob(f"{folder}/*.json")] if self.bench == None else self.bench
 
         print("reading benches")
 
@@ -327,13 +328,15 @@ def build_cmd_parser():
         help="Path to output latex table to")
     parser.add_argument("--repeat", type=int, nargs='?',
         help="Number of times to repeat filtering")
+    parser.add_argument("--bench", nargs='+',
+        help="Paths to bench file (by default runs all in benchmarks)")
     return parser
 
 def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
 
-    b = Bencher(args.repeat)
+    b = Bencher(args.repeat, args.bench)
     b.run_benches()
     b.print_table1(args.output)
     b.print_table2(args.output)

@@ -255,8 +255,7 @@ class Synthesizer:
             # "/v2/catalog/object/{object_id}_DELETE",
             # "projection(OrderLineItem, name)_",
             # "projection(Transaction, id)_",
-            # "/v2/invoices/search_POST"
-            # "projection(Tender, note)_",
+            "/v1/prices_POST"
             # "filter(Subscription, Subscription.plan_id)_",
             # "filter(Subscription, Subscription.plan_id)_",
             # "projection(/v2/subscriptions/search_response, subscriptions)_",

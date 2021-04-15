@@ -32,7 +32,7 @@
                 "Subscription"
             ],
             "solution": [
-                "\\subscription_plan_id, customer_id, location_id -> {",
+                "\\customer_id location_id subscription_plan_id -> {",
                     "x7 <- /v2/subscriptions/search_POST()",
                     "x8 <- x7.subscriptions.filter(x => x.customer_id == customer_id)",
                     "x9 <- x8.filter(x => x.plan_id == subscription_plan_id)",
@@ -224,10 +224,10 @@
             "desc": "Search customers by name",
             "landmarks": [],
             "input_args": {
-                "location_id": "Location.id"
+                "name": "Customer.given_name"
             },
             "output": [
-                "Transaction.order_id"
+                "customer"
             ],
             "solution": [
                 "\\customer_name -> {",

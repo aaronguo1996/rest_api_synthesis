@@ -3,6 +3,7 @@
   "benchmarks": [
     {
       "name": "2.1",
+      "desc": "Make a subscription to a product for a customer",
       "landmarks": [],
       "input_args": {
         "customer_id": "customer.id",
@@ -16,6 +17,7 @@
     },
     {
       "name": "2.2",
+      "desc": "Charge a saved card given customer id",
       "landmarks": [],
       "input_args": {
         "customer_id": "customer.id",
@@ -30,6 +32,7 @@
     },
     {
       "name": "2.3",
+      "desc": "Subscribe to multiple items",
       "landmarks": [],
       "input_args": {
         "customer_id": "customer.id",
@@ -43,6 +46,7 @@
     },
     {
       "name": "2.4",
+      "desc": "Create a product and invoice a customer",
       "landmarks": [],
       "input_args": {
         "product_name": "product.name",
@@ -58,10 +62,11 @@
     },
     {
       "name": "2.5",
+      "desc": "sending invoice",
       "landmarks": [],
       "input_args": {
         "customer_id": "customer.id",
-        "price_id": "price.id"
+        "price_id": "plan.id"
       },
       "output": [
         "invoiceitem"
@@ -71,6 +76,7 @@
     },
     {
       "name": "2.6",
+      "desc": "Retrieve customer by email",
       "landmarks": [],
       "input_args": {
         "customer_email": "customer.email"
@@ -78,23 +84,37 @@
       "output": [
         "customer"
       ],
-      "solution": [],
+      "solution": [
+        "\\customer_email -> {x0 <- /v1/customers_POST()",
+          "x1 <- x0.address.filter(x => x.email == customer_email)",
+          "return x1}"
+      ],
       "max_length": 10
     },
     {
       "name": "2.7",
+      "desc": "Get a list of receipts for a customer",
       "landmarks": [],
       "input_args": {
         "customer_id": "customer.id"
       },
       "output": [
-        "charge"
+        "[charge]"
       ],
-      "solution": [],
+      "solution": [
+        "\\customer_id -> {",
+          "let x1 = /v1/invoices_GET(customer=customer_id) in",
+          "let x2 = x1.data.map(\\x0 -> {",
+            "return x0.charge",
+            "}) in",
+            "return x2",
+            "}"
+      ],
       "max_length": 10
     },
     {
       "name": "2.8",
+      "desc": "Get refund for given subscription",
       "landmarks": [],
       "input_args": {
         "subscription_id": "subscription.id"
@@ -107,6 +127,7 @@
     },
     {
       "name": "2.9",
+      "desc": "Get email of all customers",
       "landmarks": [],
       "input_args": {
       },
@@ -118,6 +139,7 @@
     },
     {
       "name": "2.10",
+      "desc": "Get email of subscribers to some product",
       "landmarks": [],
       "input_args": {
         "product_id": "product.id"
@@ -130,6 +152,7 @@
     },
     {
       "name": "2.11",
+      "desc": "Get last 4 digit of card for a customer",
       "landmarks": [],
       "input_args": {
         "customer_id": "customer.id"
@@ -142,6 +165,7 @@
     },
     {
       "name": "2.12",
+      "desc": "Delete a card for a customer",
       "landmarks": [],
       "input_args": {
         "payment_method": "payment_method"
@@ -153,12 +177,13 @@
     },
     {
       "name": "2.13",
+      "desc": "Update payment methods of a customer for all subscriptions",
       "landmarks": [],
       "input_args": {
-        "payment_method": "payment_method"
+        "payment_method": "payment_method",
+        "customer_id": "customer.id"
       },
       "output": [
-        "customer.id",
         "subscription"
       ],
       "solution": [],
