@@ -46,6 +46,8 @@ HEADER_ACCEPT = "Accept"
 HEADER_AUTH = "Authorization"
 HEADER_JSON = "application/json"
 HEADER_FORM = "application/x-www-form-urlencoded"
+HEADER_TEXT = "text/plain"
+HEADER_ANY = "*/*"
 HEADER_BEARER = "Bearer"
 
 # definitions of http method

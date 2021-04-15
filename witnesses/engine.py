@@ -163,11 +163,11 @@ class BasicGenerator:
         return Result(self._method, self._endpoint, code, response, params)
 
     def run(self):
-        # try:
+        try:
             return self._generate_one(1)
-        # except Exception as e:
-        #     self._logger.debug(f"Exception: {e}")
-        #     return None
+        except Exception as e:
+            self._logger.debug(f"Exception: {e}")
+            return None
 
 class SaturationThread(BasicGenerator):
     def __init__(self, hostname, base_path, endpoint, method, ep_method_def, 
@@ -457,6 +457,11 @@ class WitnessGenerator:
             body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_JSON)
             if not body_def:
                 body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_FORM)
+            if not body_def:
+                body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_TEXT)
+            if not body_def:
+                body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_ANY)
+
             body_schema = body_def.get(defs.DOC_SCHEMA)
             body_params = body_schema.get(defs.DOC_PROPERTIES, {})
             param_names += list(body_params.keys())
@@ -519,4 +524,3 @@ class WitnessGenerator:
 
         render_filename = os.path.join("output/", filename)
         dot.render(render_filename, view=False)
-

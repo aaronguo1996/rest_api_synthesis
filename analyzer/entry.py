@@ -275,31 +275,54 @@ class TraceEntry:
                 request_body = request_params \
                     .get(defs.DOC_CONTENT) \
                     .get(defs.HEADER_JSON)
+
+            # request isn't form or json
+            if request_body is None:
+                return []
             
             schema = request_body.get(defs.DOC_SCHEMA)
             requires = schema.get(defs.DOC_REQUIRED, [])
             properties = schema.get(defs.DOC_PROPERTIES)
 
-            for name in properties.keys():
-                if name in skip_fields:
-                    continue
+            if properties:
+                for name in properties.keys():
+                    if name in skip_fields:
+                        continue
 
-                param = RequestParameter.from_openapi(
-                    endpoint, method, name,
-                    name in requires,
-                )
-                entry_params.append(param)
+                    param = RequestParameter.from_openapi(
+                        endpoint, method, name,
+                        name in requires,
+                    )
+                    entry_params.append(param)
 
         # read responses
         responses = entry_def.get(defs.DOC_RESPONSES)
-        response_content = responses \
-            .get(str(defs.CODE_OK)) \
-            .get(defs.DOC_CONTENT)
+        if str(defs.CODE_OK) in responses:
+            response_content = responses \
+                .get(str(defs.CODE_OK)) \
+                .get(defs.DOC_CONTENT)
+        elif str(defs.CODE_CREATED) in responses:
+            response_content = responses \
+                .get(str(defs.CODE_CREATED)) \
+                .get(defs.DOC_CONTENT)
+        else:
+            entry_response = ResponseParameter(
+                method, "", endpoint, [], True, 0, None, None
+            )
+
+            return [TraceEntry(endpoint, method, entry_params, entry_response)]
+
+        print(response_content)
+
         response_json = response_content.get(defs.HEADER_JSON)
 
         if response_json:
             response_schema = response_json.get(defs.DOC_SCHEMA)
         else:
+            # non json return type
+            if defs.HEADER_FORM not in response_content:
+                return []
+            
             response_schema = response_content \
                 .get(defs.HEADER_FORM) \
                 .get(defs.DOC_SCHEMA)
@@ -320,13 +343,18 @@ class TraceEntry:
         
             # response_params = expand_oneof(response_schema)
 
+            # union case
             while defs.DOC_ONEOF in response_schema:
                 response_schemas = response_schema.get(defs.DOC_ONEOF)
                 response_schema = response_schemas[0]
 
             response_params = response_schema.get(defs.DOC_PROPERTIES)
 
+            # TODO: handle array case?
+
         if response_params is None:
+            # TODO: if the returned type is an array it enters this branch
+            # does that make sense?
             entry_response = ResponseParameter(
                 method, "", endpoint, [], True, 0, None, None
             )

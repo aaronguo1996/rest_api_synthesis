@@ -152,12 +152,13 @@ class DependencyResolver:
                 for _, request_def in request_content.items():
                     request_schema = request_def.get(defs.DOC_SCHEMA)
                     request_properties = request_schema.get(defs.DOC_PROPERTIES)
-                    for param_name in request_properties:
-                        producers = self._generate_annotation_for(
-                            annotations, 
-                            ep, param_name
-                        )
-                        if producers:
-                            self._dependencies[(ep, param_name)] = producers
+                    if request_schema.get(defs.DOC_ADDITIONAL_PROP):
+                        for param_name in request_properties:
+                            producers = self._generate_annotation_for(
+                                annotations, 
+                                ep, param_name
+                            )
+                            if producers:
+                                self._dependencies[(ep, param_name)] = producers
 
         return self._dependencies

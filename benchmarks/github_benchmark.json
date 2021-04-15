@@ -1,0 +1,15 @@
+{
+  "config": "configs/github_config.json",
+  "benchmarks": [
+    {
+      "name": "4.1",
+      "desc": "Stuff",
+      "landmarks": [],
+      "input_args": {
+        "email": "objs_user_profile.email"
+      },
+      "output": "objs_user_profile.skype",
+      "max_length": 5
+    }
+  ]
+}

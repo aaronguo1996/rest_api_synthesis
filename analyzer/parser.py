@@ -1,3 +1,4 @@
+import base64
 import json
 import re
 from urllib.parse import urlparse
@@ -123,6 +124,9 @@ class LogParser:
             parameters.append(p)
 
         response_text = entry["response"]["content"]["text"]
+        # for the github api, we have to base64 decode it first.
+        if entry["response"]["content"].get("encoding") == "base64":
+            response_text = base64.b64decode(response_text)
         response_params = json.loads(response_text)
         
         # print(endpoint, "returns", response_params)
@@ -130,6 +134,7 @@ class LogParser:
         p = None
         if "ok" not in response_params:
             # print("Inferring types for", endpoint)
+            # print(response_params)
             resp_type = SchemaType.infer_type_for(
                 self.path_to_defs, skip_fields, response_params)
             p = ResponseParameter(
@@ -154,7 +159,8 @@ class LogParser:
             if should_skip:
                 continue
 
-            if (e["response"]["content"]["mimeType"] == JSON_TYPE and
+            if (e["response"]["content"]["mimeType"] is not None and
+                JSON_TYPE in e["response"]["content"]["mimeType"] and
                 self.hostname in e["request"]["url"]):
                 entry = self._resolve_entry(skip_fields, e)
                 result_entries.append(entry)

@@ -64,7 +64,7 @@ class SchemaType:
                 else:
                     score += field_score
 
-            return expected_type, score
+            return field_type, score
 
         return None, -1
 
