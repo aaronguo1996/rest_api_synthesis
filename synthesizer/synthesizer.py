@@ -165,7 +165,6 @@ class Synthesizer:
         self._create_encoder()
 
         solutions = set()
-        # graph = GraphStats()
         input_map = defaultdict(int)
         for _, typ in inputs.items():
             input_map[typ.name] += 1
@@ -228,27 +227,27 @@ class Synthesizer:
         unique_entries = self._group_transitions(entries)
 
         # slack logs
-        lst = [
-            "/conversations.list_GET",
-            "/conversations.members_GET",
-            "/users.info_GET",
-            '/users.list_GET',
-            "/conversations.open_POST",
-            "/chat.postMessage_POST",
-            "/users.lookupByEmail_GET",
-            "projection(/conversations.list_GET_response, channels)_",
-            "projection(/conversations.open_POST_response, channel)_",
-            "projection(/users.info_GET_response, user)_",
-            "projection(/conversations.members_GET_response, members)_",
-            'projection(/users.conversations_GET_response, channels)_',
-            "projection(objs_user, profile)_",
-            "projection(objs_user_profile, email)_",
-            "projection(objs_user, id)_",
-            "projection(objs_user_profile, user_id)_",
-            "projection(objs_conversation, id)_",
-            "projection(/chat.postMessage_POST_response, message)_",
-            "projection(/users.lookupByEmail_GET_response, user)_",
-        ]
+        # lst = [
+        #     "/conversations.list_GET",
+        #     "/conversations.members_GET",
+        #     "/users.info_GET",
+        #     '/users.list_GET',
+        #     "/conversations.open_POST",
+        #     "/chat.postMessage_POST",
+        #     "/users.lookupByEmail_GET",
+        #     "projection(/conversations.list_GET_response, channels)_",
+        #     "projection(/conversations.open_POST_response, channel)_",
+        #     "projection(/users.info_GET_response, user)_",
+        #     "projection(/conversations.members_GET_response, members)_",
+        #     'projection(/users.conversations_GET_response, channels)_',
+        #     "projection(objs_user, profile)_",
+        #     "projection(objs_user_profile, email)_",
+        #     "projection(objs_user, id)_",
+        #     "projection(objs_user_profile, user_id)_",
+        #     "projection(objs_conversation, id)_",
+        #     "projection(/chat.postMessage_POST_response, message)_",
+        #     "projection(/users.lookupByEmail_GET_response, user)_",
+        # ]
 
         # stripe logs
         # lst = [
@@ -279,12 +278,12 @@ class Synthesizer:
         #     # "projection(/v2/invoices/search_response, invoices)_"
         # ]
 
-        for name in lst:
-            e = self._entries.get(name)
-            print('-----')
-            print(name)
-            print([(p.arg_name, p.type.name) for p in e.parameters])
-            print(e.response.type, flush=True)
+        # for name in lst:
+        #     e = self._entries.get(name)
+        #     print('-----')
+        #     print(name)
+        #     print([(p.arg_name, p.type.name) for p in e.parameters])
+        #     print(e.response.type, flush=True)
 
         for name, e in entries.items():
             self._program_generator.add_signature(name, e)

@@ -69,7 +69,7 @@ class ResponseParameter(Parameter):
             return results, aliases
 
         if isinstance(self.value, dict):
-            print("Inferring type for", self.func_name, self.arg_name)
+            # print("Inferring type for", self.func_name, self.arg_name)
             if defs.DOC_OK not in self.value: # should only impact Slack API
                 obj_type = SchemaType.infer_type_for(
                         path_to_defs, skip_fields, self.value)

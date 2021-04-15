@@ -21,17 +21,18 @@ import shutil
 import sys
 import pickle
 
-from run import prep_exp_dir, parse_entries, run_filter
 from analyzer import dynamic
-import config_keys as keys
 from globs import get_solution_strs, init_synthesizer, get_petri_net_data
 from openapi import defs
 from openapi.utils import read_doc
-from synthesizer.parallel import spawn_encoders
-from synthesizer.utils import DEFAULT_LENGTH_LIMIT
 from program.program import ProjectionExpr, AppExpr
 from program.program_equality import compare_program_strings
+from run import prep_exp_dir, parse_entries
 from schemas.schema_type import SchemaType
+from synthesizer.filtering import run_filter
+from synthesizer.parallel import spawn_encoders
+from synthesizer.utils import DEFAULT_LENGTH_LIMIT
+import config_keys as keys
 
 BK_CONFIG = "config"
 BK_SOLUTION = "solution"
@@ -40,7 +41,7 @@ BK_BENCHES = "benchmarks"
 class SuppressPrint:
     def __init__(self, verbose):
         self.verbose = verbose
-        
+
     def __enter__(self):
         if not self.verbose:
             self._original_stdout = sys.stdout
@@ -79,7 +80,13 @@ class Bencher:
     def read_benches(self, folder="benchmarks"):
         "Reads a list JSON bench files from a folder, populating table1"
 
-        files = [f for f in glob(f"{folder}/*.json")] if self.bench == None else self.bench
+        if self.bench is None:
+            self.bench = "benchmarks"
+
+        if os.path.isdir(self.bench):
+            files = [f for f in glob(f"{folder}/*.json")]
+        else:
+            files = [self.bench]
 
         print("reading benches")
 
@@ -115,7 +122,7 @@ class Bencher:
         # this assumes bench_key is in self.benches
         print(bench_key)
         print(f"• setup")
-        
+
         configuration = self.benches[bench_key][BK_CONFIG]
 
         # clear the log file if exists
@@ -177,18 +184,18 @@ class Bencher:
 
             # create a directory for the current benchmark
             bm_dir = os.path.join(exp_dir, bench["name"])
-            if os.path.exists(bm_dir):
-                shutil.rmtree(bm_dir)
-                
-            os.makedirs(bm_dir)
+            # if os.path.exists(bm_dir):
+            #     shutil.rmtree(bm_dir)
+
+            # os.makedirs(bm_dir)
 
             init_synthesizer(doc, configuration, log_analyzer, bm_dir)
             inputs = {k: SchemaType(v, None) for k, v in bench["input_args"].items()}
             output = [SchemaType(out, None) for out in bench["output"]]
-            spawn_encoders(
-                inputs, output,
-                configuration["synthesis"]["solver_number"]
-            )
+            # spawn_encoders(
+            #     inputs, output,
+            #     configuration["synthesis"]["solver_number"]
+            # )
 
             # process solutions
             solutions = set()
@@ -242,20 +249,21 @@ class Bencher:
 
                 results = []
                 for p in solutions:
-                    score = run_filter(
-                        log_analyzer, dyn_analysis, 
-                        {"channel_name": "objs_message.name"}, p, True,
-                        repeat=self.repeat if self.repeat else 5
+                    cost = run_filter(
+                        log_analyzer, dyn_analysis,
+                        inputs, p, True,
+                        repeat=self.repeat
                     )
-                    results.append((p, score))
+                    results.append((p, cost))
 
-                res = sorted(results, key=lambda x: x[-1], reverse=True)
+                res = sorted(results, key=lambda x: x[-1])
+                for r in res:
+                    print(r[1], r[0])
 
                 res_sols = [str(r) for r, _ in res]
 
                 found = False
                 for rank, res_sol in enumerate(res_sols):
-                    print(res_sol)
                     if compare_program_strings(tgt_sol, res_sol):
                         print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
                         found = True
@@ -280,12 +288,12 @@ class Bencher:
 
     def print_table1(self, output=None):
         res = ("% auto-generated: ./bench.py, table 1"
-            "\resizebox{\textwidth}{!}{\begin{tabular}{lrrrrrrr}"
-            "\toprule"
-            "& \multicolumn{3}{c}{API size} & \multicolumn{2}{c}{Sub-API size} & \multicolumn{2}{c}{TNN size} \\"
-            "\cmidrule(lr){2-4} \cmidrule(lr){5-6} \cmidrule(lr){7-8}"
-            "API & \# endpoints & Avg. endpoint args & Avg. object size & \# endpoints covered & \# annotations & \# places & \# transitions \\"
-            "\midrule")
+            "\\resizebox{\textwidth}{!}{\\begin{tabular}{lrrrrrrr}"
+            "\\toprule"
+            "& \\multicolumn{3}{c}{API size} & \\multicolumn{2}{c}{Sub-API size} & \\multicolumn{2}{c}{TNN size} \\\\"
+            "\\cmidrule(lr){2-4} \\cmidrule(lr){5-6} \\cmidrule(lr){7-8}"
+            "API & \\# endpoints & Avg. endpoint args & Avg. object size & \\# endpoints covered & \\# annotations & \\# places & \\# transitions \\\\"
+            "\\midrule")
 
         for api, rest in self.table1.items():
             avg_num_args = round(rest['avg_num_args'], 2)
@@ -294,8 +302,8 @@ class Bencher:
             res += r" \\"
             res += "\n"
 
-        res += ("\bottomrule"
-                "\end{tabular}}")
+        res += ("\\bottomrule"
+                "\\end{tabular}}")
 
         # print(res)
 
@@ -306,13 +314,13 @@ class Bencher:
 
     def print_table2(self, output=None):
         res = ("% auto-generated: ./bench.py, table 2"
-               "\resizebox{\textwidth}{!}{"
-               "\begin{tabular}{llp{5cm}rrrrr}"
-               "\toprule"
-               "& \multicolumn{2}{c}{Benchmark info} & \multicolumn{3}{c}{Solution stats} & \multicolumn{2}{c}{Solution rank} \\"
-               "\cmidrule(lr){2-3} \cmidrule(lr){4-6} \cmidrule(lr){7-8}"
-               "API & Name & Description & AST Size & \# endpoint calls & \# projections & Without RE & With RE \\"
-               "\midrule")
+               "\\resizebox{\\textwidth}{!}{"
+               "\\begin{tabular}{llp{5cm}rrrrr}"
+               "\\toprule"
+               "& \\multicolumn{2}{c}{Benchmark info} & \\multicolumn{3}{c}{Solution stats} & \\multicolumn{2}{c}{Solution rank} \\\\"
+               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-6} \\cmidrule(lr){7-8}"
+               "API & Name & Description & AST Size & \\# endpoint calls & \\# projections & Without RE & With RE \\\\"
+               "\\midrule")
 
         for api, bench_results in self.table2.items():
             res += api.capitalize() + " "
@@ -321,8 +329,8 @@ class Bencher:
                 res += r" \\"
                 res += "\n"
 
-        res += ("\bottomrule"
-                "\end{tabular}}")
+        res += ("\\bottomrule"
+                "\\end{tabular}}")
 
         # print(res)
 
@@ -336,13 +344,12 @@ def build_cmd_parser():
         All arguments
     '''
     parser = argparse.ArgumentParser()
-    parser.add_argument("input", nargs="?")
     parser.add_argument("output", nargs='?',
         help="Path to output latex table to")
     parser.add_argument("--repeat", type=int, nargs='?', default=5,
         help="Number of times to repeat filtering")
-    parser.add_argument("--bench", nargs='+',
-        help="Paths to bench file (by default runs all in benchmarks)")
+    parser.add_argument("--bench", nargs='?',
+        help="Path to benchmark file or directory (by default runs all in benchmarks)")
     return parser
 
 def main():

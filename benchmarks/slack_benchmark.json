@@ -6,10 +6,10 @@
       "desc": "Retrieve all member emails from channel name",
       "landmarks": [],
       "input_args": {
-        "customer_id": "objs_conversation.name"
+        "channel_name": "objs_conversation.name"
       },
       "output": [
-        "objs_user.profile.email"
+        "objs_user_profile.email"
       ],
       "solution": [],
       "max_length": 10
@@ -19,7 +19,7 @@
       "desc": "Send a message to some user given the email address",
       "landmarks": [],
       "input_args": {
-        "email": "objs_user.profile.email"
+        "email": "objs_user_profile.email"
       },
       "output": [
         "objs_message"
@@ -32,7 +32,7 @@
       "desc": "Get all unread message for a user",
       "landmarks": [],
       "input_args": {
-        "user_id": "objs_user.id"
+        "user_id": "defs_user_id"
       },
       "output": [
         "objs_message"

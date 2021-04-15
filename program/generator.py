@@ -112,7 +112,7 @@ class ProgramGenerator:
             if isinstance(expr, ProjectionExpr):
                 name = f"projection([{expr._obj.type}], {expr.type})"
             elif isinstance(expr, FilterExpr):
-                name = f"filter([{expr._obj.type}, {expr._val.type}], {expr._obj.type})"
+                name = f"filter({[expr._obj.type, expr._val.type]}, {expr._obj.type})"
             elif isinstance(expr, AppExpr):
                 name = expr._fun
             else:

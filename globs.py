@@ -1,4 +1,5 @@
 from collections import defaultdict
+import os
 
 from synthesizer.synthesizer import Synthesizer
 
@@ -8,10 +9,15 @@ def init_synthesizer(doc, configuration, analyzer, exp_dir):
     synthesizer.init()
 
 def get_petri_net_data():
-    num_place = len(synthesizer._encoder._net.place())
-    num_trans = len(synthesizer._encoder._net.transition())
-    return num_place, num_trans
+    encoder_path = os.path.join(synthesizer._exp_dir, "../encoder.txt")
+    with open(encoder_path, "r") as f:
+        numbers = []
+        line = f.readline()
+        while line:
+            numbers.append(int(line))
+            line = f.readline()
+
+    return numbers[0], numbers[1]
 
 def get_solution_strs(solutions):
-    counter = defaultdict(int)
-    [r.pretty(synthesizer._entries, counter) for r in solutions]
+    return [r.pretty(synthesizer._entries, 0) for r in solutions]

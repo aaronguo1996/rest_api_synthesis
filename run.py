@@ -77,7 +77,7 @@ def parse_entries(doc, configuration, exp_dir):
         with open(trace_file, 'wb') as f:
             pickle.dump(entries, f)
 
-        print("Write", len(entries), "entries into file")
+        # print("Write", len(entries), "entries into file")
     else:
         with open(trace_file, 'rb') as f:
             entries = pickle.load(f)

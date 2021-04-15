@@ -46,12 +46,12 @@ class PetriNetEncoder:
         self._add_variables(self._path_len)
         self._fire_transitions(self._path_len - 1)
         self._no_transition_fire(self._path_len - 1)
-        print("current len", self._path_len, flush=True)
+        # print("current len", self._path_len, flush=True)
         # reset the temporary constraint when path length changes
         self._constraints["temporary"] = []
 
     def _run_approximation(self, inputs):
-        print("before approximation:", len(self._net.transition()))
+        # print("before approximation:", len(self._net.transition()))
         # on top of the input types, 
         # we also need to add output types of transitions with no required args
         self._reachables = set()
@@ -72,15 +72,15 @@ class PetriNetEncoder:
             input_places + null_places, set(), set()
         )
         self._reachables = self._reachables.union(reachables)
-        print("/users.lookupByEmail_GET" in self._reachables)
-        print("projection(/users.lookupByEmail_GET_response, user)_" in self._reachables)
-        print("projection(objs_user, id)_" in self._reachables)
-        print("/conversations.open_POST" in self._reachables)
-        print("projection(/conversations.open_POST_response, channel)_" in self._reachables)
-        print("projection(objs_conversation, id)_" in self._reachables)
-        print("/chat.postMessage_POST" in self._reachables)
-        print("projection(/chat.postMessage_POST_response, message)_" in self._reachables)
-        print("after approximation:", len(self._reachables))
+        # print("/users.lookupByEmail_GET" in self._reachables)
+        # print("projection(/users.lookupByEmail_GET_response, user)_" in self._reachables)
+        # print("projection(objs_user, id)_" in self._reachables)
+        # print("/conversations.open_POST" in self._reachables)
+        # print("projection(/conversations.open_POST_response, channel)_" in self._reachables)
+        # print("projection(objs_conversation, id)_" in self._reachables)
+        # print("/chat.postMessage_POST" in self._reachables)
+        # print("projection(/chat.postMessage_POST_response, message)_" in self._reachables)
+        # print("after approximation:", len(self._reachables))
 
     def check_constraints_binding(self):
         # constraints
@@ -156,14 +156,14 @@ class PetriNetEncoder:
         else:
             result, path = self.check_constraints_binding()
 
-        print("Check time:", time.time() - start, flush=True)
+        # print("Check time:", time.time() - start, flush=True)
         start = time.time()
         if self._path_len > 0 and result == "sat":
             results = []
             for tr in path:
                 self._prev_result.append(tr)
                 results.append(self._variable_to_trans[tr])
-            print("Model time:", time.time() - start, flush=True)
+            # print("Model time:", time.time() - start, flush=True)
             return results
         else:
             self._targets = []
@@ -192,8 +192,8 @@ class PetriNetEncoder:
         self.set_final(outputs)
         # self.add_all_constraints()
 
-        print("Finish encoding in", time.time() - start, "seconds")
-        print("Searching at len:", self._path_len, flush=True)
+        # print("Finish encoding in", time.time() - start, "seconds")
+        # print("Searching at len:", self._path_len, flush=True)
         
         start = time.time()
         path = self.solve()

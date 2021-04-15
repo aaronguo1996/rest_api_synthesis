@@ -81,7 +81,7 @@ class DSU:
         return groups
 
     def get_value_bank(self, x):
-        print("[get_value_bank] root for", x, "is", self.find(x))
+        # print("[get_value_bank] root for", x, "is", self.find(x))
         return self._values.get(self.find(x), set())
 
     def get_group(self, x):
@@ -183,6 +183,11 @@ class LogAnalyzer:
             if isinstance(entry.response, ErrorResponse):
                 continue
             
+            # if entry.endpoint == "/conversations.create":
+            #     print(entry.method)
+            #     print([(p.arg_name, p.value) for p in entry.parameters])
+            #     print(entry.response.value)
+
             # match docs to correct integers and booleans
             entry_def = paths.get(entry.endpoint)
             if entry.endpoint in blacklist:
@@ -286,17 +291,17 @@ class LogAnalyzer:
                 rep = group[0].arg_name
 
             # for debug
-            if rep == "defs_user_id":
-                group_params = []
-                for param in group:
-                    if isinstance(param, ResponseParameter):
-                        group_params.append((param.func_name, param.method, param.path, param.value, param.type))
-                    else:
-                        group_params.append((param.func_name, param.method, ["REQUEST", param.arg_name], param.value, param.type))
+            # if rep == "objs_conversation.name":
+            #     group_params = []
+            #     for param in group:
+            #         if isinstance(param, ResponseParameter):
+            #             group_params.append((param.func_name, param.method, param.path, param.value, param.type))
+            #         else:
+            #             group_params.append((param.func_name, param.method, ["REQUEST", param.arg_name], param.value, param.type))
 
-                sorted(group_params)
-                for p in group_params:
-                    print(p)
+            #     sorted(group_params)
+            #     for p in group_params:
+            #         print(p)
 
             dot.node(rep, label=rep, shape="oval")
 
@@ -448,7 +453,7 @@ class LogAnalyzer:
         params = self.dsu._parents.keys()
         values = []
         for param in params:
-            if param.type and param.type.name == typ:
+            if param.type and param.type.name == typ.name:
                 group = self.dsu.get_group(param)
                 for p in group:
                     if p.value is not None:
@@ -460,8 +465,6 @@ class LogAnalyzer:
 
     def find_same_type(self, param):
         typ_name = self.type_aliases.get(param.type.name)
-        if param.type.name == "charge.invoice":
-            print("find type alias", typ_name)
 
         if typ_name is not None:
             param.type = SchemaType(typ_name, None)
@@ -493,12 +496,6 @@ class LogAnalyzer:
                 # print(f"{param} does not belong to any group")
                 param.type = SchemaType(str(param), None)
             else:
-                # group = self.dsu.get_group(descendant)
-                # _, rep_type = get_representative(group)
-                if param.func_name == "/conversations.members":
-                    print("get descendant type", descendant.type)
-                    print("descendant type has parent", descendant.type.parent)
-
                 if descendant.type:
                     param_type = descendant.type.get_oldest_parent()
                     # get the fields

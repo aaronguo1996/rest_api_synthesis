@@ -5,6 +5,7 @@ from analyzer.multiplicity import MUL_ONE_ONE, MUL_ZERO_MORE, MUL_ZERO_ONE
 from analyzer.dynamic import Goal
 
 SPACE = '    '
+MAX_COST = 9999
 
 class Expression:
     def __init__(self, typ):
@@ -88,22 +89,28 @@ class AppExpr(Expression):
 
     def execute(self, analyzer):
         args = [arg.execute(analyzer) for _, arg in self._args]
+
+        # if any of the argument fails, the whole term fails
+        for arg, _ in args:
+            if arg is None:
+                return None, MAX_COST
+
         if args:
             arg_vals, arg_scores = zip(*args)
             arg_names = list(zip(*self._args))[0]
             # print("[App] arg names", arg_names)
             named_arg_vals = list(zip(arg_names, arg_vals))
-            # print("[App] arg names and vals", list(named_arg_vals))
+            print("[App] arg names and vals", list(named_arg_vals))
         else:
             arg_scores = [0]
             named_arg_vals = []
 
         val = analyzer.get_trace(self._fun, named_arg_vals)
         if val is None:
-            # print("fail to get successful trace for", self._fun, named_arg_vals)
-            return None, 0
+            print("fail to get successful trace for", self._fun, named_arg_vals)
+            return None, MAX_COST
         else:
-            # print("[App] get back", val, "for", self._fun, named_arg_vals)
+            print("[App] get back", val, "for", self._fun, named_arg_vals)
             return val, 1 + sum(arg_scores)
 
     def get_multiplicity(self, analyzer):
@@ -232,7 +239,7 @@ class VarExpr(Expression):
     def execute(self, analyzer):
         val = analyzer.lookup_var(self._var)
         if val is None:
-            return None, 0
+            return None, MAX_COST
         else:
             # print("[Var] get back", val, "for", self._var)
             return val, 1
@@ -309,13 +316,14 @@ class ProjectionExpr(Expression):
         return obj_vars
 
     def execute(self, analyzer):
-        val, score = self._obj.execute(analyzer)
+        val, cost = self._obj.execute(analyzer)
         if val is not None and self._field in val:
             val = val.get(self._field)
-            # print("[Projection] get back", val, "for", self._field)
-            return val, score + 1
+            print("[Projection] get back", val, "for", self._field)
+            return val, cost + 1
         else:
-            return None, 0
+            print("[Projection] field projection fails for", self._field)
+            return None, MAX_COST
 
     def get_multiplicity(self, analyzer):
         return analyzer.check_endpoint(f"projection({self._obj.type}, {self._field})")
@@ -444,28 +452,46 @@ class FilterExpr(Expression):
         obj, score1 = self._obj.execute(analyzer)
         val, score2 = self._val.execute(analyzer)
         
-        if obj is None or val is None or not isinstance(obj, list):
-            return None, 0
+        if obj is None or val is None:
+            if obj is None:
+                print("[Filter] obj cannot be evaluated")
+
+            if val is None:
+                print("[Filter] val cannot be evaluated")
+
+            return None, MAX_COST
+
+        # if not isinstance(obj, list):
+        #     obj = [obj]
 
         paths = self._field.split('.')
-        # print("[Filter] filtering by path", paths)
-        result = []
-        for o in obj:
-            tmp = o
-            for p in paths:
-                if p in tmp:
-                    tmp = tmp.get(p)
-                    # print("[Filter] get field", p, "returns", tmp)
-                else:
-                    tmp = None
-                    # print("[Filter] cannot find field", p, "in", tmp)
-                    break
+        print("[Filter] filtering by path", paths)
+        # result = []
+        # for o in obj:
+        tmp = obj
+        for p in paths:
+            if p in tmp:
+                tmp = tmp.get(p)
+                print("[Filter] get field", p, "returns", tmp)
+            else:
+                tmp = None
+                print("[Filter] cannot find field", p, "in", tmp)
+                break
             
-            if tmp == val:
-                result.append(o)
+        if tmp == val:
+            # result.append(o)
 
-        # print("[Filter] get back", result, "for", self._field)
-        return result, score1 + score2
+        # if all_fails:
+        #     return None, MAX_COST
+
+            variables = self._obj.get_vars()
+            analyzer.push_var(list(variables)[0], obj)
+            print("[Filter] get back", obj, "for filter on", self._field)
+            return obj, score1 + score2 + 1
+
+        else:
+            return None, MAX_COST
+
 
     def get_multiplicity(self, analyzer):
         obj_mul = self._obj.get_multiplicity(analyzer)
@@ -602,7 +628,7 @@ class MapExpr(Expression):
     def execute(self, analyzer):
         obj, obj_score = self._obj.execute(analyzer)
         if obj is None:
-            return None, 0
+            return None, MAX_COST
 
         scores = 0
         results = []
@@ -1009,18 +1035,53 @@ class Program:
             expr = self._expressions[-2]
             expr._prog.assign_type(t)
 
+    def _execute_exprs(self, exprs, analyzer):
+        if len(exprs) == 1:
+            return exprs[0].execute(analyzer)
+        else:
+            expr = exprs[0]
+            if isinstance(expr, AssignExpr): 
+                val, cost = expr._rhs.execute(analyzer)
+                if val is None:
+                    print(expr, "cannot be evaled")
+                    return None, MAX_COST
+
+                if expr._is_bind:
+                    vals = []
+                    bind_cost = 0
+                    for v in val:
+                        analyzer.push_var(expr.var, v)
+                        sub_val, sub_cost = self._execute_exprs(exprs[1:], analyzer)
+                        if sub_val is not None:
+                            vals.append(sub_val)
+                            bind_cost += sub_cost
+                        analyzer.pop_var(expr.var)
+
+                    if len(vals) == 0:
+                        return None, MAX_COST
+
+                    if len(val) > 0:
+                        cost += bind_cost / len(val)
+
+                    val = vals
+                else:
+                    analyzer.push_var(expr.var, val)
+                    val, sub_cost = self._execute_exprs(exprs[1:], analyzer)
+                    cost += sub_cost
+            else:
+                val, cost = expr.execute(analyzer)
+                if val is None:
+                    print(expr, "cannot be evaled")
+                    return None, MAX_COST
+
+                val, sub_cost = self._execute_exprs(exprs[1:], analyzer)
+                cost += sub_cost
+            
+            return val, cost
+
     def execute(self, analyzer):
-        scores = 0
-        for expr in self._expressions[:-1]:
-            s = expr.execute(analyzer)
-            if s is None:
-                return None, 0
-
-            scores += s
-
-        ret, score = self._expressions[-1].execute(analyzer)
-        return ret, (scores + score) / len(self._expressions) # normalize by number of expressions
-
+        return self._execute_exprs(self._expressions, analyzer)
+        
     def get_multiplicity(self, analyzer):
         for expr in self._expressions[:-1]:
             expr.get_multiplicity(analyzer)
