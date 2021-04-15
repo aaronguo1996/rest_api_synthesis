@@ -222,9 +222,7 @@ class LogAnalyzer:
                     if param.get(defs.DOC_NAME) == p.arg_name:
                         typ = param.get(defs.DOC_SCHEMA).get(defs.DOC_TYPE)
                         correct_value(p, typ)
-                    
-                    # break
-                
+
                 if p.arg_name in entry_requests:
                     param = entry_requests.get(p.arg_name)
                     typ = param.get(defs.DOC_TYPE)
@@ -288,13 +286,13 @@ class LogAnalyzer:
                 rep = group[0].arg_name
 
             # for debug
-            if rep == "line_item.id":
+            if rep == "defs_user_id":
                 group_params = []
                 for param in group:
                     if isinstance(param, ResponseParameter):
-                        group_params.append((param.func_name, param.method, param.path, param.value))
+                        group_params.append((param.func_name, param.method, param.path, param.value, param.type))
                     else:
-                        group_params.append((param.func_name, param.method, ["REQUEST", param.arg_name], param.value))
+                        group_params.append((param.func_name, param.method, ["REQUEST", param.arg_name], param.value, param.type))
 
                 sorted(group_params)
                 for p in group_params:
@@ -497,6 +495,10 @@ class LogAnalyzer:
             else:
                 # group = self.dsu.get_group(descendant)
                 # _, rep_type = get_representative(group)
+                if param.func_name == "/conversations.members":
+                    print("get descendant type", descendant.type)
+                    print("descendant type has parent", descendant.type.parent)
+
                 if descendant.type:
                     param_type = descendant.type.get_oldest_parent()
                     # get the fields

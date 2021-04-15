@@ -69,9 +69,12 @@ class ResponseParameter(Parameter):
             return results, aliases
 
         if isinstance(self.value, dict):
-            # print("[flatten] inferring type for", self.value)
-            obj_type = SchemaType.infer_type_for(
-                    path_to_defs, skip_fields, self.value)
+            print("Inferring type for", self.func_name, self.arg_name)
+            if defs.DOC_OK not in self.value: # should only impact Slack API
+                obj_type = SchemaType.infer_type_for(
+                        path_to_defs, skip_fields, self.value)
+            else:
+                obj_type = None
 
             if (self.type is not None and 
                 "unknown_obj" not in self.type.name and
@@ -335,14 +338,13 @@ class TraceEntry:
                 TraceEntry(endpoint, method, entry_params, entry_response)
             ]
         else:
+            response_typ = SchemaType(f"{endpoint}_{method.upper()}_response", None)
             entry_response = ResponseParameter(
-                method, "", endpoint, [], True, 0,
-                SchemaType(endpoint+"_response", None), None
+                method, "", endpoint, [], True, 0, response_typ, None
             )
 
             response_param = RequestParameter(
-                method, "", endpoint, True,
-                SchemaType(endpoint+"_response", None), None
+                method, "", endpoint, True, response_typ, None
             )
 
             results = [
@@ -359,7 +361,7 @@ class TraceEntry:
                     name in requires, int(rp.get(defs.DOC_TYPE) == "array"))
 
                 e = TraceEntry(
-                    f"projection({endpoint}_response, {name})",
+                    f"projection({endpoint}_{method.upper()}_response, {name})",
                     "", [response_param], param)
                 results.append(e)
 

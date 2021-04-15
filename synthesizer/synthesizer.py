@@ -1,8 +1,6 @@
 from collections import defaultdict
-import multiprocessing as mp
 import itertools
 import pickle
-import re
 import time
 import os
 
@@ -52,8 +50,20 @@ class Synthesizer:
             f.write(f"time: {t: .2f}")
             f.write("\n")
             f.write(f"time breakdown:\n{TimeStats._timing}\n")
-            f.write(p.pretty(0))
+            f.write(p.pretty(self._entries, 0))
             f.write("\n")
+
+    def _serialize_solutions(self, idx, progs):
+        solution_path = os.path.join(self._exp_dir, f"solutions_{idx}.pkl")
+        if os.path.exists(solution_path):
+            with open(solution_path, "rb") as f:
+                solutions = pickle.load(f)
+        else:
+            solutions = []
+
+        solutions += progs
+        with open(solution_path, "wb") as f:
+            pickle.dump(solutions, f)
 
     def _expand_groups(self, result):
         groups = []
@@ -84,7 +94,6 @@ class Synthesizer:
         pgraph = ProgramGraph()
         p.to_program_graph(graph=pgraph, var_to_trans={})
         all_topological_sorts(perms, pgraph, [], {})
-        # print("topo sort results:", perms)
         return perms
 
     def _generate_solutions(self, i, inputs, outputs, result, time):
@@ -118,9 +127,13 @@ class Synthesizer:
 
                 if len(indices) == len(result):
                     perm_indices.append(indices)
-        
+                
+
+        # print("Get perms", perm_indices, flush=True)
         if not perm_indices:
             perm_indices = [list(range(len(result)))]
+
+        self._serialize_solutions(i, programs)
 
         return programs, perm_indices
 
@@ -174,8 +187,9 @@ class Synthesizer:
                     0, inputs, outputs, result, 
                     time.time() - start
                 )
-                # print("get programs", programs, flush=True)
+                print("get programs", len(programs), flush=True)
                 solutions = solutions.union(set(programs))
+                print("get solutions", len(solutions), flush=True)
                 if len(solutions) >= n:
                     break
 
@@ -214,25 +228,27 @@ class Synthesizer:
         unique_entries = self._group_transitions(entries)
 
         # slack logs
-        # lst = [
-        #     "/conversations.list:GET",
-        #     # "projection(objs_conversation_0, id):",
-        #     "projection(/conversations.list_response, channels):",
-        #     "/conversations.members:GET",
-        #     "/users.info:GET",
-        #     '/users.list:GET',
-        #     # 'filter(objs_conversation_9, objs_conversation_9.name):',
-        #     # "projection(objs_user.profile, email):",
-        #     # "projection(objs_conversation_9, creator):",
-        #     "projection(/users.info_response, user):",
-        #     # "projection(objs_user_0, profile):",
-        #     "projection(/conversations.members_response, members):",
-        #     'projection(/users.conversations_response, channels):',
-        #     # "projection(objs_conversation, name):",
-        #     # "projection(objs_conversation, id):",
-        #     # "projection(objs_user.profile, email):",
-        #     # 'projection(/conversations.members_response, response_metadata):'
-        # ]
+        lst = [
+            "/conversations.list_GET",
+            "/conversations.members_GET",
+            "/users.info_GET",
+            '/users.list_GET',
+            "/conversations.open_POST",
+            "/chat.postMessage_POST",
+            "/users.lookupByEmail_GET",
+            "projection(/conversations.list_GET_response, channels)_",
+            "projection(/conversations.open_POST_response, channel)_",
+            "projection(/users.info_GET_response, user)_",
+            "projection(/conversations.members_GET_response, members)_",
+            'projection(/users.conversations_GET_response, channels)_',
+            "projection(objs_user, profile)_",
+            "projection(objs_user_profile, email)_",
+            "projection(objs_user, id)_",
+            "projection(objs_user_profile, user_id)_",
+            "projection(objs_conversation, id)_",
+            "projection(/chat.postMessage_POST_response, message)_",
+            "projection(/users.lookupByEmail_GET_response, user)_",
+        ]
 
         # stripe logs
         # lst = [
@@ -251,16 +267,17 @@ class Synthesizer:
         #     "projection(subscription, latest_invoice)_",
         #     "/v1/subscriptions/{subscription_exposed_id}_POST",
         # ]
-        lst = [
-            # "/v2/catalog/object/{object_id}_DELETE",
-            # "projection(OrderLineItem, name)_",
-            # "projection(Transaction, id)_",
-            "/v1/prices_POST"
-            # "filter(Subscription, Subscription.plan_id)_",
-            # "filter(Subscription, Subscription.plan_id)_",
-            # "projection(/v2/subscriptions/search_response, subscriptions)_",
-            # "projection(/v2/invoices/search_response, invoices)_"
-        ]
+        # lst = [
+        #     # "/v2/catalog/object/{object_id}_DELETE",
+        #     "projection(OrderLineItem, name)_",
+        #     # "projection(Transaction, id)_",
+        #     # "/v2/invoices/search_POST"
+        #     # "projection(Tender, note)_",
+        #     # "filter(Subscription, Subscription.plan_id)_",
+        #     # "filter(Subscription, Subscription.plan_id)_",
+        #     # "projection(/v2/subscriptions/search_response, subscriptions)_",
+        #     # "projection(/v2/invoices/search_response, invoices)_"
+        # ]
 
         for name in lst:
             e = self._entries.get(name)
@@ -268,9 +285,6 @@ class Synthesizer:
             print(name)
             print([(p.arg_name, p.type.name) for p in e.parameters])
             print(e.response.type, flush=True)
-        # only add unique entries into the encoder
-        # for name, e in unique_entries.items():
-        #     self._add_transition(e)
 
         for name, e in entries.items():
             self._program_generator.add_signature(name, e)
@@ -387,9 +401,11 @@ class Synthesizer:
                 proj_in = RequestParameter(
                     "", "obj", endpoint, True, SchemaType(in_name, None), None
                 )
+                is_array = prop.get(defs.DOC_TYPE) == "array"
                 proj_out = ResponseParameter(
                     "", "field", endpoint,
-                    [], True, 0, SchemaType(f"{obj_name}.{name}", None), None
+                    [], True, int(is_array),
+                    SchemaType(f"{obj_name}.{name}", None), None
                 )
                 # FIXME: this is probably wrong in other cases
                 proj_in = self._analyzer.find_same_type(proj_in)

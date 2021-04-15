@@ -46,7 +46,7 @@ class PetriNetEncoder:
         self._add_variables(self._path_len)
         self._fire_transitions(self._path_len - 1)
         self._no_transition_fire(self._path_len - 1)
-        # print("current len", self._path_len, flush=True)
+        print("current len", self._path_len, flush=True)
         # reset the temporary constraint when path length changes
         self._constraints["temporary"] = []
 
@@ -72,6 +72,14 @@ class PetriNetEncoder:
             input_places + null_places, set(), set()
         )
         self._reachables = self._reachables.union(reachables)
+        print("/users.lookupByEmail_GET" in self._reachables)
+        print("projection(/users.lookupByEmail_GET_response, user)_" in self._reachables)
+        print("projection(objs_user, id)_" in self._reachables)
+        print("/conversations.open_POST" in self._reachables)
+        print("projection(/conversations.open_POST_response, channel)_" in self._reachables)
+        print("projection(objs_conversation, id)_" in self._reachables)
+        print("/chat.postMessage_POST" in self._reachables)
+        print("projection(/chat.postMessage_POST_response, message)_" in self._reachables)
         print("after approximation:", len(self._reachables))
 
     def check_constraints_binding(self):
@@ -81,6 +89,19 @@ class PetriNetEncoder:
 
         for c in self._constraints["temporary"]:
             self._solver.add(c)
+
+        result = self._solver.check()
+        if result == z3.sat:
+            result = "sat"
+            path = []
+            m = self._solver.model()
+            for t in range(self._path_len):
+                path.append(m[Int(f"t{t}")].as_long())
+        else:
+            result = "unsat"
+            path = None
+
+        return result, path
 
     def check_constraints_cmd(self):
         query = ""
@@ -133,13 +154,7 @@ class PetriNetEncoder:
         if mode == "cmd":
             result, path = self.check_constraints_cmd()
         else:
-            result = self._solver.check()
-            if result == z3.sat:
-                result = "sat"
-                m = self._solver.model()
-                path = []
-                for t in range(self._path_len):
-                    path.append(m[Int(f"t{t}")].as_long())
+            result, path = self.check_constraints_binding()
 
         print("Check time:", time.time() - start, flush=True)
         start = time.time()
@@ -175,22 +190,21 @@ class PetriNetEncoder:
         for _ in range(path_len):
             self.increment()
         self.set_final(outputs)
-        self.add_all_constraints()
+        # self.add_all_constraints()
 
         print("Finish encoding in", time.time() - start, "seconds")
         print("Searching at len:", self._path_len, flush=True)
         
         start = time.time()
         path = self.solve()
+        # result, path = self.check_constraints_cmd()
 
         # self._solver.add(z3.And(self._targets))
         # with open("constraints.smt", "w") as f:
         #     f.write(self._solver.to_smt2())
 
         # raise Exception
-        if path is not None:
-            print("Finding a path in", time.time() - start, "seconds at path length", path_len, flush=True)
-
+        
         return path
 
     def _add_landmarks(self, landmarks):
