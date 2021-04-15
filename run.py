@@ -240,8 +240,8 @@ def main():
                     # "subscription": SchemaType("Subscription", None),
                     # "subscription_plan_id": SchemaType("CatalogObject.id", None),
                     # "subscription_plan_id": SchemaType("CatalogObject.id", None)
-                    "customer_name": SchemaType("Customer.given_name", None),
-                    # "order": SchemaType("Customer.id", None),
+                    # "customer_name": SchemaType("Customer.id", None),
+                    "subid": SchemaType("subscription.id", None),
                     # "name": SchemaType("DeviceCode.name", None),
                     # "order_id": SchemaType("Transaction.id", None),
                     # "type": SchemaType("CatalogObject.type", None)
@@ -253,7 +253,7 @@ def main():
                     # SchemaType("invoiceitem", None)
                     # SchemaType("charge", None)
                     # SchemaType("refund", None)
-                    SchemaType("Customer", None)
+                    SchemaType("refund", None)
                     # SchemaType("subscription", None)
                     # SchemaType("payment_source.last4", None)
                 ],

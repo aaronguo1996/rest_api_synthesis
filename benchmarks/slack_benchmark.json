@@ -2,14 +2,43 @@
   "config": "configs/slack_config.json",
   "benchmarks": [
     {
-      "name": "b",
-      "desc": "d",
+      "name": "1.1",
+      "desc": "Retrieve all member emails from channel name",
       "landmarks": [],
       "input_args": {
-        "email": "objs_user_profile.email"
+        "customer_id": "objs_conversation.name"
       },
-      "output": "objs_user_profile.skype",
-      "max_length": 5
+      "output": [
+        "objs_user.profile.email"
+      ],
+      "solution": [],
+      "max_length": 10
+    },
+    {
+      "name": "1.2",
+      "desc": "Send a message to some user given the email address",
+      "landmarks": [],
+      "input_args": {
+        "email": "objs_user.profile.email"
+      },
+      "output": [
+        "objs_message"
+      ],
+      "solution": [],
+      "max_length": 10
+    },
+    {
+      "name": "1.3",
+      "desc": "Get all unread message for a user",
+      "landmarks": [],
+      "input_args": {
+        "user_id": "objs_user.id"
+      },
+      "output": [
+        "objs_message"
+      ],
+      "solution": [],
+      "max_length": 10
     }
   ]
 }

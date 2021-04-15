@@ -27,6 +27,7 @@ from graphviz import Digraph
 from openapi import defs
 from openapi.utils import read_doc
 from synthesizer.synthesizer import *
+from synthesizer.filtering import run_filter
 from program.program import ProjectionExpr
 from program.program_equality import compare_program_strings
 
@@ -54,7 +55,7 @@ def avg(lst):
     return sum(lst) / len(lst)
 
 class Bencher:
-    def __init__(self, repeat):
+    def __init__(self, repeat, bench):
         self.benches = {}
 
         # map from api to entry
@@ -63,13 +64,14 @@ class Bencher:
         self.table2 = {}
 
         self.repeat = repeat
+        self.bench = bench
 
     def tkey(self, bench_key):
         return self.benches[bench_key][BK_CONFIG]["exp_name"].split("_")[0]
 
     def run_benches(self, folder="benchmarks"):
         self.read_benches(folder)
-        
+
         for bench_key in self.benches.keys():
             self.run_bench(bench_key)
 
@@ -78,7 +80,7 @@ class Bencher:
     def read_benches(self, folder="benchmarks"):
         "Reads a list JSON bench files from a folder, populating table1"
 
-        files = [f for f in glob(f"{folder}/*.json")]
+        files = [f for f in glob(f"{folder}/*.json")] if self.bench == None else self.bench
 
         print("reading benches")
 
@@ -179,7 +181,7 @@ class Bencher:
             solutions = synthesizer.run_n(
                 bench["landmarks"],
                 {k: SchemaType(v, None) for k, v in bench["input_args"].items()},
-                [SchemaType(bench["output"], None)],
+                [SchemaType(out, None) for out in bench["output"]],
                 bench["max_length"]
             )
 
@@ -238,15 +240,20 @@ class Bencher:
 
                 found = False
                 for rank, res_sol in enumerate(res_sols):
+                    print(res_sol)
                     if compare_program_strings(tgt_sol, res_sol):
                         print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
                         found = True
                         arr["rank"] = rank
 
-                        ns = res[rank].collect_exprs()
-                        arr["ast_size"] = len(ns)
-                        arr["projects"] = len(filter(lambda x: isinstance(x, ProjectionExpr), ns))
-                        arr["endpoint_calls"] = len(filter(lambda x: isinstance(x, AppExpr), ns))
+                        #TODO: FIX THIS PLS
+                        try:
+                            ns = res[rank].collect_exprs()
+                            arr["ast_size"] = len(ns)
+                            arr["projects"] = len(filter(lambda x: isinstance(x, ProjectionExpr), ns))
+                            arr["endpoint_calls"] = len(filter(lambda x: isinstance(x, AppExpr), ns))
+                        except:
+                            pass
 
                         break
                 if not found:
@@ -321,13 +328,15 @@ def build_cmd_parser():
         help="Path to output latex table to")
     parser.add_argument("--repeat", type=int, nargs='?',
         help="Number of times to repeat filtering")
+    parser.add_argument("--bench", nargs='+',
+        help="Paths to bench file (by default runs all in benchmarks)")
     return parser
 
 def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
 
-    b = Bencher(args.repeat)
+    b = Bencher(args.repeat, args.bench)
     b.run_benches()
     b.print_table1(args.output)
     b.print_table2(args.output)
