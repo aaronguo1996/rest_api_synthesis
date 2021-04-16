@@ -20,6 +20,7 @@ import random
 import shutil
 import sys
 import pickle
+import re
 
 from analyzer import dynamic
 from globs import get_solution_strs, init_synthesizer, get_petri_net_data
@@ -200,6 +201,8 @@ class Bencher:
                 configuration["synthesis"]["solver_number"]
             )
 
+            list_output = (re.match("\[.*\]", bench["output"]) != None)
+
             # process solutions
             solutions = set()
             for i in range(DEFAULT_LENGTH_LIMIT + 1):
@@ -254,7 +257,7 @@ class Bencher:
                 for p in solutions:
                     cost = run_filter(
                         log_analyzer, dyn_analysis,
-                        inputs, p, bench["output_list"],
+                        inputs, p, list_output,
                         repeat=self.repeat
                     )
                     results.append((p, cost))

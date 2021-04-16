@@ -8,9 +8,7 @@
             "input_args": {
                 "location_id": "Location.id"
             },
-            "output": [
-                "Invoice"
-            ],
+            "output": "[Invoice]",
             "solution": [
                 "\\location_id -> {",
                     "x0 <- /v2/invoices_GET(location_id=location_id)",
@@ -28,9 +26,7 @@
                 "location_id": "Location.id",
                 "subscription_plan_id": "CatalogObject.id"
             },
-            "output": [
-                "Subscription"
-            ],
+            "output": "[Subscription]",
             "solution": [
                 "\\customer_id location_id subscription_plan_id -> {",
                     "x7 <- /v2/subscriptions/search_POST()",
@@ -50,9 +46,7 @@
             "input_args": {
                 "tax_id": "CatalogObject.id"
             },
-            "output": [
-                "CatalogObject"
-            ],
+            "output": "[CatalogObject]",
             "solution": [
                 "\\tax_id -> {",
                     "x1 <- /v2/catalog/batch-retrieve_POST()",
@@ -68,9 +62,7 @@
             "landmarks": [],
             "input_args": {
             },
-            "output": [
-                "CatalogDiscount.name"
-            ],
+            "output": "[CatalogDiscount.name]",
             "solution": [
                 "\\ => {",
                     "x1 <- /v2/catalog/batch-retrieve_POST()",
@@ -88,9 +80,7 @@
                 "item_type": "CatalogObject.type",
                 "names": "CatalogDiscount.name"
             },
-            "output": [
-                "unknown_obj.deleted_object_ids"
-            ],
+            "output": "unknown_obj.deleted_object_ids",
             "solution": [
                 "\\item_type, names => {",
                     "x1 <- names.map(name => {",
@@ -120,9 +110,7 @@
             "landmarks": [],
             "input_args": {
             },
-            "output": [
-                "unknown_obj.deleted_object_ids"
-            ],
+            "output": "unknown_obj.deleted_object_ids",
             "solution": [
                 "\\ -> {",
                     "x1 <- /v2/catalog/batch-retrieve_POST()",
@@ -141,9 +129,7 @@
                 "order_ids": "OrderLineItem.uid",
                 "updates": "OrderLineItem"
             },
-            "output": [
-                "OrderLineItem"
-            ],
+            "output": "[OrderLineItem]",
             "solution": [
                 "\\location_id, order_ids, updates => {",
                     "x1 <- order_ids.map(ids => {",
@@ -161,9 +147,7 @@
             "landmarks": [],
             "input_args": {
             },
-            "output": [
-                "Tender.note"
-            ],
+            "output": "[Tender.note]",
             "solution": [
                 "\\ -> {",
                     "x1 <- /v2/payments_GET()",
@@ -182,9 +166,7 @@
             "input_args": {
                 "location_id": "Location.id"
             },
-            "output": [
-                "Transaction.order_id"
-            ],
+            "output": "[Transaction.order_id]",
             "solution": [
                 "\\location_id -> {",
                     "x1 <- /v2/locations/{location_id}/transactions_GET(location_id=location_id)",
@@ -204,9 +186,7 @@
                 "location_id": "Location.id",
                 "transaction_id": "Transaction.id"
             },
-            "output": [
-                "DeviceCode.name"
-            ],
+            "output": "[DeviceCode.name]",
             "solution": [
                 "\\location_id, transaction_id => {",
                     "x1 <- /v2/orders/batch-retrieve_POST(locationId = location_id, orderIds = [transaction_id])",
@@ -226,9 +206,7 @@
             "input_args": {
                 "name": "Customer.given_name"
             },
-            "output": [
-                "customer"
-            ],
+            "output": "customer",
             "solution": [
                 "\\customer_name -> {",
                     "x1 <- /v2/customers_GET()",
