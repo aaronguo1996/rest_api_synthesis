@@ -1097,7 +1097,7 @@ class Program:
         expr_strs = [expr.pretty(hang + 1) + newline for expr in prog._expressions]
         
         return (
-            f"\\{', '.join(prog._inputs)} -> {{{newline}"
+            f"\\{' '.join(prog._inputs)} -> {{{newline}"
             f"{''.join(expr_strs[:-1])}"
             f"{indent}return {expr_strs[-1][:-1]}{newline}"
             f"{SPACE * hang}}}"

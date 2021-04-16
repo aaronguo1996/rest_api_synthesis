@@ -260,7 +260,7 @@ class TraceEntry:
         parameters = entry_def.get(defs.DOC_PARAMS, {})
         for p in parameters:
             name = p.get(defs.DOC_NAME)
-            if name in skip_fields:
+            if name == "token":
                 continue
 
             param = RequestParameter.from_openapi(
@@ -279,19 +279,20 @@ class TraceEntry:
                     .get(defs.DOC_CONTENT) \
                     .get(defs.HEADER_JSON)
             
-            schema = request_body.get(defs.DOC_SCHEMA)
-            requires = schema.get(defs.DOC_REQUIRED, [])
-            properties = schema.get(defs.DOC_PROPERTIES)
+            if request_body is not None:
+                schema = request_body.get(defs.DOC_SCHEMA)
+                requires = schema.get(defs.DOC_REQUIRED, [])
+                properties = schema.get(defs.DOC_PROPERTIES)
 
-            for name in properties.keys():
-                if name in skip_fields:
-                    continue
+                for name in properties.keys():
+                    if name == "token":
+                        continue
 
-                param = RequestParameter.from_openapi(
-                    endpoint, method, name,
-                    name in requires,
-                )
-                entry_params.append(param)
+                    param = RequestParameter.from_openapi(
+                        endpoint, method, name,
+                        name in requires,
+                    )
+                    entry_params.append(param)
 
         # read responses
         responses = entry_def.get(defs.DOC_RESPONSES)
@@ -329,7 +330,8 @@ class TraceEntry:
 
             response_params = response_schema.get(defs.DOC_PROPERTIES)
 
-        if response_params is None:
+        # FIXME: magic thing to get Stripe API work, better implementation later
+        if response_params is None or defs.DOC_STRIPE in response_schema:
             entry_response = ResponseParameter(
                 method, "", endpoint, [], True, 0, None, None
             )

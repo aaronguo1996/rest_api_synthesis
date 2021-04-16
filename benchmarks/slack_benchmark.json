@@ -11,6 +11,7 @@
       "output": [
         "objs_user_profile.email"
       ],
+      "output_list": true,
       "solution": [],
       "max_length": 10
     },
@@ -19,11 +20,13 @@
       "desc": "Send a message to some user given the email address",
       "landmarks": [],
       "input_args": {
-        "email": "objs_user_profile.email"
+        "email": "objs_user_profile.email",
+        "msg_text": "/chat.postMessage:text:POST"
       },
       "output": [
         "objs_message"
       ],
+      "output_list": false,
       "solution": [],
       "max_length": 10
     },
@@ -37,6 +40,7 @@
       "output": [
         "objs_message"
       ],
+      "output_list": true,
       "solution": [],
       "max_length": 10
     }

@@ -15,7 +15,7 @@
             "search.autocomplete.*",
             "api.features",
             "apps.profile.get"
-        ]  
+        ]
     },
     "witness": {
         "value_dict": {},
@@ -51,7 +51,9 @@
         "token",
         "ok",
         "topic",
-        "previous_names"
+        "previous_names",
+        "include_channel_perm_error",
+        "client_msg_id"
     ],
     "blacklist": [
         "/apps.actions.v2.list",

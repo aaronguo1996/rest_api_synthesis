@@ -69,11 +69,11 @@ class Bencher:
     def tkey(self, bench_key):
         return self.benches[bench_key][BK_CONFIG]["exp_name"].split("_")[0]
 
-    def run_benches(self, folder="benchmarks"):
+    def run_benches(self, folder="benchmarks", names=None):
         self.read_benches(folder)
 
         for bench_key in self.benches.keys():
-            self.run_bench(bench_key)
+            self.run_bench(bench_key, names)
 
             print()
 
@@ -118,7 +118,7 @@ class Bencher:
 
         print()
 
-    def run_bench(self, bench_key):
+    def run_bench(self, bench_key, names):
         # this assumes bench_key is in self.benches
         print(bench_key)
         print(f"• setup")
@@ -182,20 +182,23 @@ class Bencher:
         for i, bench in enumerate(self.benches[bench_key][BK_BENCHES]):
             print(f"  • [{i + 1}/{blen}]")
 
+            if names is not None and bench["name"] not in names:
+                continue
+
             # create a directory for the current benchmark
             bm_dir = os.path.join(exp_dir, bench["name"])
-            # if os.path.exists(bm_dir):
-            #     shutil.rmtree(bm_dir)
+            if os.path.exists(bm_dir):
+                shutil.rmtree(bm_dir)
 
-            # os.makedirs(bm_dir)
+            os.makedirs(bm_dir, exist_ok=True)
 
             init_synthesizer(doc, configuration, log_analyzer, bm_dir)
             inputs = {k: SchemaType(v, None) for k, v in bench["input_args"].items()}
             output = [SchemaType(out, None) for out in bench["output"]]
-            # spawn_encoders(
-            #     inputs, output,
-            #     configuration["synthesis"]["solver_number"]
-            # )
+            spawn_encoders(
+                inputs, output,
+                configuration["synthesis"]["solver_number"]
+            )
 
             # process solutions
             solutions = set()
@@ -251,7 +254,7 @@ class Bencher:
                 for p in solutions:
                     cost = run_filter(
                         log_analyzer, dyn_analysis,
-                        inputs, p, True,
+                        inputs, p, bench["output_list"],
                         repeat=self.repeat
                     )
                     results.append((p, cost))
@@ -350,6 +353,8 @@ def build_cmd_parser():
         help="Number of times to repeat filtering")
     parser.add_argument("--bench", nargs='?',
         help="Path to benchmark file or directory (by default runs all in benchmarks)")
+    parser.add_argument("--names", nargs="+",
+        help="Benchmark name list")
     return parser
 
 def main():
@@ -357,7 +362,7 @@ def main():
     args = cmd_parser.parse_args()
 
     b = Bencher(args.repeat, args.bench)
-    b.run_benches()
+    b.run_benches(names=args.names)
     b.print_table1(args.output)
     b.print_table2(args.output)
 

@@ -183,10 +183,10 @@ class LogAnalyzer:
             if isinstance(entry.response, ErrorResponse):
                 continue
             
-            # if entry.endpoint == "/conversations.create":
-            #     print(entry.method)
-            #     print([(p.arg_name, p.value) for p in entry.parameters])
-            #     print(entry.response.value)
+            if entry.endpoint == "/chat.postMessage":
+                print(entry.method)
+                print([(p.arg_name, p.value) for p in entry.parameters])
+                print(entry.response.value)
 
             # match docs to correct integers and booleans
             entry_def = paths.get(entry.endpoint)
@@ -291,17 +291,19 @@ class LogAnalyzer:
                 rep = group[0].arg_name
 
             # for debug
-            # if rep == "objs_conversation.name":
-            #     group_params = []
-            #     for param in group:
-            #         if isinstance(param, ResponseParameter):
-            #             group_params.append((param.func_name, param.method, param.path, param.value, param.type))
-            #         else:
-            #             group_params.append((param.func_name, param.method, ["REQUEST", param.arg_name], param.value, param.type))
+            if rep == "source.id" or rep == "payment_source.id":
+                group_params = []
+                for param in group:
+                    if isinstance(param, ResponseParameter):
+                        group_params.append((param.func_name, param.method, param.path, param.value, param.type))
+                    else:
+                        group_params.append((param.func_name, param.method, ["REQUEST", param.arg_name], param.value, param.type))
 
-            #     sorted(group_params)
-            #     for p in group_params:
-            #         print(p)
+                sorted(group_params)
+                for p in group_params:
+                    print(p)
+
+                print("==================")
 
             dot.node(rep, label=rep, shape="oval")
 

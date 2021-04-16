@@ -41,7 +41,7 @@ def run_encoder(inputs, outputs, path_len):
     start = time.time()
     path = encoder.get_length_of(path_len, input_map, output_map)
     while path is not None:
-        # print("Finding a path in", time.time() - start, "seconds at path length", path_len, flush=True)
+        print("Finding a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
 
         end = time.time()
         programs, perms = globs.synthesizer._generate_solutions(

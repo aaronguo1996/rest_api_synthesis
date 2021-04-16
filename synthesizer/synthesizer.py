@@ -50,6 +50,8 @@ class Synthesizer:
             f.write(f"time: {t: .2f}")
             f.write("\n")
             f.write(f"time breakdown:\n{TimeStats._timing}\n")
+            f.write(str(p))
+            f.write("\n")
             f.write(p.pretty(self._entries, 0))
             f.write("\n")
 
@@ -227,27 +229,27 @@ class Synthesizer:
         unique_entries = self._group_transitions(entries)
 
         # slack logs
-        # lst = [
-        #     "/conversations.list_GET",
-        #     "/conversations.members_GET",
-        #     "/users.info_GET",
-        #     '/users.list_GET',
-        #     "/conversations.open_POST",
-        #     "/chat.postMessage_POST",
-        #     "/users.lookupByEmail_GET",
-        #     "projection(/conversations.list_GET_response, channels)_",
-        #     "projection(/conversations.open_POST_response, channel)_",
-        #     "projection(/users.info_GET_response, user)_",
-        #     "projection(/conversations.members_GET_response, members)_",
-        #     'projection(/users.conversations_GET_response, channels)_',
-        #     "projection(objs_user, profile)_",
-        #     "projection(objs_user_profile, email)_",
-        #     "projection(objs_user, id)_",
-        #     "projection(objs_user_profile, user_id)_",
-        #     "projection(objs_conversation, id)_",
-        #     "projection(/chat.postMessage_POST_response, message)_",
-        #     "projection(/users.lookupByEmail_GET_response, user)_",
-        # ]
+        lst = [
+            "/conversations.list_GET",
+            "/conversations.members_GET",
+            "/users.info_GET",
+            '/users.list_GET',
+            "/conversations.open_POST",
+            "/chat.postMessage_POST",
+            "/users.lookupByEmail_GET",
+            "projection(/conversations.list_GET_response, channels)_",
+            "projection(/conversations.open_POST_response, channel)_",
+            "projection(/users.info_GET_response, user)_",
+            "projection(/conversations.members_GET_response, members)_",
+            'projection(/users.conversations_GET_response, channels)_',
+            "projection(objs_user, profile)_",
+            "projection(objs_user_profile, email)_",
+            "projection(objs_user, id)_",
+            "projection(objs_user_profile, user_id)_",
+            "projection(objs_conversation, id)_",
+            "projection(/chat.postMessage_POST_response, message)_",
+            "projection(/users.lookupByEmail_GET_response, user)_",
+        ]
 
         # stripe logs
         # lst = [
@@ -265,6 +267,15 @@ class Synthesizer:
         #     "/v1/invoices_GET",
         #     "projection(subscription, latest_invoice)_",
         #     "/v1/subscriptions/{subscription_exposed_id}_POST",
+        #     "projection(invoiceitem, amount)_",
+        #     "projection(product, active)_",
+        #     "/v1/invoices/{invoice}/send_POST",
+        #     "projection(customer, default_source)_",
+        #     "projection(payment_source, last4)_",
+        #     "projection(payment_source, id)_",
+        #     "/v1/customers/{customer}/sources_GET",
+        #     "projection(/v1/customers/{customer}/sources_GET_response, data)_",
+        #     "filter(payment_source, payment_source.id)_",
         # ]
         # lst = [
         #     # "/v2/catalog/object/{object_id}_DELETE",
@@ -278,12 +289,12 @@ class Synthesizer:
         #     # "projection(/v2/invoices/search_response, invoices)_"
         # ]
 
-        # for name in lst:
-        #     e = self._entries.get(name)
-        #     print('-----')
-        #     print(name)
-        #     print([(p.arg_name, p.type.name) for p in e.parameters])
-        #     print(e.response.type, flush=True)
+        for name in lst:
+            e = self._entries.get(name)
+            print('-----')
+            print(name)
+            print([(p.arg_name, p.type.name) for p in e.parameters])
+            print(e.response.type, flush=True)
 
         for name, e in entries.items():
             self._program_generator.add_signature(name, e)
@@ -364,9 +375,13 @@ class Synthesizer:
 
     def _create_projection(self, obj_name, obj_def):
         results = {}
-        if defs.DOC_ONEOF in obj_def:
-            one_ofs = obj_def.get(defs.DOC_ONEOF)
-            for s in one_ofs:
+        if (defs.DOC_ONEOF in obj_def or
+            defs.DOC_ANYOF in obj_def or
+            defs.DOC_ALLOF in obj_def):
+            one_ofs = obj_def.get(defs.DOC_ONEOF, [])
+            any_ofs = obj_def.get(defs.DOC_ANYOF, [])
+            all_ofs = obj_def.get(defs.DOC_ALLOF, [])
+            for s in one_ofs + any_ofs + all_ofs:
                 projection = self._create_projection(obj_name, s)
                 results.update(projection)
         elif defs.DOC_PROPERTIES in obj_def:
@@ -437,9 +452,13 @@ class Synthesizer:
 
     def _create_filter(self, obj_name, field_name, field_def):
         results = {}
-        if defs.DOC_ONEOF in field_def:
-            one_ofs = field_def.get(defs.DOC_ONEOF)
-            for s in one_ofs:
+        if (defs.DOC_ONEOF in field_def or
+            defs.DOC_ANYOF in field_def or
+            defs.DOC_ALLOF in field_def):
+            one_ofs = field_def.get(defs.DOC_ONEOF, [])
+            any_ofs = field_def.get(defs.DOC_ANYOF, [])
+            all_ofs = field_def.get(defs.DOC_ALLOF, [])
+            for s in one_ofs + any_ofs + all_ofs:
                 equi_filter = self._create_filter(obj_name, field_name, s)
                 results.update(equi_filter)
                 # func_name = f"filter({obj_name}, {field_name})"

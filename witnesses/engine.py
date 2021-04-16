@@ -109,19 +109,21 @@ class BasicGenerator:
             body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_JSON)
             if not body_def:
                 body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_FORM)
-            body_schema = body_def.get(defs.DOC_SCHEMA)
-            requires = body_schema.get(defs.DOC_REQUIRED, [])
-            body_params = body_schema.get(defs.DOC_PROPERTIES, {})
 
-            body_param_lst = []
-            for param_name in body_params:
-                param = body_params[param_name]
-                param.update({
-                    defs.DOC_NAME: param_name,
-                    defs.DOC_REQUIRED: param_name in requires,
-                })
-                body_param_lst.append(param)
-            body = self._generate_params(depth + 1, body_param_lst, 2)    
+            if body_def is not None:
+                body_schema = body_def.get(defs.DOC_SCHEMA)
+                requires = body_schema.get(defs.DOC_REQUIRED, [])
+                body_params = body_schema.get(defs.DOC_PROPERTIES, {})
+
+                body_param_lst = []
+                for param_name in body_params:
+                    param = body_params[param_name]
+                    param.update({
+                        defs.DOC_NAME: param_name,
+                        defs.DOC_REQUIRED: param_name in requires,
+                    })
+                    body_param_lst.append(param)
+                body = self._generate_params(depth + 1, body_param_lst, 2)    
 
         body.update(headers)
         return body
@@ -228,7 +230,7 @@ class SaturationThread(BasicGenerator):
 
         for param_obj in req_params + picked_opt_params:
             param_name = param_obj.get(defs.DOC_NAME)
-            if param_name in self._skip_fields:
+            if param_name == "token": # in self._skip_fields:
                 continue
 
             required = param_obj.get(defs.DOC_REQUIRED)
@@ -460,9 +462,11 @@ class WitnessGenerator:
             body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_JSON)
             if not body_def:
                 body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_FORM)
-            body_schema = body_def.get(defs.DOC_SCHEMA)
-            body_params = body_schema.get(defs.DOC_PROPERTIES, {})
-            param_names += list(body_params.keys())
+
+            if body_def is not None:
+                body_schema = body_def.get(defs.DOC_SCHEMA)
+                body_params = body_schema.get(defs.DOC_PROPERTIES, {})
+                param_names += list(body_params.keys())
 
         return param_names
 

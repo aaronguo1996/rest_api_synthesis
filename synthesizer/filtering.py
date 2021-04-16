@@ -1,5 +1,6 @@
 import random
 from collections import defaultdict
+import xeger
 
 from program.program import ProgramGraph
 import globs
@@ -20,6 +21,14 @@ def run_filter(log_analyzer, dynamic_analyzer, inputs, program, multiple, repeat
         for arg_name, arg_type in inputs.items():
             vals = log_analyzer.get_values_by_type(arg_type)
             vals = list({v:v for v in vals}.keys())
+            if not vals:
+                # only two cases here
+                if arg_type == "/v1/prices:unit_amount:POST":
+                    vals = [random.randint(1,10)]
+                else:
+                    x = xeger.Xeger()
+                    vals = [x.xeger("^[a-z0-9]{10,}$")]
+                    
             arg_val = random.choice(vals)
             dynamic_analyzer.push_var(arg_name, arg_val)
 
@@ -41,7 +50,7 @@ def run_filter(log_analyzer, dynamic_analyzer, inputs, program, multiple, repeat
 
             all_none = False
             while isinstance(result, list) and len(result) == 1:
-                all_multiple = False
+                
                 if len(result) == 0:
                     break
 
@@ -49,6 +58,8 @@ def run_filter(log_analyzer, dynamic_analyzer, inputs, program, multiple, repeat
 
             if isinstance(result, list) and len(result) > 1:
                 all_singleton = False
+            else:
+                all_multiple = False
 
             scores.append(score)
 
