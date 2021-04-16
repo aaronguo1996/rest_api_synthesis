@@ -13,4 +13,4 @@ def replace_variables(progstr):
     return progstr
 
 def compare_program_strings(progstr_a, progstr_b):
-    return replace_variables(progstr_a) == replace_variables(progstr_b)
+    return [x.strip() for x in replace_variables(progstr_a).split('\n')] == [x.strip() for x in replace_variables(progstr_b).split('\n')]

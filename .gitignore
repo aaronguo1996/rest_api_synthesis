@@ -248,6 +248,5 @@ dist
 .pnp.*
 
 *.png
-*.pkl
 *.txt
 .vscode/

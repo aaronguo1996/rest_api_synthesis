@@ -241,7 +241,7 @@ def main():
                     # "subscription_plan_id": SchemaType("CatalogObject.id", None),
                     # "subscription_plan_id": SchemaType("CatalogObject.id", None)
                     # "customer_name": SchemaType("Customer.given_name", None),
-                    "repo": SchemaType("minimal-repository", None)
+                    "username": SchemaType("actor.login", None)
                     # "order": SchemaType("Customer.id", None),
                     # "name": SchemaType("DeviceCode.name", None),
                     # "order_id": SchemaType("Transaction.id", None),
@@ -255,11 +255,11 @@ def main():
                     # SchemaType("charge", None)
                     # SchemaType("refund", None)
                     # SchemaType("Customer", None)
-                    SchemaType("minimal-repository.teams_url", None)
+                    SchemaType("gist-simple", None)
                     # SchemaType("subscription", None)
                     # SchemaType("payment_source.last4", None)
                 ],
-                5 #configuration["synthesis"]["solution_num"]
+                1 #configuration["synthesis"]["solution_num"]
             )
 
             for prog in solutions:

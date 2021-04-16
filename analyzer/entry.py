@@ -312,8 +312,6 @@ class TraceEntry:
 
             return [TraceEntry(endpoint, method, entry_params, entry_response)]
 
-        print(response_content)
-
         response_json = response_content.get(defs.HEADER_JSON)
 
         if response_json:

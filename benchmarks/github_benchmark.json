@@ -1,15 +1,37 @@
 {
-  "config": "configs/github_config.json",
-  "benchmarks": [
-    {
-      "name": "4.1",
-      "desc": "Stuff",
-      "landmarks": [],
-      "input_args": {
-        "email": "objs_user_profile.email"
-      },
-      "output": "objs_user_profile.skype",
-      "max_length": 5
-    }
-  ]
+    "config": "configs/github_config.json",
+    "benchmarks": [
+        {
+            "name": "4.2",
+            "desc": "List number of open issues for each repo of a user",
+            "landmarks": [],
+            "input_args": {
+                "username": "actor.login"
+            },
+            "output": "minimal-repository.open_issues_count",
+            "solution": [
+                "\\username -> {",
+                "let x0 = /orgs/{org}/repos_GET(org=username) in",
+                "return x0.open_issues_count",
+                "}"
+        ],
+            "max_length": 1
+        },
+        {
+            "name": "4.8",
+            "desc": "List gists",
+            "landmarks": [],
+            "input_args": {
+                "username": "actor.login"
+            },
+            "output": "gist-simple",
+            "solution": [
+                "\\username -> {",
+                "let x0 = /users/{username}/gists_GET(username=username) in",
+                "return x0",
+                "}"
+            ],
+            "max_length": 1
+        }
+    ]
 }

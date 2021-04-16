@@ -27,7 +27,8 @@ from graphviz import Digraph
 from openapi import defs
 from openapi.utils import read_doc
 from synthesizer.synthesizer import *
-from program.program import ProjectionExpr
+from synthesizer.filtering import run_filter
+from program.program import ProjectionExpr, AppExpr
 from program.program_equality import compare_program_strings
 
 BK_CONFIG = "config"
@@ -67,11 +68,12 @@ class Bencher:
     def tkey(self, bench_key):
         return self.benches[bench_key][BK_CONFIG]["exp_name"].split("_")[0]
 
-    def run_benches(self, folder="benchmarks"):
+    def run_benches(self, bench=None, folder="benchmarks"):
         self.read_benches(folder)
         
         for bench_key in self.benches.keys():
-            self.run_bench(bench_key)
+            if (bench is not None and bench == bench_key) or bench is None:
+                self.run_bench(bench_key)
 
             print()
 
@@ -176,12 +178,17 @@ class Bencher:
             )
             synthesizer.init()
 
+            inputs = {k: SchemaType(v, None) for k, v in bench["input_args"].items()}
+
             solutions = synthesizer.run_n(
                 bench["landmarks"],
                 {k: SchemaType(v, None) for k, v in bench["input_args"].items()},
                 [SchemaType(bench["output"], None)],
                 bench["max_length"]
             )
+
+            for prog in solutions:
+                print(prog.pretty())
 
             # initialize table 1, part 3
             # here, we report statistics on the petri net if they haven't been yet.
@@ -204,13 +211,13 @@ class Bencher:
             if BK_SOLUTION in bench:
                 tgt_sol = "\n".join(bench[BK_SOLUTION])
 
-                res_no_re = [str(r) for r in solutions]
+                res_no_re = [r.pretty() for r in solutions]
 
                 found = False
                 for rank, res_sol in enumerate(res_no_re):
                     if compare_program_strings(tgt_sol, res_sol):
                         found = True
-                        arr["rank_no_re"] = rank
+                        arr["rank_no_re"] = rank + 1
 
                         break
 
@@ -227,26 +234,26 @@ class Bencher:
                 for p in solutions:
                     score = run_filter(
                         log_analyzer, dyn_analysis, 
-                        {"channel_name": "objs_message.name"}, p, True,
+                        bench["input_args"], p, True,
                         repeat=self.repeat if self.repeat else 5
                     )
                     results.append((p, score))
 
                 res = sorted(results, key=lambda x: x[-1], reverse=True)
 
-                res_sols = [str(r) for r, _ in res]
+                res_sols = [r.pretty() for r, _ in res]
 
                 found = False
                 for rank, res_sol in enumerate(res_sols):
                     if compare_program_strings(tgt_sol, res_sol):
                         print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
                         found = True
-                        arr["rank"] = rank
+                        arr["rank"] = rank + 1
 
-                        ns = res[rank].collect_exprs()
+                        ns = res[rank][0].collect_exprs()
                         arr["ast_size"] = len(ns)
-                        arr["projects"] = len(filter(lambda x: isinstance(x, ProjectionExpr), ns))
-                        arr["endpoint_calls"] = len(filter(lambda x: isinstance(x, AppExpr), ns))
+                        arr["projects"] = len(list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
+                        arr["endpoint_calls"] = len(list(filter(lambda x: isinstance(x, AppExpr), ns)))
 
                         break
                 if not found:
@@ -265,12 +272,14 @@ class Bencher:
   API & \# endpoints & Avg. endpoint args & Avg. object size & \# endpoints covered & \# annotations & \# places & \# transitions \\
   \midrule
 """
+        print(self.table1)
         for api, rest in self.table1.items():
-            avg_num_args = round(rest['avg_num_args'], 2)
-            obj_size = round(rest['obj_size'], 2)
-            res += f"  {api.capitalize()} & {rest['endpoints']} & {avg_num_args} & {obj_size} & {rest['endpoints_covered']} & {rest['annotations']} & {rest['places']} & {rest['transitions']}"
-            res += r" \\"
-            res += "\n"
+            if 'avg_num_args' in rest:
+                avg_num_args = round(rest['avg_num_args'], 2)
+                obj_size = round(rest['obj_size'], 2)
+                res += f"  {api.capitalize()} & {rest['endpoints']} & {avg_num_args} & {obj_size} & {rest['endpoints_covered']} & {rest['annotations']} & {rest['places']} & {rest['transitions']}"
+                res += r" \\"
+                res += "\n"
 
         res += r"""  \bottomrule
 \end{tabular}}
@@ -317,7 +326,9 @@ def build_cmd_parser():
         All arguments
     '''
     parser = argparse.ArgumentParser()
-    parser.add_argument("output", nargs='?',
+    parser.add_argument("bench", nargs='?',
+                        help="Bench file to run")
+    parser.add_argument("--output", nargs='?',
         help="Path to output latex table to")
     parser.add_argument("--repeat", type=int, nargs='?',
         help="Number of times to repeat filtering")
@@ -327,8 +338,10 @@ def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
 
+    print(args.bench)
+
     b = Bencher(args.repeat)
-    b.run_benches()
+    b.run_benches(bench=args.bench)
     b.print_table1(args.output)
     b.print_table2(args.output)
 

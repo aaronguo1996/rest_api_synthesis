@@ -1,1 +1,71 @@
-[]
+[
+    {
+        "consumer": "repo",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/users/{username}/repos",
+                "method": "get",
+                "path": "[?]/name"
+            },
+            {
+                "endpoint": "/users/{username}/starred",
+                "method": "get",
+                "path": "[?]/name"
+            },
+            {
+                "endpoint": "/users/{username}/subscriptions",
+                "method": "get",
+                "path": "[?]/name"
+            },
+            {
+                "endpoint": "/user/repos",
+                "method": "get",
+                "path": "[?]/name"
+            },
+            {
+                "endpoint": "/user/starred",
+                "method": "get",
+                "path": "[?]/name"
+            },
+            {
+                "endpoint": "/user/subscriptions",
+                "method": "get",
+                "path": "[?]/name"
+            }
+        ]
+    },
+    {
+        "consumer": "owner",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/users/{username}",
+                "method": "get",
+                "path": "login"
+            },
+            {
+                "endpoint": "/user",
+                "method": "get",
+                "path": "login"
+            }
+        ]
+    },
+    {
+        "consumer": "username",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/users/{username}",
+                "method": "get",
+                "path": "login"
+            },
+            {
+                "endpoint": "/user",
+                "method": "get",
+                "path": "login"
+            }
+        ]
+    }
+]
+

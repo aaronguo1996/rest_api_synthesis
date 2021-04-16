@@ -31,7 +31,8 @@
         "solution_number": 300,
         "enable_prefilter": false
     },
-    "endpoints": [],
+    "endpoints": [
+    ],
     "ignore_field_names": [],
     "blacklist": [],
     "test_suites": []
