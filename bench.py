@@ -56,7 +56,7 @@ def avg(lst):
     return sum(lst) / len(lst)
 
 class Bencher:
-    def __init__(self, repeat, bench):
+    def __init__(self, repeat, bench, cache):
         self.benches = {}
 
         # map from api to entry
@@ -66,6 +66,7 @@ class Bencher:
 
         self.repeat = repeat
         self.bench = bench
+        self.cache = cache
 
     def tkey(self, bench_key):
         return self.benches[bench_key][BK_CONFIG]["exp_name"].split("_")[0]
@@ -186,33 +187,40 @@ class Bencher:
             if names is not None and bench["name"] not in names:
                 continue
 
-            # create a directory for the current benchmark
+            list_output = (re.match("\[.*\]", bench["output"]) != None)
+            if list_output:
+                bench["output"] = bench["output"][1:-1]
+
             bm_dir = os.path.join(exp_dir, bench["name"])
-            if os.path.exists(bm_dir):
+            # create a directory for the current benchmark
+            cached = os.path.exists(bm_dir) and len(os.listdir(bm_dir)) != 0
+            if cached and not self.cache:
                 shutil.rmtree(bm_dir)
 
             os.makedirs(bm_dir, exist_ok=True)
 
             init_synthesizer(doc, configuration, log_analyzer, bm_dir)
             inputs = {k: SchemaType(v, None) for k, v in bench["input_args"].items()}
-            output = [SchemaType(out, None) for out in bench["output"]]
-            spawn_encoders(
-                inputs, output,
-                configuration["synthesis"]["solver_number"]
-            )
+            output = [SchemaType(bench["output"], None)]
 
-            list_output = (re.match("\[.*\]", bench["output"]) != None)
+            if not cached or not self.cache:
+                spawn_encoders(
+                    inputs, output,
+                    configuration["synthesis"]["solver_number"]
+                )
 
             # process solutions
             solutions = set()
-            for i in range(DEFAULT_LENGTH_LIMIT + 1):
-                sol_file = os.path.join(bm_dir, f"solutions_{i}.pkl")
+            for j in range(DEFAULT_LENGTH_LIMIT):
+                sol_file = os.path.join(bm_dir, f"solutions_{j}.pkl")
+                print(sol_file)
                 if os.path.exists(sol_file):
                     with open(sol_file, 'rb') as f:
                         programs = pickle.load(f)
 
                     solutions = solutions.union(programs)
 
+            print(len(solutions))
             # initialize table 1, part 3
             # here, we report statistics on the petri net if they haven't been yet.
             if "places" not in self.table1[key]:
@@ -266,10 +274,9 @@ class Bencher:
                 for r in res:
                     print(r[1], r[0])
 
-                res_sols = [str(r) for r, _ in res]
-
                 found = False
-                for rank, res_sol in enumerate(res_sols):
+                for rank, res_sol in enumerate(res_no_re):
+                    print(res_sol)
                     if compare_program_strings(tgt_sol, res_sol):
                         print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
                         found = True
@@ -355,13 +362,16 @@ def build_cmd_parser():
         help="Path to benchmark file or directory (by default runs all in benchmarks)")
     parser.add_argument("--names", nargs="+",
         help="Benchmark name list")
+    parser.add_argument("--cache", action='store_true', dest='cache',
+        help="Whether to use cached results")
+    parser.set_defaults(cache=False)
     return parser
 
 def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
 
-    b = Bencher(args.repeat, args.bench)
+    b = Bencher(args.repeat, args.bench, args.cache)
     b.run_benches(names=args.names)
     b.print_table1(args.output)
     b.print_table2(args.output)

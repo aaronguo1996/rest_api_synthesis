@@ -11,11 +11,13 @@
             "output": "[Invoice]",
             "solution": [
                 "\\location_id -> {",
-                    "x0 <- /v2/invoices_GET(location_id=location_id)",
-                    "return x0.invoice",
+                    "let x0 = /v2/invoices_GET(location_id=location_id)",
+                    "x1 <- x0.invoices",
+                    "if x1.location_id = location_id",
+                    "return x1",
                     "}"
             ],
-            "max_length": 10
+            "max_length": 8
         },
         {
             "name": "3.2",
@@ -29,14 +31,16 @@
             "output": "[Subscription]",
             "solution": [
                 "\\customer_id location_id subscription_plan_id -> {",
-                    "x7 <- /v2/subscriptions/search_POST()",
-                    "x8 <- x7.subscriptions.filter(x => x.customer_id == customer_id)",
-                    "x9 <- x8.filter(x => x.plan_id == subscription_plan_id)",
-                    "x10 <- x9.filter(x => x.location_id == location_id)",
-                    "return x10",
-                    "}"
+                    "let x0 = /v2/subscriptions/search_POST()",
+                    "x1 <- x0.subscriptions",
+                    "if x1.customer_id = customer_id",
+                    "if x1.customer_id = customer_id",
+                    "if x1.plan_id = subscription_plan_id",
+                    "if x1.location_id = location_id",
+                    "return x1",
+                "}"
             ],
-            "max_length": 10
+            "max_length": 12
         },
         {
             "name": "3.3",
@@ -49,12 +53,12 @@
             "output": "[CatalogObject]",
             "solution": [
                 "\\tax_id -> {",
-                    "x1 <- /v2/catalog/batch-retrieve_POST()",
-                    "x2 <- x1.filter(x => x.tax_id == tax_id)",
-                    "return x2",
+                    "let x0 = /v2/catalog/batch-retrieve_POST()",
+                    "x1 <- x0",
+                    "if x1.tax_id = tax_id",
                     "}"
             ],
-            "max_length": 10
+            "max_length": 8
         },
         {
             "name": "3.4",
@@ -65,12 +69,12 @@
             "output": "[CatalogDiscount.name]",
             "solution": [
                 "\\ => {",
-                    "x1 <- /v2/catalog/batch-retrieve_POST()",
-                    "x2 <- x1.map(x => x.discount_type)",
-                    "return x2",
+                    "let x0 = /v2/catalog/batch-retrieve_POST()",
+                    "x1 <- x0",
+                    "return x1.discount_type",
                     "}"
             ],
-            "max_length": 10
+            "max_length": 8
         },
         {
             "name": "3.5",
@@ -83,8 +87,8 @@
             "output": "unknown_obj.deleted_object_ids",
             "solution": [
                 "\\item_type, names => {",
-                    "x1 <- names.map(name => {",
-                        "x2 <- /v2/catalog/search-catalog-items_POST({",
+                    "let x0 = names.map(name => {",
+                        "let x1 = /v2/catalog/search-catalog-items_POST({",
                             "object_types: [item_type],",
                             "query: {",
                                 "exact_query: {",
@@ -93,16 +97,16 @@
                                     "}",
                                     "}",
                                     "})",
-                                    "x3 <- x2.items.map(x => x.id)",
-                                    "x4 <- /v2/catalog/batch-delete({",
-                                        "object_ids: x3",
-                                        "})",
-                                        "return x4",
+                                    "x2 <- x1",
+                                    "./v2/catalog/batch-delete({",
+                                        "object_ids: x2.id",
                                         "})",
                                         "return x1",
+                                        "})",
+                                        "return x0",
                                         "}"
             ],
-            "max_length": 15
+            "max_length": 10
         },
         {
             "name": "3.6",
@@ -113,12 +117,12 @@
             "output": "unknown_obj.deleted_object_ids",
             "solution": [
                 "\\ -> {",
-                    "x1 <- /v2/catalog/batch-retrieve_POST()",
-                    "x2 <- x1.map(x => /v2/catalog/batch-delete_POST(object_ids = x))",
-                    "return x12",
+                    "let x0 = /v2/catalog/batch-retrieve_POST()",
+                    "x1 <- x0",
+                    "/v2/catalog/batch-delete_POST(object_ids = x1)",
                     "}"
             ],
-            "max_length": 10
+            "max_length": 6
         },
         {
             "name": "3.7",
@@ -131,15 +135,14 @@
             },
             "output": "[OrderLineItem]",
             "solution": [
-                "\\location_id, order_ids, updates => {",
-                    "x1 <- order_ids.map(ids => {",
-                        "x2 <- /v2/orders_POST(order = update);",
-                        "return x2;",
-                        "});",
-                        "return x1;",
-                        "}"
+                "\\location_id, order_id, updates => {",
+                    "let x0 = /v2/orders/batch-retrieve_POST(location_id = location_id, order_ids: order_id)",
+                    "x1 <- x0",
+                        "let x2 = /v2/orders_POST(order_id = x1, order = update)",
+                    "return x2",
+                "}"
             ],
-            "max_length": 10
+            "max_length": 8
         },
         {
             "name": "3.8",
@@ -150,14 +153,12 @@
             "output": "[Tender.note]",
             "solution": [
                 "\\ -> {",
-                    "x1 <- /v2/payments_GET()",
-                    "x2 <- x1.payments.map(\\x0 -> {",
-                        "return x0.note",
-                        "})",
-                        "return x2",
-                        "}"
+                    "let x0 = /v2/payments_GET()",
+                    "x1 <- x0.payments",
+                    "return x1.note",
+                    "}"
             ],
-            "max_length": 10
+            "max_length": 8
         },
         {
             "name": "3.9",
@@ -169,14 +170,12 @@
             "output": "[Transaction.order_id]",
             "solution": [
                 "\\location_id -> {",
-                    "x1 <- /v2/locations/{location_id}/transactions_GET(location_id=location_id)",
-                    "x2 <- x1.transactions.map(\\x0 -> {",
-                        "return x0.order_id",
-                        "})",
-                        "return x2",
-                        "}"
+                    "let x0 = /v2/locations/{location_id}/transactions_GET(location_id=location_id)",
+                    "x1 <- x0.transactions",
+                    "return x1.order_id",
+                    "}"
             ],
-            "max_length": 10
+            "max_length": 8
         },
         {
             "name": "3.10",
@@ -189,13 +188,11 @@
             "output": "[DeviceCode.name]",
             "solution": [
                 "\\location_id, transaction_id => {",
-                    "x1 <- /v2/orders/batch-retrieve_POST(locationId = location_id, orderIds = [transaction_id])",
-                    "x2 <- x1.map(order => {",
-                        "x3 <- order.line_items.map(item => item.name)",
-                        "return x3",
-                        "})",
-                        "return x2;",
-                        "}"
+                    "let x0 = /v2/orders/batch-retrieve_POST(locationId = location_id, orderIds = [transaction_id])",
+                    "x1 <- x0",
+                    "x2 <- x1.line_items",
+                    "return item.name",
+                    "}"
             ],
             "max_length": 10
         },
@@ -206,12 +203,13 @@
             "input_args": {
                 "name": "Customer.given_name"
             },
-            "output": "customer",
+            "output": "Customer",
             "solution": [
-                "\\customer_name -> {",
-                    "x1 <- /v2/customers_GET()",
-                    "x2 <- x1.customers.filter(x => x.given_name == customer_name)",
-                    "return x2",
+                "\\name -> {",
+                    "let x0 = /v2/customers_GET()",
+                    "x1 <- x0.customers",
+                    "if x1.given_name = name",
+                    "return x1",
                     "}"
             ],
             "max_length": 10

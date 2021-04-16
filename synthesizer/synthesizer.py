@@ -291,7 +291,7 @@ class Synthesizer:
         lst = [
             # "/v2/catalog/object/{object_id}_DELETE",
             # "projection(OrderLineItem, name)_",
-            # "projection(Transaction, id)_",
+            # "projection(subscription, latest_invoice)_",
             # "/v1/prices_POST"
             # "filter(Subscription, Subscription.plan_id)_",
             # "filter(Subscription, Subscription.plan_id)_",
