@@ -1,7 +1,8 @@
-# from analyzer.entry import Parameter
+import random
+
 from analyzer.entry import ErrorResponse
 from analyzer.multiplicity import MUL_ZERO_MORE
-import random
+from synthesizer.utils import make_entry_name
 
 CMP_ENDPOINT_NAME = 0
 CMP_ENDPOINT_AND_ARG_NAME = 1
@@ -138,6 +139,7 @@ class DynamicAnalysis:
         if entry_vals:
             return random.choice(entry_vals)
         else:
+            print("not successful entry found")
             return None
 
     def get_trace(self, fun, args):
@@ -145,7 +147,7 @@ class DynamicAnalysis:
         # get all entries with the same endpoint call
         same_endpoint_calls = []
         for entry in self._entries:
-            if entry.endpoint == fun:
+            if make_entry_name(entry.endpoint, entry.method) == fun:
                 same_endpoint_calls.append(entry)
 
         if self._abstraction_level == CMP_ENDPOINT_NAME:
@@ -193,6 +195,7 @@ class DynamicAnalysis:
                 same_arg_val_calls.append(entry)
 
         if self._abstraction_level == CMP_ENDPOINT_AND_ARG_VALUE:
+            print("sampling entries for", fun)
             # return self._sample_entry(same_arg_val_calls, same_args_calls)
             return self._sample_entry(same_arg_val_calls, backup=same_args_calls)
         else:

@@ -24,6 +24,7 @@ DOC_NAME = "name"
 DOC_ID = "id"
 DOC_REQUEST = "requestBody"
 DOC_OK = "ok"
+DOC_STRIPE = "x-stripeResource"
 
 # definitions of types in OpenAPI
 TYPE_NONE = "none"

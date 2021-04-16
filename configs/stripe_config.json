@@ -37,29 +37,7 @@
         "solution_number": 300,
         "enable_prefilter": false
     },
-    "endpoints": [
-        "/v1/charges",
-        "/v1/charges/{charge}",
-        "/v1/customers",
-        "/v1/customers/{customer}",
-        "/v1/customers/{customer}/sources/{id}",
-        "/v1/invoiceitems",
-        "/v1/invoiceitems/{invoiceitem}",
-        "/v1/invoices",
-        "/v1/invoices/{invoice}",
-        "/v1/invoices/{invoice}/send",
-        "/v1/prices",
-        "/v1/prices/{price}",
-        "/v1/products",
-        "/v1/products/{id}",
-        "/v1/payment_methods",
-        "/v1/payment_intents",
-        "/v1/payment_intents/{intent}/confirm",
-        "/v1/refunds",
-        "/v1/refunds/{refund}",
-        "/v1/subscriptions",
-        "/v1/subscriptions/{subscription_exposed_id}"
-    ],
+    "endpoints": [],
     "ignore_field_names": [
         "text",
         "blocks",
@@ -82,7 +60,8 @@
         "/v1/search",
         "/v1/notes",
         "/v1/events",
-        "/v1/search/radar/related_payments"
+        "/v1/search/radar/related_payments",
+        "/v1/accounts/{account}"
     ],
     "test_suites": []
 }

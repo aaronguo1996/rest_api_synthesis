@@ -43,6 +43,8 @@ def build_cmd_parser():
         help="Run synthesis algorithm in single process mode")
     parser.add_argument("--parallel", action="store_true",
         help="Run synthesis algorithm in parallel mode")
+    parser.add_argument("--timeout", type=int,
+        help="Timeout limit for synthesis to run")
     parser.add_argument("--witness", action="store_true",
         help="Generate witnesses by configuration")
     return parser
@@ -57,8 +59,7 @@ def prep_exp_dir(config):
 
 def parse_entries(doc, configuration, exp_dir):
     trace_file = os.path.join(exp_dir, 'traces.pkl')
-    # if not os.path.exists(trace_file):
-    if True:
+    if not os.path.exists(trace_file):
         print("Parsing OpenAPI document...")
         # entries = None
         log_parser = parser.LogParser(
@@ -76,7 +77,7 @@ def parse_entries(doc, configuration, exp_dir):
         with open(trace_file, 'wb') as f:
             pickle.dump(entries, f)
 
-        print("Write", len(entries), "entries into file")
+        # print("Write", len(entries), "entries into file")
     else:
         with open(trace_file, 'rb') as f:
             entries = pickle.load(f)
@@ -218,9 +219,11 @@ def main():
             init_synthesizer(doc, configuration, log_analyzer, exp_dir)
             inputs = {
                 "channel_name": SchemaType("objs_conversation.name", None),
+                # "email": SchemaType("objs_user_profile.email", None)
             }
             outputs = [
-                SchemaType("objs_user.profile.email", None),
+                SchemaType("objs_user_profile.email", None),
+                # SchemaType("objs_message", None)
             ]
             spawn_encoders(
                 inputs, outputs,
@@ -232,6 +235,10 @@ def main():
             solutions = synthesizer.run_n(
                 [],
                 {
+                    # "channel_id": SchemaType("defs_dm_id", None),
+                    # "user_id": SchemaType("defs_user_id", None),
+                    # "email": SchemaType("objs_user_profile.email", None)
+                    "channel_name": SchemaType("objs_channel.name", None)
                     # "product_name": SchemaType("product.name", None),
                     # "product_id": SchemaType("product.id", None),
                     # "customer_id": SchemaType("customer.id", None),
@@ -240,8 +247,8 @@ def main():
                     # "subscription": SchemaType("Subscription", None),
                     # "subscription_plan_id": SchemaType("CatalogObject.id", None),
                     # "subscription_plan_id": SchemaType("CatalogObject.id", None)
-                    # "customer_name": SchemaType("Customer.id", None),
-                    "subid": SchemaType("subscription.id", None),
+                    # "customer_name": SchemaType("Customer.given_name", None),
+                    # "order": SchemaType("Customer.id", None),
                     # "name": SchemaType("DeviceCode.name", None),
                     # "order_id": SchemaType("Transaction.id", None),
                     # "type": SchemaType("CatalogObject.type", None)
@@ -250,18 +257,20 @@ def main():
                     # "payment": SchemaType("/v1/subscriptions/{subscription_exposed_id}:default_payment_method:POST", None),
                 },
                 [
+                    # SchemaType("objs_message", None)
+                    SchemaType("objs_user_profile.email", None)
                     # SchemaType("invoiceitem", None)
                     # SchemaType("charge", None)
                     # SchemaType("refund", None)
-                    SchemaType("refund", None)
+                    # SchemaType("Customer", None)
                     # SchemaType("subscription", None)
                     # SchemaType("payment_source.last4", None)
                 ],
-                5 #configuration["synthesis"]["solution_num"]
+                100 #configuration["synthesis"]["solution_num"]
             )
 
             for prog in solutions:
-                print(prog.pretty())
+                print(prog)
 
         else:
             # output the results to json file
