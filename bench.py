@@ -272,14 +272,11 @@ class Bencher:
                         found = True
                         arr["rank"] = rank
 
-                        #TODO: FIX THIS PLS
-                        try:
-                            ns = res[rank].collect_exprs()
-                            arr["ast_size"] = len(ns)
-                            arr["projects"] = len(filter(lambda x: isinstance(x, ProjectionExpr), ns))
-                            arr["endpoint_calls"] = len(filter(lambda x: isinstance(x, AppExpr), ns))
-                        except:
-                            pass
+                        ns = res[rank][0].collect_exprs()
+                        arr["ast_size"] = len(ns)
+                        arr["projects"] = len(list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
+                        arr["endpoint_calls"] = len(list(filter(lambda x: isinstance(x, AppExpr), ns)))
+
 
                         break
                 if not found:
