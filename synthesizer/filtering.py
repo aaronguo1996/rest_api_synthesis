@@ -5,10 +5,10 @@ import xeger
 from program.program import ProgramGraph
 import globs
 
-def run_filter(log_analyzer, dynamic_analyzer, inputs, program, multiple, repeat=5):
+def run_filter(syn, log_analyzer, dynamic_analyzer, inputs, program, multiple, repeat=5):
     print(program)
     counter = defaultdict(int)
-    program = program.to_multiline(globs.synthesizer._entries, counter)
+    program = program.to_multiline(syn._entries, counter)
     program.simplify()
     print(program)
 

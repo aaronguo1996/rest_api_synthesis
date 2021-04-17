@@ -158,6 +158,7 @@ class DynamicAnalysis:
         for entry in same_endpoint_calls:
             param_names = [param.arg_name for param in entry.parameters]
             has_all_args = True
+
             for x, _ in args:
                 if x not in param_names:
                     has_all_args = False
@@ -185,8 +186,15 @@ class DynamicAnalysis:
         same_arg_val_calls = []
         for entry in same_args_calls:
             params = {param.arg_name: param.value for param in entry.parameters}
+            param_names = [param.arg_name for param in entry.parameters]
+            print("FUCK 1")
+            print("endpoint:", entry.endpoint, entry.method)
+            print("params:", params)
+            print()
             has_all_values = True
             for x, v in args:
+                print("new param:", x, v)
+                print("we chillin?", x, v, params[x] if x in param_names else "SHIT")
                 if x not in param_names or params[x] != v:
                     has_all_values = False
                     break

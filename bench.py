@@ -192,10 +192,11 @@ class Bencher:
 
             os.makedirs(bm_dir, exist_ok=True)
 
-            init_synthesizer(doc, configuration, log_analyzer, bm_dir)
+            syn = init_synthesizer(doc, configuration, log_analyzer, bm_dir)
             inputs = {k: SchemaType(v, None) for k, v in bench["input_args"].items()}
             output = [SchemaType(out, None) for out in bench["output"]]
             spawn_encoders(
+                syn,
                 inputs, output,
                 configuration["synthesis"]["solver_number"]
             )
@@ -213,7 +214,7 @@ class Bencher:
             # initialize table 1, part 3
             # here, we report statistics on the petri net if they haven't been yet.
             if "places" not in self.table1[key]:
-                num_place, num_trans = get_petri_net_data()
+                num_place, num_trans = get_petri_net_data(syn)
                 self.table1[key]["places"] = num_place
                 self.table1[key]["transitions"] = num_trans
 
@@ -231,7 +232,11 @@ class Bencher:
             # the solution is contained as a list of lines in the solution key.
             if BK_SOLUTION in bench:
                 tgt_sol = "\n".join(bench[BK_SOLUTION])
-                res_no_re = get_solution_strs(solutions)
+                res_no_re = get_solution_strs(syn, solutions)
+
+                print("res_no_re", res_no_re)
+                print()
+                print()
 
                 found = False
                 for rank, res_sol in enumerate(res_no_re):
@@ -253,6 +258,7 @@ class Bencher:
                 results = []
                 for p in solutions:
                     cost = run_filter(
+                        syn,
                         log_analyzer, dyn_analysis,
                         inputs, p, bench["output_list"],
                         repeat=self.repeat
@@ -263,7 +269,7 @@ class Bencher:
                 for r in res:
                     print(r[1], r[0])
 
-                res_sols = [r.pretty() for r, _ in res]
+                res_sols = [r.pretty(syn._entries, 0) for r, _ in res]
 
                 found = False
                 for rank, res_sol in enumerate(res_sols):
@@ -286,8 +292,7 @@ class Bencher:
             self.table2[key].append(arr)
 
     def print_table1(self, output=None):
-        res = ("% auto-generated: ./bench.py, table 1"
-            "\\resizebox{\textwidth}{!}{\\begin{tabular}{lrrrrrrr}"
+        res = ("\\resizebox{\\textwidth}{!}{\\begin{tabular}{lrrrrrrr}"
             "\\toprule"
             "& \\multicolumn{3}{c}{API size} & \\multicolumn{2}{c}{Sub-API size} & \\multicolumn{2}{c}{TNN size} \\\\"
             "\\cmidrule(lr){2-4} \\cmidrule(lr){5-6} \\cmidrule(lr){7-8}"
@@ -313,8 +318,7 @@ class Bencher:
                 print(f"written to {join(output, 'table1.tex')}")
 
     def print_table2(self, output=None):
-        res = ("% auto-generated: ./bench.py, table 2"
-               "\\resizebox{\\textwidth}{!}{"
+        res = ("\\resizebox{\\textwidth}{!}{"
                "\\begin{tabular}{llp{5cm}rrrrr}"
                "\\toprule"
                "& \\multicolumn{2}{c}{Benchmark info} & \\multicolumn{3}{c}{Solution stats} & \\multicolumn{2}{c}{Solution rank} \\\\"

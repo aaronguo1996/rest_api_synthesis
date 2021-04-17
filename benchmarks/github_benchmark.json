@@ -13,10 +13,11 @@
             ],
             "solution": [
                 "\\username -> {",
-                "let x0 = /users/{username}/repos_GET(username=username) in",
+                "let x0 = /users/{username}/repos_GET(username=username)",
                 "return x0.git_url",
                 "}"
             ],
+            "output_list": false,
             "max_length": 10
         },
         {
@@ -31,10 +32,11 @@
             ],
             "solution": [
                 "\\username -> {",
-                "let x0 = /users/{username}/subscriptions_GET(username=username) in",
+                "let x0 = /users/{username}/subscriptions_GET(username=username)",
                 "return x0.open_issues_count",
                 "}"
             ],
+            "output_list": false,
             "max_length": 10
         },
         {
@@ -49,10 +51,11 @@
             ],
             "solution": [
                 "\\username -> {",
-                "let x0 = /users/{username}_GET(username=username) in",
+                "let x0 = /users/{username}_GET(username=username)",
                 "return x0.public_repos",
                 "}"
             ],
+            "output_list": false,
             "max_length": 10
         },
         {
@@ -67,10 +70,11 @@
             ],
             "solution": [
                 "\\username -> {",
-                "let x0 = /users/{username}/gists_GET(username=username) in",
+                "let x0 = /users/{username}/gists_GET(username=username)",
                 "return x0",
                 "}"
             ],
+            "output_list": false,
             "max_length": 10
         }
     ]

@@ -97,7 +97,10 @@ class ResponseParameter(Parameter):
                 if k in skip_fields:
                     continue
 
-                field_schema = self.type.get_field_schema(k)
+                try:
+                    field_schema = self.type.get_field_schema(k)
+                except Exception as e:
+                    continue
                 if field_schema is None: # field not defined in the doc
                     continue
 

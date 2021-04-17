@@ -118,7 +118,7 @@ class LogParser:
                     "value": v
                 })
 
-        request_params = [ x for x in request_params if x["name"] not in skip_fields]
+        request_params = [x for x in request_params if x["name"] not in skip_fields]
         for rp in request_params:
             p = RequestParameter(method, rp["name"], endpoint, True, None, rp["value"])
             parameters.append(p)
