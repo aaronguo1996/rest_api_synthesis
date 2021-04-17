@@ -169,7 +169,10 @@ class Bencher:
 
         self.table1[key]["obj_size"] = avg(obj_sizes)
         self.table1[key]["endpoints"] = len(endpoints)
-        self.table1[key]["endpoints_covered"] = len({x.endpoint for x in entries})
+        covered = {x.endpoint for x in entries if str(x.endpoint) in endpoints}
+        print(len(endpoints), endpoints)
+        print(len(covered), covered)
+        self.table1[key]["endpoints_covered"] = len(covered)
 
         log_analyzer = None
         with open(os.path.join(exp_dir, "graph.pkl"), "rb") as f:
@@ -233,13 +236,13 @@ class Bencher:
             arr = {
                 "name": bench["name"],
                 "desc": bench["desc"],
-                "ast_size": "N/A",
-                "endpoint_calls": "N/A",
-                "projects": "N/A",
-                "rank": "N/A",
-                "rank_no_re": "N/A",
-                "median_rank": "N/A",
-                "mean_rank": "N/A",
+                "ast_size": "-",
+                "endpoint_calls": "-",
+                "projects": "-",
+                "rank": "-",
+                "rank_no_re": "-",
+                "median_rank": "-",
+                "mean_rank": "-",
             }
 
             # the solution is contained as a list of lines in the solution key.
@@ -282,11 +285,12 @@ class Bencher:
                     for rank, res_sol in enumerate(res_no_re):
                         print(res_sol)
                         if compare_program_strings(tgt_sol, res_sol):
-                            sol_prog = res[rank][0]
-                            return rank
-                    return None
+                            return rank, res[rank][0]
+                    return None, None
 
                 ranks = [get_solution_rank() for _ in range(self.filter_num)]
+                sol_prog = ranks[0][1]
+                ranks = [rank for rank, _ in ranks]
                 # print([[a[1] for a in r] for r in reslsfjsa])
                 print(ranks)
                 if ranks[0] is not None:
@@ -300,24 +304,24 @@ class Bencher:
                 if sol_prog is not None:
                     ns = sol_prog.collect_exprs()
                     arr["ast_size"] = len(ns)
-                    arr["projects"] = len(filter(lambda x: isinstance(x, ProjectionExpr), ns))
-                    arr["endpoint_calls"] = len(filter(lambda x: isinstance(x, AppExpr), ns))
+                    arr["projects"] = len(list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
+                    arr["endpoint_calls"] = len(list(filter(lambda x: isinstance(x, AppExpr), ns)))
             else:
                 print(f"  • [{i + 1}/{blen}] NO SOL")
 
             self.table2[key].append(arr)
 
     def print_table1(self, output=None):
-        res = ("% auto-generated: ./bench.py, table 1"
+        res = ("% auto-generated: ./bench.py, table 1\n"
             "\\resizebox{\\textwidth}{!}{\\begin{tabular}{lrrrrrrr}"
             "\\toprule"
             "& \\multicolumn{3}{c}{API size} & \\multicolumn{2}{c}{Sub-API size} & \\multicolumn{2}{c}{TNN size} \\\\"
             "\\cmidrule(lr){2-4} \\cmidrule(lr){5-6} \\cmidrule(lr){7-8}"
             "API & \\# endpoints & Avg. endpoint args & Avg. object size & \\# endpoints covered & \\# annotations & \\# places & \\# transitions \\\\"
             "\\midrule")
+        res += "\n"
 
         for api, rest in self.table1.items():
-            print("WHAAHH", api)
             avg_num_args = round(rest['avg_num_args'], 2)
             obj_size = round(rest['obj_size'], 2)
             res += f"  {api.capitalize()} & {rest['endpoints']} & {avg_num_args} & {obj_size} & {rest['endpoints_covered']} & {rest['annotations']} & {rest['places']} & {rest['transitions']}"
@@ -335,7 +339,7 @@ class Bencher:
                 print(f"written to {join(output, 'table1.tex')}")
 
     def print_table2(self, output=None):
-        res = ("% auto-generated: ./bench.py, table 2"
+        res = ("% auto-generated: ./bench.py, table 2\n"
                "\\resizebox{\\textwidth}{!}{"
                "\\begin{tabular}{llp{5cm}rrrrr}"
                "\\toprule"
@@ -343,14 +347,16 @@ class Bencher:
                "\\cmidrule(lr){2-3} \\cmidrule(lr){4-6} \\cmidrule(lr){7-8}"
                "API & Name & Description & AST Size & \\# endpoint calls & \\# projections & Without RE & With RE \\\\"
                "\\midrule")
+        res += "\n"
 
-        for api, bench_results in self.table2.items():
-            print(api, bench_results)
+        for i, (api, bench_results) in enumerate(self.table2.items()):
             res += api.capitalize() + " "
             for r in bench_results:
                 res += f"& {r['name']} & {r['desc']} & {r['ast_size']} & {r['endpoint_calls']} & {r['projects']} & {r['rank_no_re']} & {r['rank']} "
                 res += r" \\"
                 res += "\n"
+            if i < len(self.table2.items()) - 1:
+                res += "\\hline\n"
 
         res += ("\\bottomrule"
                 "\\end{tabular}}")

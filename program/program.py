@@ -301,7 +301,8 @@ class ProjectionExpr(Expression):
         )
 
     def collect_exprs(self):
-        res = [self] ++ self._obj.collect_exprs()
+        res = [self] + self._obj.collect_exprs()
+        return res
 
     def to_graph(self, graph):
         # print(self)
@@ -426,12 +427,15 @@ class FilterExpr(Expression):
         )
 
     def collect_exprs(self):
-        res = [self] ++ self._obj.collect_exprs()
-        # if self._is_val_list:
-        #     return res ++ chain(*[x.collect_exprs() for x in self._val])
-        # else:
-        #     return res ++ self._val.collect_exprs()
-        return res ++ self._val.collect_exprs()
+        try:
+            res = [self] + self._obj.collect_exprs()
+            # if self._is_val_list:
+            #     return res ++ chain(*[x.collect_exprs() for x in self._val])
+            # else:
+            #     return res ++ self._val.collect_exprs()
+            return res + self._val.collect_exprs()
+        except:
+            return [self] + self._val.collect_exprs()
 
     def to_graph(self, graph):
         # print(self)
@@ -598,7 +602,7 @@ class MapExpr(Expression):
         )
 
     def collect_exprs(self):
-        return [self] ++ self._obj.collect_exprs() ++ self._prog.collect_exprs()
+        return [self] + self._obj.collect_exprs() + self._prog.collect_exprs()
 
     def body(self):
         expr = self._prog.to_expression({self._prog._inputs[0]: self._obj})
@@ -751,7 +755,7 @@ class AssignExpr(Expression):
         )
 
     def collect_exprs(self):
-        return [self] ++ self._rhs.collect_exprs()
+        return [self] + self._rhs.collect_exprs()
 
     def to_graph(self, graph):
         # print(self)

@@ -1,7 +1,7 @@
 {
     "exp_name": "stripe_api_test",
     "log_file": "data/logs/dashboard.stripe.com.20210331.har",
-    "doc_file": "data/openapi/stripe_spec3_sdk_large.json",
+    "doc_file": "data/openapi/stripe_spec3_sdk_full.json",
     "enable_debug": true,
     "debug_output": "debug.log",
     "hostname": "https://dashboard.stripe.com",
