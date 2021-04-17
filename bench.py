@@ -282,10 +282,9 @@ class Bencher:
                     for r in res:
                         print(r[1], r[0])
 
-                    for rank, res_sol in enumerate(res_no_re):
-                        print(res_sol)
-                        if compare_program_strings(tgt_sol, res_sol):
-                            return rank, res[rank][0]
+                    for rank, res_sol in enumerate(res):
+                        if compare_program_strings(tgt_sol, get_solution_strs([res_sol[0]])[0]):
+                            return rank, res_sol[0]
                     return None, None
 
                 ranks = [get_solution_rank() for _ in range(self.filter_num)]
@@ -301,6 +300,7 @@ class Bencher:
                 else:
                     print(f"  • [{i + 1}/{blen}] FAIL")
 
+                print(arr["rank_no_re"], arr["rank"])
                 if sol_prog is not None:
                     ns = sol_prog.collect_exprs()
                     arr["ast_size"] = len(ns)
