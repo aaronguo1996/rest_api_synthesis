@@ -95,9 +95,10 @@ class SchemaType:
             enum = expected_type.get("enum")
             # print(f"checking string {obj} against pattern {pattern}")
             if ((pattern and re.search(pattern, obj)) or
-                (enum and obj in enum) or
-                (pattern is None and enum is None)):
+                (enum and obj in enum)):
                 return self, 1
+            elif pattern is None and enum is None:
+                return self, 0.5
 
         return None, -1
 
@@ -171,7 +172,7 @@ class SchemaType:
                     if typ:
                         py_typ = SchemaType.to_python_type(typ)
                         if py_typ is dict:
-                            return self, value_size(obj)
+                            return self, 1 #value_size(obj)
                         elif isinstance(obj, py_typ):
                             return self, 1
                         else:
@@ -249,7 +250,7 @@ class SchemaType:
                 # if a candidate match only a small number of fields, do not add
                 sz = value_size(value)
                 if obj_score >= sz * 0.6:
-                    # print("find object type", obj_name, "with score", obj_score)
+                    # print("find object type", obj_name, "with score", obj_score, "for value", value)
                     obj_candidates.append((obj_type, obj_score))
 
         # return the one with the greatest score

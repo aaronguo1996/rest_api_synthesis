@@ -8,14 +8,16 @@
             "input_args": {
                 "username": "actor.login"
             },
-            "output": "minimal-repository.git_url",
+            "output": [
+                "minimal-repository.git_url"
+            ],
             "solution": [
                 "\\username -> {",
                 "let x0 = /users/{username}/repos_GET(username=username) in",
                 "return x0.git_url",
                 "}"
             ],
-            "max_length": 1
+            "max_length": 10
         },
         {
             "name": "4.2",
@@ -24,14 +26,16 @@
             "input_args": {
                 "username": "actor.login"
             },
-            "output": "minimal-repository.open_issues_count",
+            "output": [
+                "minimal-repository.open_issues_count"
+            ],
             "solution": [
                 "\\username -> {",
                 "let x0 = /users/{username}/subscriptions_GET(username=username) in",
                 "return x0.open_issues_count",
                 "}"
             ],
-            "max_length": 1
+            "max_length": 10
         },
         {
             "name": "4.6",
@@ -40,14 +44,16 @@
             "input_args": {
                 "username": "actor.login"
             },
-            "output": "ldap-mapping-user.public_repos",
+            "output": [
+                "ldap-mapping-user.public_repos"
+            ],
             "solution": [
                 "\\username -> {",
                 "let x0 = /users/{username}_GET(username=username) in",
                 "return x0.public_repos",
                 "}"
             ],
-            "max_length": 1
+            "max_length": 10
         },
         {
             "name": "4.8",
@@ -56,14 +62,16 @@
             "input_args": {
                 "username": "actor.login"
             },
-            "output": "gist-simple",
+            "output": [
+                "gist-simple"
+            ],
             "solution": [
                 "\\username -> {",
                 "let x0 = /users/{username}/gists_GET(username=username) in",
                 "return x0",
                 "}"
             ],
-            "max_length": 1
+            "max_length": 10
         }
     ]
 }

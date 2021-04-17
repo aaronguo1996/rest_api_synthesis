@@ -69,9 +69,12 @@ class ResponseParameter(Parameter):
             return results, aliases
 
         if isinstance(self.value, dict):
-            # print("[flatten] inferring type for", self.value)
-            obj_type = SchemaType.infer_type_for(
-                    path_to_defs, skip_fields, self.value)
+            # print("Inferring type for", self.func_name, self.arg_name)
+            if defs.DOC_OK not in self.value: # should only impact Slack API
+                obj_type = SchemaType.infer_type_for(
+                        path_to_defs, skip_fields, self.value)
+            else:
+                obj_type = None
 
             if (self.type is not None and 
                 "unknown_obj" not in self.type.name and
@@ -257,7 +260,7 @@ class TraceEntry:
         parameters = entry_def.get(defs.DOC_PARAMS, {})
         for p in parameters:
             name = p.get(defs.DOC_NAME)
-            if name in skip_fields:
+            if name == "token":
                 continue
 
             param = RequestParameter.from_openapi(
@@ -280,13 +283,14 @@ class TraceEntry:
             if request_body is None:
                 return []
             
-            schema = request_body.get(defs.DOC_SCHEMA)
-            requires = schema.get(defs.DOC_REQUIRED, [])
-            properties = schema.get(defs.DOC_PROPERTIES)
+            if request_body is not None:
+                schema = request_body.get(defs.DOC_SCHEMA)
+                requires = schema.get(defs.DOC_REQUIRED, [])
+                properties = schema.get(defs.DOC_PROPERTIES)
 
             if properties:
                 for name in properties.keys():
-                    if name in skip_fields:
+                    if name == "token":
                         continue
 
                     param = RequestParameter.from_openapi(
@@ -350,11 +354,8 @@ class TraceEntry:
 
             response_params = response_schema.get(defs.DOC_PROPERTIES)
 
-            # TODO: handle array case?
-
-        if response_params is None:
-            # TODO: if the returned type is an array it enters this branch
-            # does that make sense?
+        # FIXME: magic thing to get Stripe API work, better implementation later
+        if response_params is None or defs.DOC_STRIPE in response_schema:
             entry_response = ResponseParameter(
                 method, "", endpoint, [], True, 0, None, None
             )
@@ -363,14 +364,13 @@ class TraceEntry:
                 TraceEntry(endpoint, method, entry_params, entry_response)
             ]
         else:
+            response_typ = SchemaType(f"{endpoint}_{method.upper()}_response", None)
             entry_response = ResponseParameter(
-                method, "", endpoint, [], True, 0,
-                SchemaType(endpoint+"_response", None), None
+                method, "", endpoint, [], True, 0, response_typ, None
             )
 
             response_param = RequestParameter(
-                method, "", endpoint, True,
-                SchemaType(endpoint+"_response", None), None
+                method, "", endpoint, True, response_typ, None
             )
 
             # this was a temporary hack to make things work
@@ -394,7 +394,7 @@ class TraceEntry:
                     name in requires, int(rp.get(defs.DOC_TYPE) == "array"))
 
                 e = TraceEntry(
-                    f"projection({endpoint}_response, {name})",
+                    f"projection({endpoint}_{method.upper()}_response, {name})",
                     "", [response_param], param)
                 results.append(e)
 

@@ -77,7 +77,7 @@ class BasicGenerator:
             defined_regex = self._value_dict.get(param_name)
 
         if param_type == defs.TYPE_STRING:
-            regex = defined_regex or r"^[a-zA-Z0-9]{10,}$"
+            regex = defined_regex or r"^[a-z0-9]{10,}$"
             return x.xeger(regex)
         elif param_type == defs.TYPE_ARRAY:
             return []
@@ -109,19 +109,21 @@ class BasicGenerator:
             body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_JSON)
             if not body_def:
                 body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_FORM)
-            body_schema = body_def.get(defs.DOC_SCHEMA)
-            requires = body_schema.get(defs.DOC_REQUIRED, [])
-            body_params = body_schema.get(defs.DOC_PROPERTIES, {})
 
-            body_param_lst = []
-            for param_name in body_params:
-                param = body_params[param_name]
-                param.update({
-                    defs.DOC_NAME: param_name,
-                    defs.DOC_REQUIRED: param_name in requires,
-                })
-                body_param_lst.append(param)
-            body = self._generate_params(depth + 1, body_param_lst, 2)    
+            if body_def is not None:
+                body_schema = body_def.get(defs.DOC_SCHEMA)
+                requires = body_schema.get(defs.DOC_REQUIRED, [])
+                body_params = body_schema.get(defs.DOC_PROPERTIES, {})
+
+                body_param_lst = []
+                for param_name in body_params:
+                    param = body_params[param_name]
+                    param.update({
+                        defs.DOC_NAME: param_name,
+                        defs.DOC_REQUIRED: param_name in requires,
+                    })
+                    body_param_lst.append(param)
+                body = self._generate_params(depth + 1, body_param_lst, 2)    
 
         body.update(headers)
         return body
@@ -228,16 +230,17 @@ class SaturationThread(BasicGenerator):
 
         for param_obj in req_params + picked_opt_params:
             param_name = param_obj.get(defs.DOC_NAME)
-            if param_name in self._skip_fields:
+            if param_name == "token": # in self._skip_fields:
                 continue
 
+            required = param_obj.get(defs.DOC_REQUIRED)
             param_schema = param_obj.get(defs.DOC_SCHEMA)
             if param_schema: # for parameters
                 param_type = param_schema.get(defs.DOC_TYPE)
             else: # for requestBody
                 param_type = param_obj.get(defs.DOC_TYPE)
 
-            self._logger.debug(f"Filling for parameter {param_name}")
+            self._logger.debug(f"Filling for parameter {param_name} in {self._endpoint}")
             param = RequestParameter(
                 self._method,
                 param_name, 
@@ -246,12 +249,12 @@ class SaturationThread(BasicGenerator):
                 None, 
                 None
             )
-            if self._analyzer.dsu.find(param):
+            if self._analyzer.dsu.find(param) and param_name != "name":
                 self._logger.debug(f"Trying fill parameter {param_name} by real dependencies")
                 # if we already have the value bank for this variable
                 param_value_bank = self._analyzer.dsu.get_value_bank(param)
                 param_val = random.choice(list(param_value_bank))
-            elif (self._endpoint, param_name) in self._annotations:
+            elif (self._endpoint, param_name) in self._annotations and param_name != "name":
                 self._logger.debug(f"Trying fill parameter {param_name} by annotated dependencies")
                 # try inferred dependencies but do not create new values
                 producers = self._annotations.get(
@@ -271,6 +274,7 @@ class SaturationThread(BasicGenerator):
 
             # if we cannot find a value for an optional arg, skip it
             if not param_val and not required and param_type == "string":
+                print(f"Parameter {param_name} is not required in {self._endpoint}")
                 continue
 
             if not param_val:
@@ -332,7 +336,8 @@ class WitnessGenerator:
             request = RequestParameter(
                 result.method, name, result.endpoint, True, None, val)
             requests.append(request)
-            self._analyzer.insert(request)
+            if not result.has_error:
+                self._analyzer.insert(request)
 
         if result.has_error:
             response = ErrorResponse(result.response_body)
@@ -457,14 +462,18 @@ class WitnessGenerator:
             body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_JSON)
             if not body_def:
                 body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_FORM)
-            if not body_def:
-                body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_TEXT)
-            if not body_def:
-                body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_ANY)
 
-            body_schema = body_def.get(defs.DOC_SCHEMA)
-            body_params = body_schema.get(defs.DOC_PROPERTIES, {})
-            param_names += list(body_params.keys())
+            # Previously: the request wasn't a json or form type, we would do this.
+            # Instead, we just ignore
+            # if not body_def:
+            #     body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_TEXT)
+            # if not body_def:
+            #     body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_ANY)
+
+            if body_def is not None:
+                body_schema = body_def.get(defs.DOC_SCHEMA)
+                body_params = body_schema.get(defs.DOC_PROPERTIES, {})
+                param_names += list(body_params.keys())
 
         return param_names
 

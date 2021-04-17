@@ -16,6 +16,22 @@
         ]
     },
     {
+        "consumer": "subscription",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/subscriptions",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/subscriptions",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
         "consumer": "price",
         "endpoint": null,
         "producer": [
@@ -32,6 +48,26 @@
         ]
     },
     {
+        "consumer": "currency",
+        "endpoint": null,
+        "producer": [
+            {
+                "enum": ["usd", "cny"],
+                "combine": false
+            }
+        ]
+    },
+    {
+        "consumer": "type",
+        "endpoint": "/v1/payment_methods",
+        "producer": [
+            {
+                "enum": ["alipay", "card", "eps"],
+                "combine": false
+            }
+        ]
+    },
+    {
         "consumer": "customer",
         "endpoint": null,
         "producer": [
@@ -42,6 +78,22 @@
             },
             {
                 "endpoint": "/v1/customers",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "person",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/accounts/{account}/persons",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/accounts/{account}/persons",
                 "method": "post",
                 "path": "id"
             }
@@ -139,7 +191,7 @@
     },
     {
         "consumer": "intent",
-        "endpoint": null,
+        "endpoint": "/v1/payment_intents/{intent}",
         "producer": [
             {
                 "endpoint": "/v1/payment_intents",
@@ -154,13 +206,214 @@
         ]
     },
     {
+        "consumer": "source",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/sources",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/sources",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "subscription_item",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/subscription_items",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/subscription_items",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "review",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/reviews",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/reviews",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "promotion_code",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/promotion_codes",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/promotion_codes",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "plan",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/plans",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/plans",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "payment_method",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/payment_methods",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/payment_methods",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "dispute",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/disputes",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/disputes",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "coupon",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/coupons",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/coupons",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "tax_rate",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/tax_rates",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/tax_rates",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "credit_note",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/credit_notes",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/credit_notes",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "id",
+        "endpoint": "/v1/credit_notes/{id}",
+        "producer": [
+            {
+                "endpoint": "/v1/credit_notes",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/credit_notes",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "id",
+        "endpoint": "/v1/credit_notes/{id}/void",
+        "producer": [
+            {
+                "endpoint": "/v1/credit_notes",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/credit_notes",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
         "consumer": "id",
         "endpoint": "/v1/customers/{customer}/sources/{id}",
         "producer": [
             {
-                "endpoint": "/v1/customers/{customer}/sources",
-                "method": "get",
-                "path": "data/[?]/id"
+                "enum": ["card_1IZ1eeDLm14arRKVTozikUnP", "card_1IZ1euDLm14arRKVzLVieBb8"],
+                "combine": false
+            }
+        ]
+    },
+    {
+        "consumer": "customer",
+        "endpoint": "/v1/customers/{customer}/sources/{id}",
+        "producer": [
+            {
+                "enum": ["cus_IpIhIZuvL3Lerc"],
+                "combine": false
             }
         ]
     },
@@ -177,6 +430,134 @@
                 "endpoint": "/v1/products",
                 "method": "post",
                 "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "id",
+        "endpoint": "/v1/balance_transactions/{id}",
+        "producer": [
+            {
+                "endpoint": "/v1/balance_transactions",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/balance_transactions",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "id",
+        "endpoint": "/v1/recipients/{id}",
+        "producer": [
+            {
+                "endpoint": "/v1/recipients",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/recipients",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "id",
+        "endpoint": "/v1/orders/{id}",
+        "producer": [
+            {
+                "endpoint": "/v1/orders",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/orders",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "id",
+        "endpoint": "/v1/orders/{id}/pay",
+        "producer": [
+            {
+                "endpoint": "/v1/orders",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/orders",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "id",
+        "endpoint": "/v1/orders/{id}/returns",
+        "producer": [
+            {
+                "endpoint": "/v1/orders",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/orders",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "id",
+        "endpoint": "/v1/order_returns/{id}",
+        "producer": [
+            {
+                "endpoint": "/v1/order_returns",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/order_returns",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "default_payment_method",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/payment_methods",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/payment_methods",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "client_secret",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/payment_intents",
+                "method": "get",
+                "path": "data/[?]/client_secret"
+            },
+            {
+                "endpoint": "/v1/payment_intents",
+                "method": "post",
+                "path": "client_secret"
             }
         ]
     }
