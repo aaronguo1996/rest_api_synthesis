@@ -260,7 +260,7 @@ class TraceEntry:
         parameters = entry_def.get(defs.DOC_PARAMS, {})
         for p in parameters:
             name = p.get(defs.DOC_NAME)
-            if name == "token":
+            if name in skip_fields:
                 continue
 
             param = RequestParameter.from_openapi(
@@ -285,7 +285,7 @@ class TraceEntry:
                 properties = schema.get(defs.DOC_PROPERTIES)
 
                 for name in properties.keys():
-                    if name == "token":
+                    if name in skip_fields:
                         continue
 
                     param = RequestParameter.from_openapi(

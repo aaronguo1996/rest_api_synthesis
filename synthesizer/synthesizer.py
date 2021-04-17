@@ -232,23 +232,25 @@ class Synthesizer:
         lst = [
             "/conversations.list_GET",
             "/conversations.members_GET",
-            "/users.info_GET",
-            '/users.list_GET',
-            "/conversations.open_POST",
-            "/chat.postMessage_POST",
-            "/users.lookupByEmail_GET",
+            # "/users.info_GET",
+            # '/users.list_GET',
+            # "/conversations.open_POST",
+            # "/chat.postMessage_POST",
+            # "/users.lookupByEmail_GET",
             "projection(/conversations.list_GET_response, channels)_",
-            "projection(/conversations.open_POST_response, channel)_",
-            "projection(/users.info_GET_response, user)_",
+            # "projection(/conversations.open_POST_response, channel)_",
+            # "projection(/users.info_GET_response, user)_",
             "projection(/conversations.members_GET_response, members)_",
-            'projection(/users.conversations_GET_response, channels)_',
+            # 'projection(/users.conversations_GET_response, channels)_',
             "projection(objs_user, profile)_",
             "projection(objs_user_profile, email)_",
             "projection(objs_user, id)_",
             "projection(objs_user_profile, user_id)_",
             "projection(objs_conversation, id)_",
-            "projection(/chat.postMessage_POST_response, message)_",
-            "projection(/users.lookupByEmail_GET_response, user)_",
+            # "projection(/chat.postMessage_POST_response, message)_",
+            # "projection(/users.lookupByEmail_GET_response, user)_",
+            "filter(objs_conversation, objs_conversation.name)_",
+            "projection(/users.profile.get_GET_response, profile)_",
         ]
 
         # stripe logs
@@ -379,8 +381,8 @@ class Synthesizer:
             defs.DOC_ANYOF in obj_def or
             defs.DOC_ALLOF in obj_def):
             one_ofs = obj_def.get(defs.DOC_ONEOF, [])
-            any_ofs = obj_def.get(defs.DOC_ANYOF, [])
-            all_ofs = obj_def.get(defs.DOC_ALLOF, [])
+            any_ofs = [] # obj_def.get(defs.DOC_ANYOF, [])
+            all_ofs = [] # obj_def.get(defs.DOC_ALLOF, [])
             for s in one_ofs + any_ofs + all_ofs:
                 projection = self._create_projection(obj_name, s)
                 results.update(projection)
@@ -456,8 +458,8 @@ class Synthesizer:
             defs.DOC_ANYOF in field_def or
             defs.DOC_ALLOF in field_def):
             one_ofs = field_def.get(defs.DOC_ONEOF, [])
-            any_ofs = field_def.get(defs.DOC_ANYOF, [])
-            all_ofs = field_def.get(defs.DOC_ALLOF, [])
+            any_ofs = [] # field_def.get(defs.DOC_ANYOF, [])
+            all_ofs = [] # field_def.get(defs.DOC_ALLOF, [])
             for s in one_ofs + any_ofs + all_ofs:
                 equi_filter = self._create_filter(obj_name, field_name, s)
                 results.update(equi_filter)

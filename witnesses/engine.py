@@ -224,7 +224,7 @@ class SaturationThread(BasicGenerator):
             else:
                 opt_params.append(param_obj)
 
-        picked_num = random.randint(0, n)
+        picked_num = 0 # random.randint(0, 1)
         picked_num = min(picked_num, len(opt_params))
         picked_opt_params = random.sample(opt_params, picked_num)
 
@@ -249,12 +249,13 @@ class SaturationThread(BasicGenerator):
                 None, 
                 None
             )
-            if self._analyzer.dsu.find(param) and param_name != "name":
+            # need to change to create stuff
+            if self._analyzer.dsu.find(param): # and param_name != "name":
                 self._logger.debug(f"Trying fill parameter {param_name} by real dependencies")
                 # if we already have the value bank for this variable
                 param_value_bank = self._analyzer.dsu.get_value_bank(param)
                 param_val = random.choice(list(param_value_bank))
-            elif (self._endpoint, param_name) in self._annotations and param_name != "name":
+            elif (self._endpoint, param_name) in self._annotations: #and param_name != "name":
                 self._logger.debug(f"Trying fill parameter {param_name} by annotated dependencies")
                 # try inferred dependencies but do not create new values
                 producers = self._annotations.get(
@@ -333,6 +334,9 @@ class WitnessGenerator:
     def _add_new_result(self, result: Result):
         requests = []
         for name, val in result.request_params.items():
+            if name in self._skip_fields:
+                continue
+            
             request = RequestParameter(
                 result.method, name, result.endpoint, True, None, val)
             requests.append(request)

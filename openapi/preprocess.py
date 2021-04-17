@@ -216,11 +216,12 @@ class PreProcessor:
     def _to_openapi_v3(self, doc):
         conn = Connection("converter.swagger.io", "/api")
         _, response = conn.send_and_recv(
-            "/convert", 
+            "/convert",
+            "POST",
             {defs.HEADER_CONTENT: defs.HEADER_JSON}, 
             doc
         )
-        # print(response[1])
+        return json.loads(response)
 
     def _write_to_file(self, doc, output_file):
         with open(output_file, 'w+') as output:

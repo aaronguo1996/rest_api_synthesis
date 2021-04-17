@@ -20,8 +20,7 @@
       "desc": "Send a message to some user given the email address",
       "landmarks": [],
       "input_args": {
-        "email": "objs_user_profile.email",
-        "msg_text": "/chat.postMessage:text:POST"
+        "email": "objs_user_profile.email"
       },
       "output": [
         "objs_message"

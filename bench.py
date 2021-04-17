@@ -197,7 +197,8 @@ class Bencher:
             output = [SchemaType(out, None) for out in bench["output"]]
             spawn_encoders(
                 inputs, output,
-                configuration["synthesis"]["solver_number"]
+                configuration["synthesis"]["solver_number"],
+                timeout=600
             )
 
             # process solutions

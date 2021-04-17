@@ -183,7 +183,7 @@ class LogAnalyzer:
             if isinstance(entry.response, ErrorResponse):
                 continue
             
-            if entry.endpoint == "/chat.postMessage":
+            if entry.endpoint in ["/conversations.members", "/chat.postMessage"]:
                 print(entry.method)
                 print([(p.arg_name, p.value) for p in entry.parameters])
                 print(entry.response.value)

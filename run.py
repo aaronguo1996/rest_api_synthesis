@@ -190,7 +190,7 @@ def main():
             run_test(suites, doc, configuration, log_analyzer)
         
         elif args.filtering:
-            random.seed(1)
+            # random.seed(1)
 
             dyn_analysis = dynamic.DynamicAnalysis(
                 entries,

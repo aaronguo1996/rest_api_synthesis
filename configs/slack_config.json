@@ -51,9 +51,7 @@
         "token",
         "ok",
         "topic",
-        "previous_names",
-        "include_channel_perm_error",
-        "client_msg_id"
+        "previous_names"
     ],
     "blacklist": [
         "/apps.actions.v2.list",

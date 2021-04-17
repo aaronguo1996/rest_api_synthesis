@@ -37,7 +37,7 @@ class PetriNetEncoder:
         # variables and constraints
         self._add_variables(self._path_len)
         self._set_initial(inputs)
-        self._add_copy_transitions()
+        # self._add_copy_transitions()
         self._run_approximation(inputs)
 
     @TimeStats(key=STATS_ENCODE)
