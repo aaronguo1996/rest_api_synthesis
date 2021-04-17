@@ -46,7 +46,7 @@ class PetriNetEncoder:
         self._add_variables(self._path_len)
         self._fire_transitions(self._path_len - 1)
         self._no_transition_fire(self._path_len - 1)
-        # print("current len", self._path_len, flush=True)
+        print("current len", self._path_len, flush=True)
         # reset the temporary constraint when path length changes
         self._constraints["temporary"] = []
 
@@ -213,8 +213,10 @@ class PetriNetEncoder:
 
     def _fire_transitions(self, t):
         transitions = self._net.transition()
+        # print([x.output() for x in transitions if "minimal-repository" in [p.name for p, _ in x.input()]])
         for trans in transitions:
             entry = self._entries.get(trans.name)
+                
             tr_idx = self._trans_to_variable.get(trans.name)
 
             if self._reachables and trans.name not in self._reachables:
@@ -370,3 +372,6 @@ class PetriNetEncoder:
             if not self._net.has_place(param):
                 self._net.add_place(Place(param))
             self._net.add_output(param, trans_name, Value(1))
+
+        # if "minimal-repository" in param:
+        #     print("added out", param, trans_name)

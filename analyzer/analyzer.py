@@ -485,8 +485,8 @@ class LogAnalyzer:
         return param
 
     def set_type(self, param):
-        if param.type and re.search('^/.*_response$', param.type.name):
-            return
+        # if param.type and re.search('^/.*_response$', param.type.name):
+        #     return
 
         if isinstance(param, ResponseParameter):
             descendant = self._find_descendant(param)

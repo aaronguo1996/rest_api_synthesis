@@ -90,7 +90,9 @@ class Synthesizer:
     def _generate_solutions(self, i, inputs, outputs, result, time):
         programs = []
         groups = self._expand_groups(result) 
+        # print(groups)
         for r in itertools.product(*groups):
+            # print(r)
             programs += self._program_generator.generate_program(
                 r, inputs, outputs[0]
             )
@@ -169,7 +171,6 @@ class Synthesizer:
         while len(solutions) < n:
             result = self._encoder.solve()
             while result is not None:
-                print("Find path", result, flush=True)
                 programs, perms = self._generate_solutions(
                     0, inputs, outputs, result, 
                     time.time() - start
@@ -294,6 +295,7 @@ class Synthesizer:
                 if method.lower() == "delete": # do not handle delete for now
                     continue
 
+                # print("\nENDPOINT:", endpoint)
                 results = self._create_entry(endpoint, method, method_def)
                 # print("Endpoint:", endpoint, "Results:", results)
                 for entry in results:
@@ -302,6 +304,7 @@ class Synthesizer:
                         self._analyzer.set_type(p)
 
                     self._analyzer.set_type(entry.response)
+                    # print(entry.response.type)
 
                     # store results
                     entry_name = make_entry_name(entry.endpoint, entry.method)

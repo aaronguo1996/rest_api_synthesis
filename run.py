@@ -255,7 +255,7 @@ def main():
                     # SchemaType("charge", None)
                     # SchemaType("refund", None)
                     # SchemaType("Customer", None)
-                    SchemaType("gist-simple", None)
+                    SchemaType("ldap-mapping-user.public_repos", None)
                     # SchemaType("subscription", None)
                     # SchemaType("payment_source.last4", None)
                 ],

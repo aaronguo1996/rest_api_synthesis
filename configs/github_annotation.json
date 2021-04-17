@@ -40,11 +40,6 @@
         "endpoint": null,
         "producer": [
             {
-                "endpoint": "/users/{username}",
-                "method": "get",
-                "path": "login"
-            },
-            {
                 "endpoint": "/user",
                 "method": "get",
                 "path": "login"
@@ -55,11 +50,6 @@
         "consumer": "username",
         "endpoint": null,
         "producer": [
-            {
-                "endpoint": "/users/{username}",
-                "method": "get",
-                "path": "login"
-            },
             {
                 "endpoint": "/user",
                 "method": "get",

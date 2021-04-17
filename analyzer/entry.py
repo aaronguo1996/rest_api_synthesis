@@ -295,6 +295,8 @@ class TraceEntry:
                     )
                     entry_params.append(param)
 
+        # print("request", entry_params)
+
         # read responses
         responses = entry_def.get(defs.DOC_RESPONSES)
         if str(defs.CODE_OK) in responses:
@@ -370,6 +372,13 @@ class TraceEntry:
                 method, "", endpoint, True,
                 SchemaType(endpoint+"_response", None), None
             )
+
+            # this was a temporary hack to make things work
+            # if endpoint == "/users/{username}":
+            #     entry_response = ResponseParameter(
+            #         method, "", endpoint, [], True, 0,
+            #         SchemaType("ldap-mapping-user", None), None
+            #     )
 
             results = [
                 TraceEntry(endpoint, method, entry_params, entry_response)
