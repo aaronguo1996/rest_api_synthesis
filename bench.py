@@ -56,7 +56,7 @@ def avg(lst):
     return sum(lst) / len(lst)
 
 class Bencher:
-    def __init__(self, repeat, bench, cache):
+    def __init__(self, repeat, bench, cache, filter_num):
         self.benches = {}
 
         # map from api to entry
@@ -67,6 +67,7 @@ class Bencher:
         self.repeat = repeat
         self.bench = bench
         self.cache = cache
+        self.filter_num = filter_num
 
     def tkey(self, bench_key):
         return self.benches[bench_key][BK_CONFIG]["exp_name"].split("_")[0]
@@ -237,6 +238,8 @@ class Bencher:
                 "projects": "N/A",
                 "rank": "N/A",
                 "rank_no_re": "N/A",
+                "median_rank": "N/A",
+                "mean_rank": "N/A",
             }
 
             # the solution is contained as a list of lines in the solution key.
@@ -252,45 +255,53 @@ class Bencher:
 
                         break
 
+                sol_prog = None
+                # reslsfjsa = []
                 # We need to rank our solutions by running filtering first.
-                random.seed(1)
-
-                dyn_analysis = dynamic.DynamicAnalysis(
-                    entries,
-                    configuration.get(keys.KEY_SKIP_FIELDS),
-                    abstraction_level=dynamic.CMP_ENDPOINT_AND_ARG_VALUE
-                )
-
-                results = []
-                for p in solutions:
-                    cost = run_filter(
-                        log_analyzer, dyn_analysis,
-                        inputs, p, list_output,
-                        repeat=self.repeat
+                def get_solution_rank():
+                    dyn_analysis = dynamic.DynamicAnalysis(
+                        entries,
+                        configuration.get(keys.KEY_SKIP_FIELDS),
+                        abstraction_level=dynamic.CMP_ENDPOINT_AND_ARG_VALUE
                     )
-                    results.append((p, cost))
 
-                res = sorted(results, key=lambda x: x[-1])
-                for r in res:
-                    print(r[1], r[0])
+                    results = []
+                    for p in solutions:
+                        cost = run_filter(
+                            log_analyzer, dyn_analysis,
+                            inputs, p, list_output,
+                            repeat=self.repeat
+                        )
+                        results.append((p, cost))
 
-                found = False
-                for rank, res_sol in enumerate(res_no_re):
-                    print(res_sol)
-                    if compare_program_strings(tgt_sol, res_sol):
-                        print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
-                        found = True
-                        arr["rank"] = rank
+                    # reslsfjsa.append(results)
+                    res = sorted(results, key=lambda x: x[-1])
+                    for r in res:
+                        print(r[1], r[0])
 
-                        ns = res[rank][0].collect_exprs()
-                        arr["ast_size"] = len(ns)
-                        arr["projects"] = len(list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
-                        arr["endpoint_calls"] = len(list(filter(lambda x: isinstance(x, AppExpr), ns)))
+                    for rank, res_sol in enumerate(res_no_re):
+                        print(res_sol)
+                        if compare_program_strings(tgt_sol, res_sol):
+                            sol_prog = res[rank][0]
+                            return rank
+                    return None
 
-
-                        break
-                if not found:
+                ranks = [get_solution_rank() for _ in range(self.filter_num)]
+                # print([[a[1] for a in r] for r in reslsfjsa])
+                print(ranks)
+                if ranks[0] is not None:
+                    print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
+                    arr["mean_rank"] = sum(ranks) / len(ranks)
+                    arr["rank"] = arr["mean_rank"]
+                    arr["median_rank"] = sorted(ranks)[len(ranks)//2]
+                else:
                     print(f"  • [{i + 1}/{blen}] FAIL")
+
+                if sol_prog is not None:
+                    ns = sol_prog.collect_exprs()
+                    arr["ast_size"] = len(ns)
+                    arr["projects"] = len(filter(lambda x: isinstance(x, ProjectionExpr), ns))
+                    arr["endpoint_calls"] = len(filter(lambda x: isinstance(x, AppExpr), ns))
             else:
                 print(f"  • [{i + 1}/{blen}] NO SOL")
 
@@ -298,7 +309,7 @@ class Bencher:
 
     def print_table1(self, output=None):
         res = ("% auto-generated: ./bench.py, table 1"
-            "\\resizebox{\textwidth}{!}{\\begin{tabular}{lrrrrrrr}"
+            "\\resizebox{\\textwidth}{!}{\\begin{tabular}{lrrrrrrr}"
             "\\toprule"
             "& \\multicolumn{3}{c}{API size} & \\multicolumn{2}{c}{Sub-API size} & \\multicolumn{2}{c}{TNN size} \\\\"
             "\\cmidrule(lr){2-4} \\cmidrule(lr){5-6} \\cmidrule(lr){7-8}"
@@ -306,6 +317,7 @@ class Bencher:
             "\\midrule")
 
         for api, rest in self.table1.items():
+            print("WHAAHH", api)
             avg_num_args = round(rest['avg_num_args'], 2)
             obj_size = round(rest['obj_size'], 2)
             res += f"  {api.capitalize()} & {rest['endpoints']} & {avg_num_args} & {obj_size} & {rest['endpoints_covered']} & {rest['annotations']} & {rest['places']} & {rest['transitions']}"
@@ -333,6 +345,7 @@ class Bencher:
                "\\midrule")
 
         for api, bench_results in self.table2.items():
+            print(api, bench_results)
             res += api.capitalize() + " "
             for r in bench_results:
                 res += f"& {r['name']} & {r['desc']} & {r['ast_size']} & {r['endpoint_calls']} & {r['projects']} & {r['rank_no_re']} & {r['rank']} "
@@ -358,6 +371,8 @@ def build_cmd_parser():
         help="Path to output latex table to")
     parser.add_argument("--repeat", type=int, nargs='?', default=5,
         help="Number of times to repeat filtering")
+    parser.add_argument("--filternum", type=int, nargs='?', default=3,
+        help="Number of times to run filtering")
     parser.add_argument("--bench", nargs='?',
         help="Path to benchmark file or directory (by default runs all in benchmarks)")
     parser.add_argument("--names", nargs="+",
@@ -371,7 +386,7 @@ def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
 
-    b = Bencher(args.repeat, args.bench, args.cache)
+    b = Bencher(args.repeat, args.bench, args.cache, args.filternum)
     b.run_benches(names=args.names)
     b.print_table1(args.output)
     b.print_table2(args.output)

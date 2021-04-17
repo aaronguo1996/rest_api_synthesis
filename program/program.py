@@ -317,11 +317,11 @@ class ProjectionExpr(Expression):
 
     def execute(self, analyzer):
         val, cost = self._obj.execute(analyzer)
-        if val is not None and self._field in val:
+        try:
             val = val.get(self._field)
             print("[Projection] get back", val, "for", self._field)
             return val, cost + 1
-        else:
+        except:
             print("[Projection] field projection fails for", self._field)
             return None, MAX_COST
 
