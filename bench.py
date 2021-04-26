@@ -36,7 +36,7 @@ from synthesizer.utils import DEFAULT_LENGTH_LIMIT
 import config_keys as keys
 
 BK_CONFIG = "config"
-BK_SOLUTION = "solution"
+BK_SOLUTION = "solutions"
 BK_BENCHES = "benchmarks"
 
 class SuppressPrint:
@@ -170,8 +170,6 @@ class Bencher:
         self.table1[key]["obj_size"] = avg(obj_sizes)
         self.table1[key]["endpoints"] = len(endpoints)
         covered = {x.endpoint for x in entries if str(x.endpoint) in endpoints}
-        print(len(endpoints), endpoints)
-        print(len(covered), covered)
         self.table1[key]["endpoints_covered"] = len(covered)
 
         log_analyzer = None
@@ -215,16 +213,14 @@ class Bencher:
 
             # process solutions
             solutions = set()
-            for j in range(DEFAULT_LENGTH_LIMIT):
+            for j in range(DEFAULT_LENGTH_LIMIT + 1):
                 sol_file = os.path.join(bm_dir, f"solutions_{j}.pkl")
-                print(sol_file)
                 if os.path.exists(sol_file):
                     with open(sol_file, 'rb') as f:
                         programs = pickle.load(f)
 
                     solutions = solutions.union(programs)
 
-            print(len(solutions))
             # initialize table 1, part 3
             # here, we report statistics on the petri net if they haven't been yet.
             if "places" not in self.table1[key]:
@@ -247,12 +243,12 @@ class Bencher:
 
             # the solution is contained as a list of lines in the solution key.
             if BK_SOLUTION in bench:
-                tgt_sol = "\n".join(bench[BK_SOLUTION])
+                tgt_sols = ["\n".join(sol) for sol in bench[BK_SOLUTION]]
                 res_no_re = get_solution_strs(solutions)
 
                 found = False
                 for rank, res_sol in enumerate(res_no_re):
-                    if compare_program_strings(tgt_sol, res_sol):
+                    if any([compare_program_strings(tgt_sol, res_sol) for tgt_sol in tgt_sols]):
                         found = True
                         arr["rank_no_re"] = rank
 
@@ -283,7 +279,7 @@ class Bencher:
                         print(r[1], r[0])
 
                     for rank, res_sol in enumerate(res):
-                        if compare_program_strings(tgt_sol, get_solution_strs([res_sol[0]])[0]):
+                        if any([compare_program_strings(tgt_sol, get_solution_strs([res_sol[0]])[0]) for tgt_sol in tgt_sols]):
                             return rank, res_sol[0]
                     return None, None
 

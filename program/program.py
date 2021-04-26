@@ -427,15 +427,8 @@ class FilterExpr(Expression):
         )
 
     def collect_exprs(self):
-        try:
-            res = [self] + self._obj.collect_exprs()
-            # if self._is_val_list:
-            #     return res ++ chain(*[x.collect_exprs() for x in self._val])
-            # else:
-            #     return res ++ self._val.collect_exprs()
-            return res + self._val.collect_exprs()
-        except:
-            return [self] + self._val.collect_exprs()
+        res = [self] + self._obj.collect_exprs()
+        return res + self._val.collect_exprs()
 
     def to_graph(self, graph):
         # print(self)

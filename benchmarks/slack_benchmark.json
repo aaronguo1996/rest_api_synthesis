@@ -9,7 +9,7 @@
         "channel_name": "objs_conversation.name"
       },
       "output": "[objs_user_profile.email]",
-      "solution": [
+      "solutions": [[
         "\\channel_name => {",
           "let x0 = /conversations.list_GET()",
           "let x1 <- x0.channels",
@@ -19,7 +19,7 @@
           "let x4 = /users.info_GET(user=x3)",
           "return x4.user.profile.email",
         "}"
-      ],
+      ]],
       "max_length": 20
     },
     {
@@ -30,14 +30,14 @@
         "email": "objs_user_profile.email"
       },
       "output": "objs_message",
-      "solution": [
+      "solutions": [[
         "\\email => {",
           "let x0 = /users.lookupByEmail_GET(email=email)",
           "let x1 = /conversations.open_GET(users=x0.user.id)",
           "let x2 = /chat.postMessage_POST(channel=x1.channel.id)",
           "return x2.message",
           "}"
-      ],
+      ]],
       "max_length": 10
     },
     {
@@ -48,7 +48,7 @@
         "user_id": "defs_bot_id"
       },
       "output": "[objs_message]",
-      "solution": [
+      "solutions": [[
         "\\user_id => {",
           "let x0 = /users.conversations_GET(user=user_id)",
           "x1 <- x0.channels",
@@ -57,7 +57,7 @@
           "let x5 = /conversations.history_GET(channel=x2.id, oldest=x3)",
           "return x5",
           "}"
-      ],
+      ]],
       "max_length": 10
     }
   ]

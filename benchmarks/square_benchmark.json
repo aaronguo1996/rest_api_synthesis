@@ -9,14 +9,14 @@
                 "location_id": "Location.id"
             },
             "output": "[Invoice]",
-            "solution": [
+            "solutions": [[
                 "\\location_id -> {",
                     "let x0 = /v2/invoices_GET(location_id=location_id)",
                     "x1 <- x0.invoices",
                     "if x1.location_id = location_id",
                     "return x1",
                     "}"
-            ],
+            ]],
             "max_length": 8
         },
         {
@@ -29,7 +29,7 @@
                 "subscription_plan_id": "CatalogObject.id"
             },
             "output": "[Subscription]",
-            "solution": [
+            "solutions": [[
                 "\\customer_id location_id subscription_plan_id -> {",
                     "let x0 = /v2/subscriptions/search_POST()",
                     "x1 <- x0.subscriptions",
@@ -39,7 +39,7 @@
                     "if x1.location_id = location_id",
                     "return x1",
                 "}"
-            ],
+            ]],
             "max_length": 12
         },
         {
@@ -51,13 +51,13 @@
                 "tax_id": "CatalogObject.id"
             },
             "output": "[CatalogObject]",
-            "solution": [
+            "solutions": [[
                 "\\tax_id -> {",
                     "let x0 = /v2/catalog/batch-retrieve_POST()",
                     "x1 <- x0",
                     "if x1.tax_id = tax_id",
                     "}"
-            ],
+            ]],
             "max_length": 8
         },
         {
@@ -67,13 +67,13 @@
             "input_args": {
             },
             "output": "[CatalogDiscount.name]",
-            "solution": [
+            "solutions": [[
                 "\\ => {",
                     "let x0 = /v2/catalog/batch-retrieve_POST()",
                     "x1 <- x0",
                     "return x1.discount_type",
                     "}"
-            ],
+            ]],
             "max_length": 8
         },
         {
@@ -85,7 +85,7 @@
                 "names": "CatalogDiscount.name"
             },
             "output": "unknown_obj.deleted_object_ids",
-            "solution": [
+            "solutions": [[
                 "\\item_type, names => {",
                     "let x0 = names.map(name => {",
                         "let x1 = /v2/catalog/search-catalog-items_POST({",
@@ -105,7 +105,7 @@
                                         "})",
                                         "return x0",
                                         "}"
-            ],
+            ]],
             "max_length": 10
         },
         {
@@ -115,13 +115,13 @@
             "input_args": {
             },
             "output": "unknown_obj.deleted_object_ids",
-            "solution": [
+            "solutions": [[
                 "\\ -> {",
                     "let x0 = /v2/catalog/batch-retrieve_POST()",
                     "x1 <- x0",
                     "/v2/catalog/batch-delete_POST(object_ids = x1)",
                     "}"
-            ],
+            ]],
             "max_length": 6
         },
         {
@@ -134,14 +134,14 @@
                 "updates": "OrderLineItem"
             },
             "output": "[OrderLineItem]",
-            "solution": [
+            "solutions": [[
                 "\\location_id, order_id, updates => {",
                     "let x0 = /v2/orders/batch-retrieve_POST(location_id = location_id, order_ids: order_id)",
                     "x1 <- x0",
                         "let x2 = /v2/orders_POST(order_id = x1, order = update)",
                     "return x2",
                 "}"
-            ],
+            ]],
             "max_length": 8
         },
         {
@@ -151,13 +151,13 @@
             "input_args": {
             },
             "output": "[Tender.note]",
-            "solution": [
+            "solutions": [[
                 "\\ -> {",
                     "let x0 = /v2/payments_GET()",
                     "x1 <- x0.payments",
                     "return x1.note",
                     "}"
-            ],
+            ]],
             "max_length": 8
         },
         {
@@ -168,13 +168,13 @@
                 "location_id": "Location.id"
             },
             "output": "[Transaction.order_id]",
-            "solution": [
+            "solutions": [[
                 "\\location_id -> {",
                     "let x0 = /v2/locations/{location_id}/transactions_GET(location_id=location_id)",
                     "x1 <- x0.transactions",
                     "return x1.order_id",
                     "}"
-            ],
+            ]],
             "max_length": 8
         },
         {
@@ -186,14 +186,14 @@
                 "transaction_id": "Transaction.id"
             },
             "output": "[DeviceCode.name]",
-            "solution": [
+            "solutions": [[
                 "\\location_id, transaction_id => {",
                     "let x0 = /v2/orders/batch-retrieve_POST(locationId = location_id, orderIds = [transaction_id])",
                     "x1 <- x0",
                     "x2 <- x1.line_items",
                     "return item.name",
                     "}"
-            ],
+            ]],
             "max_length": 10
         },
         {
@@ -204,14 +204,14 @@
                 "name": "Customer.given_name"
             },
             "output": "Customer",
-            "solution": [
+            "solutions": [[
                 "\\name -> {",
                     "let x0 = /v2/customers_GET()",
                     "x1 <- x0.customers",
                     "if x1.given_name = name",
                     "return x1",
                     "}"
-            ],
+            ]],
             "max_length": 10
         }
 

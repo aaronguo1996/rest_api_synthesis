@@ -230,25 +230,25 @@ class Synthesizer:
 
         # slack logs
         lst = [
-            "/conversations.list_GET",
-            "/conversations.members_GET",
-            "/users.info_GET",
-            '/users.list_GET',
-            "/conversations.open_POST",
-            "/chat.postMessage_POST",
-            "/users.lookupByEmail_GET",
-            "projection(/conversations.list_GET_response, channels)_",
-            "projection(/conversations.open_POST_response, channel)_",
-            "projection(/users.info_GET_response, user)_",
-            "projection(/conversations.members_GET_response, members)_",
-            'projection(/users.conversations_GET_response, channels)_',
-            "projection(objs_user, profile)_",
-            "projection(objs_user_profile, email)_",
-            "projection(objs_user, id)_",
-            "projection(objs_user_profile, user_id)_",
-            "projection(objs_conversation, id)_",
-            "projection(/chat.postMessage_POST_response, message)_",
-            "projection(/users.lookupByEmail_GET_response, user)_",
+            # "/conversations.list_GET",
+            # "/conversations.members_GET",
+            # "/users.info_GET",
+            # '/users.list_GET',
+            # "/conversations.open_POST",
+            # "/chat.postMessage_POST",
+            # "/users.lookupByEmail_GET",
+            # "projection(/conversations.list_GET_response, channels)_",
+            # "projection(/conversations.open_POST_response, channel)_",
+            # "projection(/users.info_GET_response, user)_",
+            # "projection(/conversations.members_GET_response, members)_",
+            # 'projection(/users.conversations_GET_response, channels)_',
+            # "projection(objs_user, profile)_",
+            # "projection(objs_user_profile, email)_",
+            # "projection(objs_user, id)_",
+            # "projection(objs_user_profile, user_id)_",
+            # "projection(objs_conversation, id)_",
+            # "projection(/chat.postMessage_POST_response, message)_",
+            # "projection(/users.lookupByEmail_GET_response, user)_",
         ]
 
         # stripe logs
@@ -288,16 +288,6 @@ class Synthesizer:
         #     # "projection(/v2/subscriptions/search_response, subscriptions)_",
         #     # "projection(/v2/invoices/search_response, invoices)_"
         # ]
-        lst = [
-            # "/v2/catalog/object/{object_id}_DELETE",
-            # "projection(OrderLineItem, name)_",
-            # "projection(subscription, latest_invoice)_",
-            # "/v1/prices_POST"
-            # "filter(Subscription, Subscription.plan_id)_",
-            # "filter(Subscription, Subscription.plan_id)_",
-            # "projection(/v2/subscriptions/search_response, subscriptions)_",
-            # "projection(/v2/invoices/search_response, invoices)_"
-        ]
 
         for name in lst:
             e = self._entries.get(name)
