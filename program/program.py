@@ -301,7 +301,8 @@ class ProjectionExpr(Expression):
         )
 
     def collect_exprs(self):
-        res = [self] ++ self._obj.collect_exprs()
+        res = [self] + self._obj.collect_exprs()
+        return res
 
     def to_graph(self, graph):
         # print(self)
@@ -317,11 +318,11 @@ class ProjectionExpr(Expression):
 
     def execute(self, analyzer):
         val, cost = self._obj.execute(analyzer)
-        if val is not None and self._field in val:
+        try:
             val = val.get(self._field)
             print("[Projection] get back", val, "for", self._field)
             return val, cost + 1
-        else:
+        except:
             print("[Projection] field projection fails for", self._field)
             return None, MAX_COST
 
@@ -426,12 +427,8 @@ class FilterExpr(Expression):
         )
 
     def collect_exprs(self):
-        res = [self] ++ self._obj.collect_exprs()
-        # if self._is_val_list:
-        #     return res ++ chain(*[x.collect_exprs() for x in self._val])
-        # else:
-        #     return res ++ self._val.collect_exprs()
-        return res ++ self._val.collect_exprs()
+        res = [self] + self._obj.collect_exprs()
+        return res + self._val.collect_exprs()
 
     def to_graph(self, graph):
         # print(self)
@@ -598,7 +595,7 @@ class MapExpr(Expression):
         )
 
     def collect_exprs(self):
-        return [self] ++ self._obj.collect_exprs() ++ self._prog.collect_exprs()
+        return [self] + self._obj.collect_exprs() + self._prog.collect_exprs()
 
     def body(self):
         expr = self._prog.to_expression({self._prog._inputs[0]: self._obj})
@@ -751,7 +748,7 @@ class AssignExpr(Expression):
         )
 
     def collect_exprs(self):
-        return [self] ++ self._rhs.collect_exprs()
+        return [self] + self._rhs.collect_exprs()
 
     def to_graph(self, graph):
         # print(self)

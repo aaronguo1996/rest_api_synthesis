@@ -20,6 +20,7 @@ import random
 import shutil
 import sys
 import pickle
+import re
 
 from analyzer import dynamic
 from globs import get_solution_strs, init_synthesizer, get_petri_net_data
@@ -35,7 +36,7 @@ from synthesizer.utils import DEFAULT_LENGTH_LIMIT
 import config_keys as keys
 
 BK_CONFIG = "config"
-BK_SOLUTION = "solution"
+BK_SOLUTION = "solutions"
 BK_BENCHES = "benchmarks"
 
 class SuppressPrint:
@@ -55,7 +56,7 @@ def avg(lst):
     return sum(lst) / len(lst)
 
 class Bencher:
-    def __init__(self, repeat, bench):
+    def __init__(self, repeat, bench, cache, filter_num):
         self.benches = {}
 
         # map from api to entry
@@ -65,6 +66,8 @@ class Bencher:
 
         self.repeat = repeat
         self.bench = bench
+        self.cache = cache
+        self.filter_num = filter_num
 
     def tkey(self, bench_key):
         return self.benches[bench_key][BK_CONFIG]["exp_name"].split("_")[0]
@@ -166,7 +169,8 @@ class Bencher:
 
         self.table1[key]["obj_size"] = avg(obj_sizes)
         self.table1[key]["endpoints"] = len(endpoints)
-        self.table1[key]["endpoints_covered"] = len({x.endpoint for x in entries})
+        covered = {x.endpoint for x in entries if str(x.endpoint) in endpoints}
+        self.table1[key]["endpoints_covered"] = len(covered)
 
         log_analyzer = None
         with open(os.path.join(exp_dir, "graph.pkl"), "rb") as f:
@@ -185,25 +189,32 @@ class Bencher:
             if names is not None and bench["name"] not in names:
                 continue
 
-            # create a directory for the current benchmark
+            list_output = (re.match("\[.*\]", bench["output"]) != None)
+            if list_output:
+                bench["output"] = bench["output"][1:-1]
+
             bm_dir = os.path.join(exp_dir, bench["name"])
-            if os.path.exists(bm_dir):
+            # create a directory for the current benchmark
+            cached = os.path.exists(bm_dir) and len(os.listdir(bm_dir)) != 0
+            if cached and not self.cache:
                 shutil.rmtree(bm_dir)
 
             os.makedirs(bm_dir, exist_ok=True)
 
             init_synthesizer(doc, configuration, log_analyzer, bm_dir)
             inputs = {k: SchemaType(v, None) for k, v in bench["input_args"].items()}
-            output = [SchemaType(out, None) for out in bench["output"]]
-            spawn_encoders(
-                inputs, output,
-                configuration["synthesis"]["solver_number"]
-            )
+            output = [SchemaType(bench["output"], None)]
+
+            if not cached or not self.cache:
+                spawn_encoders(
+                    inputs, output,
+                    configuration["synthesis"]["solver_number"]
+                )
 
             # process solutions
             solutions = set()
-            for i in range(DEFAULT_LENGTH_LIMIT + 1):
-                sol_file = os.path.join(bm_dir, f"solutions_{i}.pkl")
+            for j in range(DEFAULT_LENGTH_LIMIT + 1):
+                sol_file = os.path.join(bm_dir, f"solutions_{j}.pkl")
                 if os.path.exists(sol_file):
                     with open(sol_file, 'rb') as f:
                         programs = pickle.load(f)
@@ -221,79 +232,94 @@ class Bencher:
             arr = {
                 "name": bench["name"],
                 "desc": bench["desc"],
-                "ast_size": "N/A",
-                "endpoint_calls": "N/A",
-                "projects": "N/A",
-                "rank": "N/A",
-                "rank_no_re": "N/A",
+                "ast_size": "-",
+                "endpoint_calls": "-",
+                "projects": "-",
+                "rank": "-",
+                "rank_no_re": "-",
+                "median_rank": "-",
+                "mean_rank": "-",
             }
 
             # the solution is contained as a list of lines in the solution key.
             if BK_SOLUTION in bench:
-                tgt_sol = "\n".join(bench[BK_SOLUTION])
+                tgt_sols = ["\n".join(sol) for sol in bench[BK_SOLUTION]]
                 res_no_re = get_solution_strs(solutions)
 
                 found = False
                 for rank, res_sol in enumerate(res_no_re):
-                    if compare_program_strings(tgt_sol, res_sol):
-                        found = True
-                        arr["rank_no_re"] = rank
+                    for tgt_sol in tgt_sols:
+                        if compare_program_strings(tgt_sol, res_sol):
+                            found = True
+                            arr["rank_no_re"] = rank
 
+                            break
+                    if found:
                         break
 
+                sol_prog = None
+                # reslsfjsa = []
                 # We need to rank our solutions by running filtering first.
-                random.seed(1)
-
-                dyn_analysis = dynamic.DynamicAnalysis(
-                    entries,
-                    configuration.get(keys.KEY_SKIP_FIELDS),
-                    abstraction_level=dynamic.CMP_ENDPOINT_AND_ARG_VALUE
-                )
-
-                results = []
-                for p in solutions:
-                    cost = run_filter(
-                        log_analyzer, dyn_analysis,
-                        inputs, p, bench["output_list"],
-                        repeat=self.repeat
+                def get_solution_rank():
+                    dyn_analysis = dynamic.DynamicAnalysis(
+                        entries,
+                        configuration.get(keys.KEY_SKIP_FIELDS),
+                        abstraction_level=dynamic.CMP_ENDPOINT_AND_ARG_VALUE
                     )
-                    results.append((p, cost))
 
-                res = sorted(results, key=lambda x: x[-1])
-                for r in res:
-                    print(r[1], r[0])
+                    results = []
+                    for p in solutions:
+                        cost = run_filter(
+                            log_analyzer, dyn_analysis,
+                            inputs, p, list_output,
+                            repeat=self.repeat
+                        )
+                        results.append((p, cost))
 
-                res_sols = [str(r) for r, _ in res]
+                    # reslsfjsa.append(results)
+                    res = sorted(results, key=lambda x: x[-1])
+                    for r in res:
+                        print(r[1], r[0])
 
-                found = False
-                for rank, res_sol in enumerate(res_sols):
-                    if compare_program_strings(tgt_sol, res_sol):
-                        print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
-                        found = True
-                        arr["rank"] = rank
+                    for rank, res_sol in enumerate(res):
+                        for tgt_sol in tgt_sols:
+                            if compare_program_strings(tgt_sol, get_solution_strs([res_sol[0]])[0]):
+                                return rank, res_sol[0]
+                    return None, None
 
-                        ns = res[rank][0].collect_exprs()
-                        arr["ast_size"] = len(ns)
-                        arr["projects"] = len(list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
-                        arr["endpoint_calls"] = len(list(filter(lambda x: isinstance(x, AppExpr), ns)))
-
-
-                        break
-                if not found:
+                ranks = [get_solution_rank() for _ in range(self.filter_num)]
+                sol_prog = ranks[0][1]
+                ranks = [rank for rank, _ in ranks]
+                # print([[a[1] for a in r] for r in reslsfjsa])
+                print(ranks)
+                if ranks[0] is not None:
+                    print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
+                    arr["mean_rank"] = sum(ranks) / len(ranks)
+                    arr["rank"] = arr["mean_rank"]
+                    arr["median_rank"] = sorted(ranks)[len(ranks)//2]
+                else:
                     print(f"  • [{i + 1}/{blen}] FAIL")
+
+                print(arr["rank_no_re"], arr["rank"])
+                if sol_prog is not None:
+                    ns = sol_prog.collect_exprs()
+                    arr["ast_size"] = len(ns)
+                    arr["projects"] = len(list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
+                    arr["endpoint_calls"] = len(list(filter(lambda x: isinstance(x, AppExpr), ns)))
             else:
                 print(f"  • [{i + 1}/{blen}] NO SOL")
 
             self.table2[key].append(arr)
 
     def print_table1(self, output=None):
-        res = ("% auto-generated: ./bench.py, table 1"
-            "\\resizebox{\textwidth}{!}{\\begin{tabular}{lrrrrrrr}"
+        res = ("% auto-generated: ./bench.py, table 1\n"
+            "\\resizebox{\\textwidth}{!}{\\begin{tabular}{lrrrrrrr}"
             "\\toprule"
             "& \\multicolumn{3}{c}{API size} & \\multicolumn{2}{c}{Sub-API size} & \\multicolumn{2}{c}{TNN size} \\\\"
             "\\cmidrule(lr){2-4} \\cmidrule(lr){5-6} \\cmidrule(lr){7-8}"
             "API & \\# endpoints & Avg. endpoint args & Avg. object size & \\# endpoints covered & \\# annotations & \\# places & \\# transitions \\\\"
             "\\midrule")
+        res += "\n"
 
         for api, rest in self.table1.items():
             avg_num_args = round(rest['avg_num_args'], 2)
@@ -313,7 +339,7 @@ class Bencher:
                 print(f"written to {join(output, 'table1.tex')}")
 
     def print_table2(self, output=None):
-        res = ("% auto-generated: ./bench.py, table 2"
+        res = ("% auto-generated: ./bench.py, table 2\n"
                "\\resizebox{\\textwidth}{!}{"
                "\\begin{tabular}{llp{5cm}rrrrr}"
                "\\toprule"
@@ -321,13 +347,16 @@ class Bencher:
                "\\cmidrule(lr){2-3} \\cmidrule(lr){4-6} \\cmidrule(lr){7-8}"
                "API & Name & Description & AST Size & \\# endpoint calls & \\# projections & Without RE & With RE \\\\"
                "\\midrule")
+        res += "\n"
 
-        for api, bench_results in self.table2.items():
+        for i, (api, bench_results) in enumerate(self.table2.items()):
             res += api.capitalize() + " "
             for r in bench_results:
                 res += f"& {r['name']} & {r['desc']} & {r['ast_size']} & {r['endpoint_calls']} & {r['projects']} & {r['rank_no_re']} & {r['rank']} "
                 res += r" \\"
                 res += "\n"
+            if i < len(self.table2.items()) - 1:
+                res += "\\hline\n"
 
         res += ("\\bottomrule"
                 "\\end{tabular}}")
@@ -348,17 +377,22 @@ def build_cmd_parser():
         help="Path to output latex table to")
     parser.add_argument("--repeat", type=int, nargs='?', default=5,
         help="Number of times to repeat filtering")
+    parser.add_argument("--filternum", type=int, nargs='?', default=3,
+        help="Number of times to run filtering")
     parser.add_argument("--bench", nargs='?',
         help="Path to benchmark file or directory (by default runs all in benchmarks)")
     parser.add_argument("--names", nargs="+",
         help="Benchmark name list")
+    parser.add_argument("--cache", action='store_true', dest='cache',
+        help="Whether to use cached results")
+    parser.set_defaults(cache=False)
     return parser
 
 def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
 
-    b = Bencher(args.repeat, args.bench)
+    b = Bencher(args.repeat, args.bench, args.cache, args.filternum)
     b.run_benches(names=args.names)
     b.print_table1(args.output)
     b.print_table2(args.output)

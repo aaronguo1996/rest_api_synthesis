@@ -9,12 +9,15 @@
         "customer_id": "customer.id",
         "product_id": "product.id"
       },
-      "output": [
-        "subscription"
-      ],
-      "output_list": false,
-      "solution": [],
-      "max_length": 10
+      "output": "subscription",
+      "solutions": [[
+        "\\customer_id product_id => {",
+          "let x1 = /v1/prices_GET(product=product_id);",
+          "x2 <- x1.data",
+          "let x3 = /v1/subscriptions_POST(customer=customer_id, items[0].price=x2.id)",
+          "return x3",
+          "}"
+      ]]
     },
     {
       "name": "2.2",
@@ -22,15 +25,18 @@
       "landmarks": [],
       "input_args": {
         "customer_id": "customer.id",
-        "currency": "fee.currency",
-        "amount": "price.unit_amount"
+        "cut": "fee.currency",
+        "amt": "price.unit_amount"
       },
-      "output": [
-        "payment_intent"
-      ],
-      "output_list": false,
-      "solution": [],
-      "max_length": 10
+      "output": "payment_intent",
+      "solutions": [[
+        "\\customer_id cur amt => {",
+          "let x1 = /v1/payment_methods_GET(customer=customer_id, type=card)",
+          "let x2 = /v1/payment_intents_POST(customer=customer_id, payment_method=x1.id, currency=cur, amount=amt)",
+          "let x3 = /v1/payment_intents/{pi}/confirm_POST(pi=x2.id, setup_future_usage=off_session)",
+          "return x3",
+          "}"
+      ]]
     },
     {
       "name": "2.3",
@@ -40,11 +46,20 @@
         "customer_id": "customer.id",
         "product_id": "product.id"
       },
-      "output": [
-        "subscription"
-      ],
-      "solution": [],
-      "max_length": 10
+      "output": "[subscription]",
+      "solutions": [[
+        "\\customer_id product_ids => {",
+          "x0 <- product_ids",
+          "let x1 = /v1/prices_GET(product=x0)",
+            "let x2 = x1.data.map((x3) => {",
+              "let x4 = /v1/subscriptions_POST(customer=customer_id, items[0].price=x3.id)",
+              "return x4",
+              "})",
+              "return x2",
+              "}",
+              "return x0",
+              "}"
+      ]]
     },
     {
       "name": "2.4",
@@ -56,11 +71,15 @@
         "currency": "fee.currency",
         "unit_amount": "/v1/prices:unit_amount:POST"
       },
-      "output": [
-        "invoiceitem"
-      ],
-      "solution": [],
-      "max_length": 10
+      "output": "invoiceitem",
+      "solutions": [[
+        "\\product_name customer_id currency unit_amount -> {",
+          "let x0 = /v1/products_POST(name=product_name)",
+          "let x1 = /v1/prices_POST(currency=currency, product=x0.id, unit_amount=unit_amount)",
+          "let x2 = /v1/invoiceitems_POST(customer=customer_id, price=x1.id)",
+          "return x2",
+          "}"
+      ]]
     },
     {
       "name": "2.5",
@@ -70,11 +89,15 @@
         "customer_id": "customer.id",
         "price_id": "plan.id"
       },
-      "output": [
-        "invoice"
-      ],
-      "solution": [],
-      "max_length": 10
+      "output": "invoice",
+      "solutions": [[
+        "\\customer_id price_id => {",
+          "let x1 = /v1/invoiceitems_POST(customer=customer_id, price=price_id);",
+          "let x2 = /v1/invoices_POST(customer=x1.customer);",
+          "let x3 = /v1/invoices/{invoice}/send_POST(invoice=x2.id);",
+          "return x3;",
+          "}"
+      ]]
     },
     {
       "name": "2.6",
@@ -83,15 +106,15 @@
       "input_args": {
         "customer_email": "customer.email"
       },
-      "output": [
-        "customer"
-      ],
-      "solution": [
-        "\\customer_email -> {x0 <- /v1/customers_POST()",
-          "x1 <- x0.address.filter(x => x.email == customer_email)",
-          "return x1}"
-      ],
-      "max_length": 10
+      "output": "customer",
+      "solutions": [[
+        "\\customer_email -> {",
+          "let x0 = /v1/customers_GET()",
+          "x1 <- x0.data",
+          "if x1.email = customer_email",
+          "return x1",
+        "}"
+      ]]
     },
     {
       "name": "2.7",
@@ -100,19 +123,15 @@
       "input_args": {
         "customer_id": "customer.id"
       },
-      "output": [
-        "charge"
-      ],
-      "solution": [
+      "output": "[charge]",
+      "solutions": [[
         "\\customer_id -> {",
-          "let x1 = /v1/invoices_GET(customer=customer_id) in",
-          "let x2 = x1.data.map(\\x0 -> {",
-            "return x0.charge",
-            "}) in",
-            "return x2",
-            "}"
-      ],
-      "max_length": 10
+          "let x1 = /v1/invoices_GET(customer=customer_id)",
+          "x2 <- x1.data",
+          "let x3 = /v1/charges/{charge}_GET(charge=x2.charge)",
+          "return x3",
+        "}"
+      ]]
     },
     {
       "name": "2.8",
@@ -121,11 +140,16 @@
       "input_args": {
         "subscription_id": "subscription.id"
       },
-      "output": [
-        "refund"
-      ],
-      "solution": [],
-      "max_length": 10
+      "output": "refund",
+      "solutions": [[
+        "\\subscription_id -> {",
+          "let x0 = /v1/subscriptions/{subscription_exposed_id}_POST(subscription_exposed_id=subscription_id)",
+          "let x1 = /v1/invoices_GET(customer=x0.customer)",
+          "x2 <- x1.data",
+          "let x3 = /v1/refunds/{refund}_GET(refund=x2.charge)",
+          "return x3",
+          "}"
+      ]]
     },
     {
       "name": "2.9",
@@ -133,11 +157,14 @@
       "landmarks": [],
       "input_args": {
       },
-      "output": [
-        "customer.email"
-      ],
-      "solution": [],
-      "max_length": 10
+      "output": "[customer.email]",
+      "solutions": [[
+        "\\ -> {",
+          "let x0 = /v1/customers_GET()",
+          "x1 <- x0.data",
+          "return x1.email",
+          "}"
+      ]]
     },
     {
       "name": "2.10",
@@ -146,11 +173,16 @@
       "input_args": {
         "product_id": "product.id"
       },
-      "output": [
-        "customer.email"
-      ],
-      "solution": [],
-      "max_length": 10
+      "output": "[customer.email]",
+      "solutions": [[
+        "\\product_id => {",
+          "let x1 = /v1/subscriptions_GET()",
+          "x2 <- x1",
+          "if x2.items.product = product_id",
+          "let x3 = /v1/customers/{customer}_GET(customer=x2.customer_id)",
+          "return x3",
+          "}"
+      ]]
     },
     {
       "name": "2.11",
@@ -159,11 +191,14 @@
       "input_args": {
         "customer_id": "customer.id"
       },
-      "output": [
-        "payment_source.last4"
-      ],
-      "solution": [],
-      "max_length": 10
+      "output": "payment_source.last4",
+      "solutions": [[
+        "\\customer_id -> {",
+          "let x0 = /v1/customers/{customer}/sources_GET(customer=customer_id)",
+          "x1 <- x0.data",
+          "return x1.last4",
+          "}"
+      ]]
     },
     {
       "name": "2.12",
@@ -172,10 +207,15 @@
       "input_args": {
         "payment_method": "payment_method"
       },
-      "output": [
-      ],
-      "solution": [],
-      "max_length": 10
+      "output": "payment_source",
+      "solutions": [[
+        "\\customer_id => {",
+          "let x1 = /v1/customers/{customer}_GET(customer=customer_id)",
+          "let x2 = customer.default_source",
+          "let x3 = /v1/customers/{customer}/sources/{source}_DELETE(customer=customer_id, source=x2)",
+          "return x3",
+          "}"
+      ]]
     },
     {
       "name": "2.13",
@@ -185,11 +225,15 @@
         "payment_method": "payment_method",
         "customer_id": "customer.id"
       },
-      "output": [
-        "subscription"
-      ],
-      "solution": [],
-      "max_length": 10
+      "output": "[subscription]",
+      "solutions": [[
+        "(payment, customer_id) => {",
+          "let x1 = /v1/subscriptions_GET(customer=customer_id)",
+          "x2 <- x1.map(",
+            "let x3 = /v1/subscriptions/{subscription}_POST(subscription=x2.id, default_payment_method=payment);",
+            "return x3",
+            "}"
+      ]]
     }
   ]
 }

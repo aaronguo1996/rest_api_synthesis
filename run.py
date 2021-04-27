@@ -17,7 +17,7 @@ import config_keys as keys
 from synthesizer.synthesizer import Synthesizer
 from synthesizer.filtering import run_filter
 from synthesizer.parallel import spawn_encoders
-from globs import init_synthesizer
+from globs import init_synthesizer, get_solution_strs
 from witnesses.engine import WitnessGenerator
 
 # test imports
@@ -238,7 +238,9 @@ def main():
                     # "channel_id": SchemaType("defs_dm_id", None),
                     # "user_id": SchemaType("defs_user_id", None),
                     # "email": SchemaType("objs_user_profile.email", None)
-                    "channel_name": SchemaType("objs_channel.name", None)
+                    # "customer_id": SchemaType("Customer.id", None),
+                    # "location_id": SchemaType("Location.id", None),
+                    # "subscription_plan_id": SchemaType("CatalogObject.id", None)
                     # "product_name": SchemaType("product.name", None),
                     # "product_id": SchemaType("product.id", None),
                     # "customer_id": SchemaType("customer.id", None),
@@ -258,7 +260,7 @@ def main():
                 },
                 [
                     # SchemaType("objs_message", None)
-                    SchemaType("objs_user_profile.email", None)
+                    # SchemaType("Transaction.order_id", None)
                     # SchemaType("invoiceitem", None)
                     # SchemaType("charge", None)
                     # SchemaType("refund", None)
@@ -266,10 +268,10 @@ def main():
                     # SchemaType("subscription", None)
                     # SchemaType("payment_source.last4", None)
                 ],
-                100 #configuration["synthesis"]["solution_num"]
+                10 #configuration["synthesis"]["solution_num"]
             )
 
-            for prog in solutions:
+            for prog in [r.pretty(synthesizer._entries, 0) for r in solutions]:
                 print(prog)
 
         else:
