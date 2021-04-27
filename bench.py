@@ -248,10 +248,13 @@ class Bencher:
 
                 found = False
                 for rank, res_sol in enumerate(res_no_re):
-                    if any([compare_program_strings(tgt_sol, res_sol) for tgt_sol in tgt_sols]):
-                        found = True
-                        arr["rank_no_re"] = rank
+                    for tgt_sol in tgt_sols:
+                        if compare_program_strings(tgt_sol, res_sol):
+                            found = True
+                            arr["rank_no_re"] = rank
 
+                            break
+                    if found:
                         break
 
                 sol_prog = None
@@ -279,8 +282,9 @@ class Bencher:
                         print(r[1], r[0])
 
                     for rank, res_sol in enumerate(res):
-                        if any([compare_program_strings(tgt_sol, get_solution_strs([res_sol[0]])[0]) for tgt_sol in tgt_sols]):
-                            return rank, res_sol[0]
+                        for tgt_sol in tgt_sols:
+                            if compare_program_strings(tgt_sol, get_solution_strs([res_sol[0]])[0]):
+                                return rank, res_sol[0]
                     return None, None
 
                 ranks = [get_solution_rank() for _ in range(self.filter_num)]

@@ -239,7 +239,7 @@ def main():
                     # "user_id": SchemaType("defs_user_id", None),
                     # "email": SchemaType("objs_user_profile.email", None)
                     # "customer_id": SchemaType("Customer.id", None),
-                    "location_id": SchemaType("Location.id", None),
+                    # "location_id": SchemaType("Location.id", None),
                     # "subscription_plan_id": SchemaType("CatalogObject.id", None)
                     # "product_name": SchemaType("product.name", None),
                     # "product_id": SchemaType("product.id", None),
@@ -260,7 +260,7 @@ def main():
                 },
                 [
                     # SchemaType("objs_message", None)
-                    SchemaType("Transaction.order_id", None)
+                    # SchemaType("Transaction.order_id", None)
                     # SchemaType("invoiceitem", None)
                     # SchemaType("charge", None)
                     # SchemaType("refund", None)

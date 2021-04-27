@@ -227,7 +227,7 @@ class SaturationThread(BasicGenerator):
             else:
                 opt_params.append(param_obj)
 
-        picked_num = 0
+        picked_num = random.randint(0, n)
         picked_num = min(picked_num, len(opt_params))
         picked_opt_params = random.sample(opt_params, picked_num)
 

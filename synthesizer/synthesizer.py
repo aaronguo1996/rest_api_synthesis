@@ -230,7 +230,7 @@ class Synthesizer:
 
         # slack logs
         lst = [
-            # "/conversations.list_GET",
+            # "/chat.delete_POST",
             # "/conversations.members_GET",
             # "/users.info_GET",
             # '/users.list_GET',
