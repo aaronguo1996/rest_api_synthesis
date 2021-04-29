@@ -15,7 +15,7 @@
                     "x1 <- x0.invoices",
                     "if x1.location_id = location_id",
                     "return x1",
-                    "}"
+                "}"
             ]],
             "max_length": 8
         },
@@ -37,6 +37,16 @@
                     "if x1.customer_id = customer_id",
                     "if x1.plan_id = subscription_plan_id",
                     "if x1.location_id = location_id",
+                    "return x1",
+                "}"
+            ], [
+                "\\customer_id location_id subscription_plan_id -> {",
+                    "let x0 = /v2/subscriptions/search_POST()",
+                    "x1 <- x0.subscriptions",
+                    "if x1.location_id = location_id",
+                    "if x1.location_id = location_id",
+                    "if x1.plan_id = subscription_plan_id",
+                    "if x1.customer_id = customer_id",
                     "return x1",
                 "}"
             ]],

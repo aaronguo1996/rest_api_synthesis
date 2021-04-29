@@ -64,7 +64,7 @@ class BasicGenerator:
         self._value_dict = value_dict
         self._conn = Connection(hostname, base_path)
         self._generateing_depth_limit = depth_limit
-        self.opt_param_indices = opt_param_indices
+        self._opt_param_indices = opt_param_indices
         self._real_dependencies = real_dependencies
         self._annotations = annotations
         self._token = token
@@ -98,16 +98,17 @@ class BasicGenerator:
 
     def _generate_get(self, depth):
         params = self._ep_method_def.get(defs.DOC_PARAMS, [])
-        return self._generate_params(depth + 1, params, self.opt_param_indices)
+        return self._generate_params(depth + 1, params, self._opt_param_indices)
 
     def _generate_post(self, depth):
-        header_param_indices = [idx for idx in self.opt_param_indices if idx < len(header_params)]
         header_params = self._ep_method_def.get(defs.DOC_PARAMS, [])
+        _, opt_header_params = self._filter_optional(header_params)
+        header_param_indices = [idx for idx in self._opt_param_indices if idx < len(opt_header_params)]
         headers = self._generate_params(depth + 1, header_params, header_param_indices)
 
-        body_param_indices = [idx - len(header_params)
-                              for idx in self.opt_param_indices
-                              if idx >= len(header_params)]
+        body_param_indices = [idx - len(opt_header_params)
+                              for idx in self._opt_param_indices
+                              if idx >= len(opt_header_params)]
         body_param_lst = self._get_body_params()
         body = self._generate_params(depth + 1, body_param_lst, body_param_indices)
 
@@ -127,6 +128,8 @@ class BasicGenerator:
                 requires = body_schema.get(defs.DOC_REQUIRED, [])
                 body_params = body_schema.get(defs.DOC_PROPERTIES, {})
 
+                if not isinstance(requires, list):
+                    return []
                 for param_name in body_params:
                     param = body_params[param_name]
                     param.update({
@@ -429,7 +432,6 @@ class WitnessGenerator:
                                     self._real_dependencies,
                                     self._annotations,
                                     self._analyzer, self._depth_limit, indices)
-                                print(indices)
                                 futures.append(executor.submit(t.run))
                                 return
                             generate_opt_param_subsets(num_params - 1, num_choose, indices)
