@@ -290,6 +290,16 @@ class Synthesizer:
         #     # "projection(/v2/subscriptions/search_response, subscriptions)_",
         #     # "projection(/v2/invoices/search_response, invoices)_"
         # ]
+        lst = [
+            # "/v2/catalog/object/{object_id}_DELETE",
+            # "projection(OrderLineItem, name)_",
+            # "projection(subscription, latest_invoice)_",
+            # "/v1/prices_POST"
+            # "filter(Subscription, Subscription.plan_id)_",
+            # "filter(Subscription, Subscription.plan_id)_",
+            # "projection(/v2/subscriptions/search_response, subscriptions)_",
+            # "projection(/v2/invoices/search_response, invoices)_"
+        ]
 
         for name in lst:
             e = self._entries.get(name)

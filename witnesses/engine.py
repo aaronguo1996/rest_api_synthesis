@@ -138,31 +138,34 @@ class BasicGenerator:
         self._logger.debug(f"generateing for endpoint {self._endpoint}"
             f" at depth {depth}")
 
-        # get parameters
-        if self._method.upper() == defs.METHOD_GET:
-            # parameters are defined in the "parameters" section
-            params = self._generate_get(depth)
-            code, response = self._conn.send_and_recv(
-                self._endpoint,
-                self._method.upper(),
-                {
-                    defs.HEADER_AUTH: f"{defs.HEADER_BEARER} {self._token}",
-                },
-                params)
-        elif self._method.upper() == defs.METHOD_POST:
-            # parameters are defined in both the "parameters" and "requestBody"
-            params = self._generate_post(depth)
-            code, response = self._conn.send_and_recv(
-                self._endpoint,
-                self._method.upper(),
-                {
-                    defs.HEADER_AUTH: f"{defs.HEADER_BEARER} {self._token}",
-                },
-                params)
-        else:
-            raise Exception("Unsupported method for generateing:", self._method)
+        try:
+            # get parameters
+            if self._method.upper() == defs.METHOD_GET:
+                # parameters are defined in the "parameters" section
+                params = self._generate_get(depth)
+                code, response = self._conn.send_and_recv(
+                    self._endpoint,
+                    self._method.upper(),
+                    {
+                        defs.HEADER_AUTH: f"{defs.HEADER_BEARER} {self._token}",
+                    },
+                    params)
+            elif self._method.upper() == defs.METHOD_POST:
+                # parameters are defined in both the "parameters" and "requestBody"
+                params = self._generate_post(depth)
+                code, response = self._conn.send_and_recv(
+                    self._endpoint,
+                    self._method.upper(),
+                    {
+                        defs.HEADER_AUTH: f"{defs.HEADER_BEARER} {self._token}",
+                    },
+                    params)
+            else:
+                raise Exception("Unsupported method for generateing:", self._method)
+            return Result(self._method, self._endpoint, code, response, params)
+        except:
+            return None
 
-        return Result(self._method, self._endpoint, code, response, params)
 
     def run(self):
         # try:

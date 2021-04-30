@@ -8,12 +8,19 @@
       "input_args": {
         "channel_name": "objs_conversation.name"
       },
-      "output": [
-        "objs_user_profile.email"
+      "output": "[objs_user_profile.email]",
+      "solution": [
+        "\\channel_name -> {",
+          "let x0 = /conversations.list_GET()",
+          "x1 <- x0.channels",
+          "if x1.name = channel_name",
+          "let x2 = /conversations.members_GET(channel=x1.id)",
+          "x3 <- x2.members",
+          "let x4 = /users.profile.get_GET(user=x3)",
+          "return x4.profile.email",
+        "}"
       ],
-      "output_list": true,
-      "solution": [],
-      "max_length": 10
+      "max_length": 20
     },
     {
       "name": "1.2",
@@ -22,11 +29,15 @@
       "input_args": {
         "email": "objs_user_profile.email"
       },
-      "output": [
-        "objs_message"
+      "output": "objs_message",
+      "solution": [
+        "\\email -> {",
+          "let x0 = /users.lookupByEmail_GET(email=email)",
+          "let x1 = /conversations.open_POST(users=x0.user.id)",
+          "let x2 = /chat.postMessage_POST(channel=x1.channel.id)",
+          "return x2.message",
+          "}"
       ],
-      "output_list": false,
-      "solution": [],
       "max_length": 10
     },
     {
@@ -36,11 +47,17 @@
       "input_args": {
         "user_id": "defs_user_id"
       },
-      "output": [
-        "objs_message"
+      "output": "[objs_message]",
+      "solution": [
+        "\\user_id -> {",
+          "let x0 = /users.conversations_GET(user=user_id)",
+          "x1 <- x0.channels",
+          "let x2 = /conversations.info_GET(channel=x1.id)",
+          "let x3 = x2.last_read",
+          "let x5 = /conversations.history_GET(channel=x2.id, oldest=x3)",
+          "return x5",
+          "}"
       ],
-      "output_list": true,
-      "solution": [],
       "max_length": 10
     }
   ]

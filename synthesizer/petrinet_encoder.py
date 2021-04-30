@@ -37,7 +37,7 @@ class PetriNetEncoder:
         # variables and constraints
         self._add_variables(self._path_len)
         self._set_initial(inputs)
-        # self._add_copy_transitions()
+        self._add_copy_transitions()
         self._run_approximation(inputs)
 
     @TimeStats(key=STATS_ENCODE)
@@ -72,15 +72,6 @@ class PetriNetEncoder:
             input_places + null_places, set(), set()
         )
         self._reachables = self._reachables.union(reachables)
-        # print("/users.lookupByEmail_GET" in self._reachables)
-        # print("projection(/users.lookupByEmail_GET_response, user)_" in self._reachables)
-        # print("projection(objs_user, id)_" in self._reachables)
-        # print("/conversations.open_POST" in self._reachables)
-        # print("projection(/conversations.open_POST_response, channel)_" in self._reachables)
-        # print("projection(objs_conversation, id)_" in self._reachables)
-        # print("/chat.postMessage_POST" in self._reachables)
-        # print("projection(/chat.postMessage_POST_response, message)_" in self._reachables)
-        # print("after approximation:", len(self._reachables))
 
     def check_constraints_binding(self):
         # constraints

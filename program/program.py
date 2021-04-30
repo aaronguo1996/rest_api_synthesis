@@ -100,7 +100,7 @@ class AppExpr(Expression):
             arg_names = list(zip(*self._args))[0]
             # print("[App] arg names", arg_names)
             named_arg_vals = list(zip(arg_names, arg_vals))
-            print("[App] arg names and vals", list(named_arg_vals))
+            # print("[App] arg names and vals", list(named_arg_vals))
         else:
             arg_scores = [0]
             named_arg_vals = []
@@ -110,7 +110,7 @@ class AppExpr(Expression):
             print("fail to get successful trace for", self._fun, named_arg_vals)
             return None, MAX_COST
         else:
-            print("[App] get back", val, "for", self._fun, named_arg_vals)
+            # print("[App] get back", val, "for", self._fun, named_arg_vals)
             return val, 1 + sum(arg_scores)
 
     def get_multiplicity(self, analyzer):
@@ -301,7 +301,8 @@ class ProjectionExpr(Expression):
         )
 
     def collect_exprs(self):
-        res = [self] ++ self._obj.collect_exprs()
+        res = [self] + self._obj.collect_exprs()
+        return res
 
     def to_graph(self, graph):
         # print(self)
@@ -317,12 +318,12 @@ class ProjectionExpr(Expression):
 
     def execute(self, analyzer):
         val, cost = self._obj.execute(analyzer)
-        if val is not None and self._field in val:
+        try:
             val = val.get(self._field)
-            print("[Projection] get back", val, "for", self._field)
+            # print("[Projection] get back", val, "for", self._field)
             return val, cost + 1
-        else:
-            print("[Projection] field projection fails for", self._field)
+        except:
+            # print("[Projection] field projection fails for", self._field)
             return None, MAX_COST
 
     def get_multiplicity(self, analyzer):
@@ -426,12 +427,15 @@ class FilterExpr(Expression):
         )
 
     def collect_exprs(self):
-        res = [self] ++ self._obj.collect_exprs()
-        # if self._is_val_list:
-        #     return res ++ chain(*[x.collect_exprs() for x in self._val])
-        # else:
-        #     return res ++ self._val.collect_exprs()
-        return res ++ self._val.collect_exprs()
+        try:
+            res = [self] + self._obj.collect_exprs()
+            # if self._is_val_list:
+            #     return res ++ chain(*[x.collect_exprs() for x in self._val])
+            # else:
+            #     return res ++ self._val.collect_exprs()
+            return res + self._val.collect_exprs()
+        except:
+            return [self] + self._val.collect_exprs()
 
     def to_graph(self, graph):
         # print(self)
@@ -453,11 +457,11 @@ class FilterExpr(Expression):
         val, score2 = self._val.execute(analyzer)
         
         if obj is None or val is None:
-            if obj is None:
-                print("[Filter] obj cannot be evaluated")
+            # if obj is None:
+                # print("[Filter] obj cannot be evaluated")
 
-            if val is None:
-                print("[Filter] val cannot be evaluated")
+            # if val is None:
+                # print("[Filter] val cannot be evaluated")
 
             return None, MAX_COST
 
@@ -465,17 +469,17 @@ class FilterExpr(Expression):
         #     obj = [obj]
 
         paths = self._field.split('.')
-        print("[Filter] filtering by path", paths)
+        # print("[Filter] filtering by path", paths)
         # result = []
         # for o in obj:
         tmp = obj
         for p in paths:
             if p in tmp:
                 tmp = tmp.get(p)
-                print("[Filter] get field", p, "returns", tmp)
+                # print("[Filter] get field", p, "returns", tmp)
             else:
                 tmp = None
-                print("[Filter] cannot find field", p, "in", tmp)
+                # print("[Filter] cannot find field", p, "in", tmp)
                 break
             
         if tmp == val:
@@ -598,7 +602,7 @@ class MapExpr(Expression):
         )
 
     def collect_exprs(self):
-        return [self] ++ self._obj.collect_exprs() ++ self._prog.collect_exprs()
+        return [self] + self._obj.collect_exprs() + self._prog.collect_exprs()
 
     def body(self):
         expr = self._prog.to_expression({self._prog._inputs[0]: self._obj})
@@ -751,7 +755,7 @@ class AssignExpr(Expression):
         )
 
     def collect_exprs(self):
-        return [self] ++ self._rhs.collect_exprs()
+        return [self] + self._rhs.collect_exprs()
 
     def to_graph(self, graph):
         # print(self)
@@ -1043,7 +1047,7 @@ class Program:
             if isinstance(expr, AssignExpr): 
                 val, cost = expr._rhs.execute(analyzer)
                 if val is None:
-                    print(expr, "cannot be evaled")
+                    # print(expr, "cannot be evaled")
                     return None, MAX_COST
 
                 if expr._is_bind:
@@ -1071,7 +1075,7 @@ class Program:
             else:
                 val, cost = expr.execute(analyzer)
                 if val is None:
-                    print(expr, "cannot be evaled")
+                    # print(expr, "cannot be evaled")
                     return None, MAX_COST
 
                 val, sub_cost = self._execute_exprs(exprs[1:], analyzer)
