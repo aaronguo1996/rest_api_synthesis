@@ -1,21 +1,6 @@
 from schemas.schema_type import SchemaType
 from openapi import defs
 
-class Parameter:
-    def __init__(self, method, arg_name, func_name, is_required, typ, value=None):
-        self.method = method
-        self.arg_name = arg_name
-        self.func_name = func_name
-        self.value = value
-        self.type = typ
-        self.is_required = is_required
-
-    def __str__(self):
-        return self.__dict__
-
-    def __repr__(self):
-        return self.__str__()
-
 class ErrorResponse:
     def __init__(self, msg):
         self._error_msg = msg
@@ -32,10 +17,15 @@ class ErrorResponse:
 
         return self._error_msg == other._error_msg
         
-class ResponseParameter(Parameter):
+class Parameter:
     def __init__(self, method, arg_name, func_name, 
         path, is_required, array_level, typ, value):
-        super().__init__(method, arg_name, func_name, is_required, typ, value)
+        self.method = method
+        self.arg_name = arg_name
+        self.func_name = func_name
+        self.value = value
+        self.type = typ
+        self.is_required = is_required
         self.path = path
         self.array_level = array_level
 
@@ -70,18 +60,16 @@ class ResponseParameter(Parameter):
 
         if isinstance(self.value, dict):
             # print("Inferring type for", self.func_name, self.arg_name)
-            if defs.DOC_OK not in self.value: # should only impact Slack API
-                obj_type = SchemaType.infer_type_for(
-                        path_to_defs, skip_fields, self.value)
-            else:
-                obj_type = None
+            # FIXME: how to disable the wrong inference for the one with "ok" in Slack API
+            obj_type = SchemaType.infer_type_for(
+                    path_to_defs, skip_fields, self.value)
 
             if (self.type is not None and 
                 "unknown_obj" not in self.type.name and
                 obj_type is not None and # when we know its type
                 self.type.name != obj_type.name):
                 aliases[self.type.name] = obj_type.name
-                
+
             if obj_type is not None:
                 if self.type is None:
                     self.type = obj_type
@@ -89,6 +77,7 @@ class ResponseParameter(Parameter):
                     self.type.name = obj_type.name
                     self.type.schema = obj_type.schema
 
+            # ad hoc objects
             if self.type is None:
                 assigned_type = self._assign_type(self.value)
                 self.type = SchemaType("unknown_obj", assigned_type)
@@ -111,7 +100,7 @@ class ResponseParameter(Parameter):
                 else:
                     typ = None
 
-                p = ResponseParameter(
+                p = Parameter(
                     self.method, k, self.func_name,
                     self.path + [k], self.is_required, self.array_level, 
                     typ, v
@@ -144,7 +133,7 @@ class ResponseParameter(Parameter):
                 if self.type is not None and item_type.name != "unknown_obj":
                     aliases[self.type.name] = item_type.name
 
-                p = ResponseParameter(
+                p = Parameter(
                     self.method, defs.INDEX_ANY, self.func_name,
                     self.path + [defs.INDEX_ANY], self.is_required,
                     self.array_level + 1,
@@ -160,14 +149,15 @@ class ResponseParameter(Parameter):
 
             # if we see a scalar value for the same type name,
             # invalidate its definition as an object
-            aliases[self.type.name] = None
+            if self.type is not None:
+                aliases[self.type.name] = None
 
             return [self], aliases
 
         return results, aliases
 
     def __eq__(self, other): 
-        if not isinstance(other, ResponseParameter):
+        if not isinstance(other, Parameter):
             # don't attempt to compare against unrelated types
             return NotImplemented
 
@@ -190,32 +180,9 @@ class ResponseParameter(Parameter):
 
     @staticmethod
     def from_openapi(endpoint, method, arg_name, is_required, array_level):
-        return ResponseParameter(
+        return Parameter(
             method, arg_name, endpoint,
             [arg_name], is_required, array_level, None, None)
-
-class RequestParameter(Parameter):
-    def __init__(self, method, arg_name, func_name, is_required, typ, value):
-        super().__init__(method, arg_name, func_name, is_required, typ, value)
-
-    def __eq__(self, other): 
-        if not isinstance(other, RequestParameter):
-            # don't attempt to compare against unrelated types
-            return NotImplemented
-
-        return (self.arg_name == other.arg_name and
-                self.method.upper() == other.method.upper() and
-                self.func_name == other.func_name)
-
-    def __str__(self):
-        return self.func_name + ':' + self.arg_name + ':' + self.method.upper()
-
-    def __hash__(self):
-        return hash((self.arg_name, self.method.upper(), self.func_name))
-
-    @staticmethod
-    def from_openapi(endpoint, method, arg_name, is_required):
-        return RequestParameter(method, arg_name, endpoint, is_required, None, None)
 
 class TraceEntry:
     def __init__(self, endpoint, method, parameters, response):
@@ -263,7 +230,7 @@ class TraceEntry:
             if name == "token":
                 continue
 
-            param = RequestParameter.from_openapi(
+            param = Parameter.from_openapi(
                 endpoint, method, name,
                 p.get(defs.DOC_REQUIRED, False))
             entry_params.append(param)
@@ -288,7 +255,7 @@ class TraceEntry:
                     if name == "token":
                         continue
 
-                    param = RequestParameter.from_openapi(
+                    param = Parameter.from_openapi(
                         endpoint, method, name,
                         name in requires,
                     )
@@ -311,19 +278,6 @@ class TraceEntry:
         requires = response_schema.get(defs.DOC_REQUIRED, [])
         response_params = response_schema.get(defs.DOC_PROPERTIES)
         if response_params is None:
-            # def expand_oneof(schema):
-            #     results = []
-            #     if defs.DOC_ONEOF in schema:
-            #         oneof_params = schema.get(defs.DOC_ONEOF)
-            #         for p in oneof_params:
-            #             results += expand_oneof(p)
-            #     else:
-            #         results.append(schema.get(defs.DOC_PROPERTIES))
-
-            #     return results
-        
-            # response_params = expand_oneof(response_schema)
-
             while defs.DOC_ONEOF in response_schema:
                 response_schemas = response_schema.get(defs.DOC_ONEOF)
                 response_schema = response_schemas[0]
@@ -332,7 +286,7 @@ class TraceEntry:
 
         # FIXME: magic thing to get Stripe API work, better implementation later
         if response_params is None or defs.DOC_STRIPE in response_schema:
-            entry_response = ResponseParameter(
+            entry_response = Parameter(
                 method, "", endpoint, [], True, 0, None, None
             )
 
@@ -341,11 +295,11 @@ class TraceEntry:
             ]
         else:
             response_typ = SchemaType(f"{endpoint}_{method.upper()}_response", None)
-            entry_response = ResponseParameter(
+            entry_response = Parameter(
                 method, "", endpoint, [], True, 0, response_typ, None
             )
 
-            response_param = RequestParameter(
+            response_param = Parameter(
                 method, "", endpoint, True, response_typ, None
             )
 
@@ -358,7 +312,7 @@ class TraceEntry:
                     continue
 
                 # print("name:", name)
-                param = ResponseParameter.from_openapi(
+                param = Parameter.from_openapi(
                     endpoint, method, name,
                     name in requires, int(rp.get(defs.DOC_TYPE) == "array"))
 

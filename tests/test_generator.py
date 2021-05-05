@@ -1,6 +1,6 @@
 import unittest
 from program.generator import *
-from analyzer.entry import TraceEntry, RequestParameter, ResponseParameter
+from analyzer.entry import TraceEntry, Parameter
 from schemas.schema_type import SchemaType
 
 class GeneratorTestCase(unittest.TestCase):
@@ -11,12 +11,12 @@ class GeneratorTestCase(unittest.TestCase):
     def test_generate_projection(self):
         sig = TraceEntry("projection(user, id)", "", 
             [
-                RequestParameter(
-                    "", "id", "projection(user, id)", 
-                    True, SchemaType("user", None), None
+                Parameter(
+                    "", "id", "projection(user, id)", [],
+                    True, None, SchemaType("user", None), None
                 ),
             ],
-            ResponseParameter(
+            Parameter(
                 "", "user.id", "projection(user, id)",
                 [], True, 0, SchemaType("user.id", None), None
             ),
@@ -38,16 +38,16 @@ class GeneratorTestCase(unittest.TestCase):
     def test_generate_filter(self):
         sig = TraceEntry("filter(user, user.id)", "", 
             [
-                RequestParameter(
-                    "", "id", "filter(user, user.id)", 
-                    True, SchemaType("user", None), None
+                Parameter(
+                    "", "id", "filter(user, user.id)", [], 
+                    True, None, SchemaType("user", None), None
                 ),
-                RequestParameter(
-                    "", "user.id", "filter(user, user.id)",
-                    True, SchemaType("user.id", None), None
+                Parameter(
+                    "", "user.id", "filter(user, user.id)", [],
+                    True, None, SchemaType("user.id", None), None
                 ),
             ],
-            ResponseParameter(
+            Parameter(
                 "", "user.id", "filter(user, user.id)",
                 [], True, 0, SchemaType("user", None), None
             ),
@@ -75,12 +75,12 @@ class GeneratorTestCase(unittest.TestCase):
     def test_generate_let(self):
         sig = TraceEntry("/users.lookupByEmail", "", 
             [
-                RequestParameter(
-                    "get", "email", "/users.lookupByEmail", 
-                    True, SchemaType("user.profile.email", None), None
+                Parameter(
+                    "get", "email", "/users.lookupByEmail", [], 
+                    True, None, SchemaType("user.profile.email", None), None
                 ),
             ],
-            ResponseParameter(
+            Parameter(
                 "get", "user", "/users.lookupByEmail",
                 ["user"], True, 0, SchemaType("user", None), None
             ),
@@ -106,7 +106,7 @@ class GeneratorTestCase(unittest.TestCase):
             "/conversations.list:get": 
                 TraceEntry("/conversations.list", "", 
                     [],
-                    ResponseParameter(
+                    Parameter(
                         "get", "channels", "/conversations.list",
                         ["channels"], True, 1,
                         SchemaType("objs_conversation", None), None
@@ -115,12 +115,12 @@ class GeneratorTestCase(unittest.TestCase):
             "/conversations.members:get":
                 TraceEntry("/conversations.members", "get",
                     [
-                        RequestParameter(
-                            "get", "channel", "/conversations.members",
-                            True, SchemaType("objs_channel.id", None), None
+                        Parameter(
+                            "get", "channel", "/conversations.members", [],
+                            True, None, SchemaType("objs_channel.id", None), None
                         ),
                     ],
-                    ResponseParameter(
+                    Parameter(
                         "get", "users", "/conversations.members",
                         ["users"], True, 1,
                         SchemaType("defs_user_id", None), None
@@ -129,12 +129,12 @@ class GeneratorTestCase(unittest.TestCase):
             "/users.info:get":
                 TraceEntry("/users.info", "get",
                     [
-                        RequestParameter(
-                            "get", "user", "/users.info",
-                            True, SchemaType("defs_user_id", None), None
+                        Parameter(
+                            "get", "user", "/users.info", [],
+                            True, None, SchemaType("defs_user_id", None), None
                         ),
                     ],
-                    ResponseParameter(
+                    Parameter(
                         "get", "user", "/users.info",
                         ["user"], True, 1,
                         SchemaType("objs_user", None), None
@@ -143,17 +143,22 @@ class GeneratorTestCase(unittest.TestCase):
             "filter(objs_conversation, objs_conversation.name):":
                 TraceEntry("filter(objs_conversation, objs_conversation.name)", "",
                     [
-                        RequestParameter(
-                            "", "", "filter(objs_conversation, objs_conversation.name)",
-                            True, SchemaType("objs_conversation", None), None
+                        Parameter(
+                            "", "", 
+                            "filter(objs_conversation, objs_conversation.name)", 
+                            [], True, None,
+                            SchemaType("objs_conversation", None), None
                         ),
-                        RequestParameter(
-                            "", "", "filter(objs_conversation, objs_conversation.name)",
-                            True, SchemaType("objs_conversation.name", None), None
+                        Parameter(
+                            "", "", 
+                            "filter(objs_conversation, objs_conversation.name)",
+                            [], True, None,
+                            SchemaType("objs_conversation.name", None), None
                         ),
                     ],
-                    ResponseParameter(
-                        "", "", "filter(objs_conversation, objs_conversation.name)",
+                    Parameter(
+                        "", "", 
+                        "filter(objs_conversation, objs_conversation.name)",
                         [], True, 1,
                         SchemaType("objs_conversation", None), None
                     ),
@@ -161,12 +166,13 @@ class GeneratorTestCase(unittest.TestCase):
             "projection(objs_conversation, id):":
                 TraceEntry("projection(objs_conversation, id)", "",
                     [
-                        RequestParameter(
-                            "", "", "projection(objs_conversation, id)",
-                            True, SchemaType("objs_conversation", None), None
+                        Parameter(
+                            "", "", "projection(objs_conversation, id)", [],
+                            True, None,
+                            SchemaType("objs_conversation", None), None
                         ),
                     ],
-                    ResponseParameter(
+                    Parameter(
                         "", "", "projection(objs_conversation, id)",
                         [], True, 0,
                         SchemaType("objs_channel.id", None), None
@@ -175,12 +181,12 @@ class GeneratorTestCase(unittest.TestCase):
             "projection(objs_user, profile):":
                 TraceEntry("projection(objs_user, profile)", "",
                     [
-                        RequestParameter(
-                            "", "", "projection(objs_user, profile)",
-                            True, SchemaType("objs_user", None), None
+                        Parameter(
+                            "", "", "projection(objs_user, profile)", [],
+                            True, None, SchemaType("objs_user", None), None
                         ),
                     ],
-                    ResponseParameter(
+                    Parameter(
                         "", "", "projection(objs_user, profile)",
                         [], True, 0,
                         SchemaType("objs_user.profile", None), None
@@ -189,12 +195,13 @@ class GeneratorTestCase(unittest.TestCase):
             "projection(objs_user.profile, email):":
                 TraceEntry("projection(objs_user.profile, email)", "",
                     [
-                        RequestParameter(
-                            "", "", "projection(objs_user.profile, email)",
-                            True, SchemaType("objs_user.profile", None), None
+                        Parameter(
+                            "", "", "projection(objs_user.profile, email)", [],
+                            True, None, 
+                            SchemaType("objs_user.profile", None), None
                         ),
                     ],
-                    ResponseParameter(
+                    Parameter(
                         "", "", "projection(objs_user.profile, email)",
                         [], True, 0,
                         SchemaType("objs_user.profile.email", None), None

@@ -2,7 +2,7 @@ import re
 import logging
 
 from schemas.schema_type import SchemaType
-from analyzer.entry import ErrorResponse, ResponseParameter, RequestParameter
+from analyzer.entry import ErrorResponse, Parameter
 from analyzer.utils import get_representative
 from openapi import defs
 from synthesizer.utils import make_entry_name
@@ -46,18 +46,11 @@ class DSU:
                 self._values[y] = set([str(y.value)])
 
         # hard code rules for Slack, FIXME: check the type
-        if (("name" in y.arg_name and isinstance(y, ResponseParameter) and y.type and "objs_message" in y.type.name) or 
-            ("name" in x.arg_name and isinstance(x, ResponseParameter) and x.type and "objs_message" in x.type.name)):
+        if (("name" in y.arg_name and y.type and "objs_message" in y.type.name) or 
+            ("name" in x.arg_name and x.type and "objs_message" in x.type.name)):
             return
 
-        # hard code rules for Stripe
-        # if ((isinstance(x, ResponseParameter) and x.path == ['data', '[?]', 'data', 'object', 'id']) or
-        #     (isinstance(y, ResponseParameter) and y.path == ['data', '[?]', 'data', 'object', 'id'])):
-        #     return
-
         xr, yr = self.find(x), self.find(y)
-        # if xr != yr:
-        #     print("union", xr, yr)
 
         if self._sizes[xr] < self._sizes[yr]:
             self._parents[yr] = xr
@@ -115,12 +108,7 @@ class LogAnalyzer:
             return
 
         typ = r.type.get_oldest_parent()
-        # if typ.name == "defs_user_id":
-        #     print(typ.name)
-        #     print(typ.schema)
-        #     print(typ.is_object)
         if not typ.is_object:
-            # print(typ.name, "is not an object")
             return
 
         typ_name = typ.name
@@ -171,22 +159,66 @@ class LogAnalyzer:
 
                 self.type_partitions[t] = new_partitions
 
+    def _analyze_params(self, skip_fields, entry_def, params, path_to_defs):
+        entry_params = {}
+        if entry_def:
+            header_params = entry_def.get(defs.DOC_PARAMS, {})
+            for p in header_params:
+                param_name = p.get(defs.DOC_NAME)
+                param_type = p.get(defs.DOC_SCHEMA).get(defs.DOC_TYPE)
+                entry_params[param_name] = {
+                    defs.DOC_TYPE: param_type,
+                }
 
-    def analyze(self, paths, entries, skip_fields, blacklist, path_to_defs="#/components/schemas", prefilter=False):
+            body_params = entry_def.get(defs.DOC_REQUEST, {})
+            if body_params:
+                body_params = body_params.get(defs.DOC_CONTENT, {})
+                if defs.HEADER_FORM in body_params:
+                    body_params = body_params.get(defs.HEADER_FORM)
+                else:
+                    body_params = body_params.get(defs.HEADER_JSON)
+                body_params = body_params \
+                    .get(defs.DOC_SCHEMA) \
+                    .get(defs.DOC_PROPERTIES)
+
+        def correct_value(p, typ):
+            if typ == "integer":
+                p.value = int(p.value)
+            elif typ == "boolean":
+                p.value = bool(p.value)
+
+        for param in params:
+            flatten_params, aliases = param.flatten(path_to_defs, skip_fields)
+            self.type_aliases.update(aliases)
+
+            for p in flatten_params:
+                if p.arg_name in entry_params:
+                    param = entry_params.get(p.arg_name)
+                    typ = param.get(defs.DOC_TYPE)
+                    correct_value(p, typ)
+
+                self.insert(p)
+
+    def _analyze_response(self, skip_fields, response, path_to_defs):
+        responses, aliases = response.flatten(
+            path_to_defs, skip_fields
+        )
+        self.type_aliases.update(aliases)
+
+        for r in responses:
+            self._add_type_fields(r)
+            self.insert(r)
+
+    def analyze(self, paths, entries, skip_fields, blacklist,
+        path_to_defs="#/components/schemas", prefilter=False):
         '''
             Match the value of each request argument or response parameter
             in a log entry and union the common ones
         '''
-        params = []
         for entry in entries:
             # do not add error responses to DSU
             if isinstance(entry.response, ErrorResponse):
                 continue
-            
-            if entry.endpoint == "/chat.postMessage":
-                print(entry.method)
-                print([(p.arg_name, p.value) for p in entry.parameters])
-                print(entry.response.value)
 
             # match docs to correct integers and booleans
             entry_def = paths.get(entry.endpoint)
@@ -196,55 +228,16 @@ class LogAnalyzer:
             if entry_def:
                 entry_def = entry_def.get(entry.method.lower())
 
-            entry_requests = {}
-            entry_params = []
-            if entry_def:
-                entry_params = entry_def.get(defs.DOC_PARAMS, [])
-                entry_requests = entry_def.get(defs.DOC_REQUEST, {})
-                if entry_requests:
-                    entry_requests = entry_requests.get(defs.DOC_CONTENT, {})
-                    if defs.HEADER_FORM in entry_requests:
-                        entry_requests = entry_requests.get(defs.HEADER_FORM)
-                    else:
-                        entry_requests = entry_requests.get(defs.HEADER_JSON)
-                    entry_requests = entry_requests \
-                        .get(defs.DOC_SCHEMA) \
-                        .get(defs.DOC_PROPERTIES)
-
-            responses, aliases = entry.response.flatten(
-                path_to_defs, skip_fields
+            self._analyze_params(
+                skip_fields, entry_def, entry.parameters, path_to_defs
             )
-            self.type_aliases.update(aliases)
-
-            def correct_value(p, typ):
-                if typ == "integer":
-                    p.value = int(p.value)
-                elif typ == "boolean":
-                    p.value = bool(p.value)
-
-            for p in entry.parameters:
-                for param in entry_params:
-                    if param.get(defs.DOC_NAME) == p.arg_name:
-                        typ = param.get(defs.DOC_SCHEMA).get(defs.DOC_TYPE)
-                        correct_value(p, typ)
-
-                if p.arg_name in entry_requests:
-                    param = entry_requests.get(p.arg_name)
-                    typ = param.get(defs.DOC_TYPE)
-                    correct_value(p, typ)
-
-                params.append(p)
-                
-            for r in responses:
-                self._add_type_fields(r)
-                params.append(r)
+            
+            self._analyze_response(
+                skip_fields, entry.response, path_to_defs
+            )
 
         if prefilter:
-            print(self.type_fields)
             self._partition_type()
-            print(self.type_partitions)
-        for p in params:
-            self.insert(p)
 
     def insert(self, param):
         if param.value is None:
@@ -294,10 +287,7 @@ class LogAnalyzer:
             if rep == "source.id" or rep == "payment_source.id":
                 group_params = []
                 for param in group:
-                    if isinstance(param, ResponseParameter):
-                        group_params.append((param.func_name, param.method, param.path, param.value, param.type))
-                    else:
-                        group_params.append((param.func_name, param.method, ["REQUEST", param.arg_name], param.value, param.type))
+                    group_params.append((param.func_name, param.method, param.path, param.value, param.type))
 
                 sorted(group_params)
                 for p in group_params:
@@ -310,7 +300,7 @@ class LogAnalyzer:
             for param in group:
                 trans = make_entry_name(param.func_name, param.method)
                 dot.node(trans, label=trans, shape='rectangle')
-                if isinstance(param, ResponseParameter):
+                if param.array_level is not None:
                     # add an edge between the method and its return type
                     if '[' not in rep and not re.search("image_.*", rep):
                         if param.type:
@@ -377,7 +367,7 @@ class LogAnalyzer:
                     "kind": "endpoint",
                 })
                 if '[' not in rep and not re.search("image_*", rep):
-                    if isinstance(param, ResponseParameter):
+                    if param.array_level is not None:
                         # add an edge between the method and its return type
                         if param.type:
                             p = param.type.get_oldest_parent()
@@ -443,8 +433,7 @@ class LogAnalyzer:
     def _find_descendant(self, param):
         params = self.dsu._parents.keys()
         for p in params:
-            if (isinstance(p, ResponseParameter) and
-                p.func_name == param.func_name and
+            if (p.func_name == param.func_name and
                 p.method.upper() == param.method.upper() and
                 param.path == p.path[:len(param.path)]):
 
@@ -460,8 +449,6 @@ class LogAnalyzer:
                 for p in group:
                     if p.value is not None:
                         values.append(p.value)
-                
-                # break
 
         return values
 
@@ -476,8 +463,7 @@ class LogAnalyzer:
 
         params = self.dsu._parents.keys()
         for p in params:
-            if (isinstance(p, ResponseParameter) and
-                p.type and p.type.name == typ_name):
+            if p.type and p.type.name == typ_name:
                 group = self.dsu.get_group(p)
                 _, rep_type = get_representative(group)
                 # TODO: we do not want to find the parent of this type, correct?
@@ -490,59 +476,47 @@ class LogAnalyzer:
     def set_type(self, param):
         if param.type and re.search('^/.*_response$', param.type.name):
             return
-
-        if isinstance(param, ResponseParameter):
-            descendant = self._find_descendant(param)
-            # if param does not belong to any group, create a new type
-            if descendant is None or descendant.type is None:
-                # print(f"{param} does not belong to any group")
-                param.type = SchemaType(str(param), None)
-            else:
-                if descendant.type:
-                    param_type = descendant.type.get_oldest_parent()
-                    # get the fields
-                    func_fields = self.type_fields.get(param_type.name, {})
-                    fields = func_fields.get(param.func_name)
-                    if fields is None: # we add all partitions that we can find
-                        parts = self.type_partitions.get(param_type.name)
-                        if parts is None:
-                            # print("no partition available for type when fields not available", param_type)
-                            param.type = param_type
-                        else:
-                            param.type = [
-                                SchemaType(f"{param_type.name}_{i}", None)
-                                for i in range(len(parts))
-                            ]
-                    else:
-                        # get all the partitions that cover the fields
-                        partitions = self.type_partitions.get(param_type.name)
-                        if partitions is None:
-                            # print("no partition available for type when fields available", param_type)
-                            param.type = param_type
-                        else:
-                            indices = []
-                            for i, part in enumerate(partitions):
-                                if part[0] in fields:
-                                    indices.append(i)
-
-                            param.type = [
-                                SchemaType(f"{param_type.name}_{i}", None)
-                                for i in indices
-                            ]
-                else:
-                    # print(f"{param} does not have a descendant type {descendant}")
-                    param.type = descendant.type
-        elif isinstance(param, RequestParameter):
-            group = self.dsu.get_group(param)
-            _, rep_type = get_representative(group)
-            # if param does not belong to any group
-            if group == [] or rep_type is None:
-                param.type = SchemaType(str(param), None)
-            else:
-                param.type = rep_type
+        
+        descendant = self._find_descendant(param)
+        # if param does not belong to any group, create a new type
+        if descendant is None or descendant.type is None:
+            # print(f"{param} does not belong to any group")
+            param.type = SchemaType(str(param), None)
         else:
-            raise Exception("Unexpected parameter type: "
-                "neither ResponseParameter nor RequestParameter")
+            if descendant.type:
+                param_type = descendant.type.get_oldest_parent()
+                # get the fields
+                func_fields = self.type_fields.get(param_type.name, {})
+                fields = func_fields.get(param.func_name)
+                if fields is None: # we add all partitions that we can find
+                    parts = self.type_partitions.get(param_type.name)
+                    if parts is None:
+                        # print("no partition available for type when fields not available", param_type)
+                        param.type = param_type
+                    else:
+                        param.type = [
+                            SchemaType(f"{param_type.name}_{i}", None)
+                            for i in range(len(parts))
+                        ]
+                else:
+                    # get all the partitions that cover the fields
+                    partitions = self.type_partitions.get(param_type.name)
+                    if partitions is None:
+                        # print("no partition available for type when fields available", param_type)
+                        param.type = param_type
+                    else:
+                        indices = []
+                        for i, part in enumerate(partitions):
+                            if part[0] in fields:
+                                indices.append(i)
+
+                        param.type = [
+                            SchemaType(f"{param_type.name}_{i}", None)
+                            for i in indices
+                        ]
+            else:
+                # print(f"{param} does not have a descendant type {descendant}")
+                param.type = descendant.type
 
     def reset_context(self):
         self._checked_fields = {}

@@ -3,7 +3,8 @@ import re
 from urllib.parse import urlparse
 
 from schemas.schema_type import SchemaType
-from analyzer.entry import TraceEntry, RequestParameter, ResponseParameter
+from analyzer.entry import TraceEntry, Parameter
+from openapi import defs
 
 JSON_TYPE = "application/json"
 HOSTNAME_PREFIX = "https://"
@@ -56,6 +57,55 @@ class LogParser:
 
         return entries
 
+    def _resolve_params(self, skip_fields, method, endpoint, request):
+        # get all the query data and body data
+        parameters = []
+
+        # match the endpoint names with those in the doc and get path params
+        endpoints = self.doc.get("paths")
+        path_params = None
+        for path, path_def in endpoints.items():
+            if method.lower() in path_def:
+                path_params = match_with_path(path, endpoint)
+                if path_params is not None:
+                    # print("Find path", path, "for entry", endpoint)
+                    endpoint = path
+                    break
+
+        request_params = path_params or []
+        request_params += request.get("queryString", [])
+
+        post_data = request.get("postData", {})
+        if "params" in post_data:
+            post_params = post_data.get("params")
+            request_params += post_params
+        else:
+            post_body = json.loads(post_data.get("text", "{}"))
+            for k, v in post_body.items():
+                request_params.append({
+                    "name": k,
+                    "value": v
+                })
+
+        request_params = [x for x in request_params if x["name"] not in skip_fields]
+        for rp in request_params:
+            p = Parameter(
+                method, rp["name"], endpoint, [],
+                True, None, None, rp["value"])
+            parameters.append(p)
+
+        return parameters
+
+    def _resolve_response(self, entry, method, endpoint):
+        response_text = entry["response"]["content"]["text"]
+        response_params = json.loads(response_text)
+
+        response = Parameter(
+            method, "", endpoint, [],
+            True, 0, None, response_params)
+
+        return response
+
     def _resolve_entry(self, skip_fields, entry):
         '''
             resolve a request/response entry into an LogEntry object
@@ -78,7 +128,7 @@ class LogParser:
 
         if not endpoint:
             raise Exception("Endpoint not found in the request entry")
-        
+
         host_len = len(self.hostname)
         if endpoint[:host_len] == self.hostname:
             endpoint = endpoint[host_len:]
@@ -88,57 +138,10 @@ class LogParser:
         if not method:
             raise Exception("Method not found in the request entry")
 
-        # get all the query data and body data
-        parameters = []
-        
-        # match the endpoint names with those in the doc and get path params
-        endpoints = self.doc.get("paths")
-        path_params = None
-        for path, path_def in endpoints.items():
-            if method.lower() in path_def:
-                path_params = match_with_path(path, endpoint)
-                if path_params is not None:
-                    # print("Find path", path, "for entry", endpoint)
-                    endpoint = path
-                    break
-        
-        request_params = path_params or []
-        request_params += request.get("queryString", [])
-        
-        post_data = request.get("postData", {})
-        if "params" in post_data:
-            post_params = post_data.get("params")
-            request_params += post_params
-        else:
-            post_body = json.loads(post_data.get("text", "{}"))
-            for k, v in post_body.items():
-                request_params.append({
-                    "name": k,
-                    "value": v
-                })
+        parameters = self._resolve_params(skip_fields, method, endpoint, request)
+        response = self._resolve_response(entry, method, endpoint)
 
-        request_params = [ x for x in request_params if x["name"] not in skip_fields]
-        for rp in request_params:
-            p = RequestParameter(method, rp["name"], endpoint, True, None, rp["value"])
-            parameters.append(p)
-
-        response_text = entry["response"]["content"]["text"]
-        response_params = json.loads(response_text)
-        
-        # print(endpoint, "returns", response_params)
-
-        p = None
-        if "ok" not in response_params:
-            # print("Inferring types for", endpoint)
-            resp_type = SchemaType.infer_type_for(
-                self.path_to_defs, skip_fields, response_params)
-            p = ResponseParameter(
-                method, "", endpoint, [], True, 0, resp_type, response_params)
-        else:
-            p = ResponseParameter(
-                method, "", endpoint, [], True, 0, None, response_params)
-        
-        return TraceEntry(endpoint, method, parameters, p)
+        return TraceEntry(endpoint, method, parameters, response)
 
     def _resolve_entries(self, entries, skips, skip_fields):
         '''
@@ -162,7 +165,6 @@ class LogParser:
         return result_entries
 
     def sanitize_hostname(self):
-        
         # check whether the provided hostname starts with https://
         # prepend it if not
         if self.hostname[:HOSTNAME_PREFIX_LEN] != HOSTNAME_PREFIX:
@@ -177,4 +179,3 @@ class LogParser:
         with open(doc_file, 'r') as f:
             doc = f.read()
             return json.loads(doc)
-            

@@ -9,7 +9,7 @@ import pickle
 import random
 import time
 
-from analyzer.entry import ErrorResponse, RequestParameter, ResponseParameter, TraceEntry
+from analyzer.entry import ErrorResponse, Parameter, TraceEntry
 from openapi import defs
 from witnesses.dependencies import DependencyResolver, EndpointProducer, EnumProducer
 from witnesses.error import EndpointNotFoundError, ExceedDepthLimit
@@ -95,13 +95,9 @@ class BasicGenerator:
             print("Cannot generate random values for type", param_type, "with name", param_name)
             return None
 
-    def _generate_get(self, depth):
-        params = self._ep_method_def.get(defs.DOC_PARAMS, [])
-        return self._generate_params(depth + 1, params, 2)
-
-    def _generate_post(self, depth):
+    def _generate_data(self):
         header_params = self._ep_method_def.get(defs.DOC_PARAMS, [])
-        headers = self._generate_params(depth + 1, header_params, 2)
+        headers = self._generate_params(header_params, 2)
         
         request_body = self._ep_method_def.get(defs.DOC_REQUEST)
         body = {}
@@ -123,56 +119,33 @@ class BasicGenerator:
                         defs.DOC_REQUIRED: param_name in requires,
                     })
                     body_param_lst.append(param)
-                body = self._generate_params(depth + 1, body_param_lst, 2)    
+                body = self._generate_params(body_param_lst, 2)
 
         body.update(headers)
         return body
 
-    def _generate_params(self, depth, params):
+    def _generate_params(self, params):
         raise NotImplementedError
 
-    def _generate_one(self, depth):
-        if depth > self._generateing_depth_limit:
-            raise ExceedDepthLimit
-
-        self._logger.debug(f"generateing for endpoint {self._endpoint}"
-            f" at depth {depth}")
+    def _generate_one(self):
+        self._logger.debug(f"generating for endpoint {self._endpoint}")
 
         try:
-            # get parameters
-            if self._method.upper() == defs.METHOD_GET:
-                # parameters are defined in the "parameters" section
-                params = self._generate_get(depth)
-                code, response = self._conn.send_and_recv(
-                    self._endpoint,
-                    self._method.upper(),
-                    {
-                        defs.HEADER_AUTH: f"{defs.HEADER_BEARER} {self._token}",
-                    },
-                    params)
-            elif self._method.upper() == defs.METHOD_POST:
-                # parameters are defined in both the "parameters" and "requestBody"
-                params = self._generate_post(depth)
-                code, response = self._conn.send_and_recv(
-                    self._endpoint,
-                    self._method.upper(),
-                    {
-                        defs.HEADER_AUTH: f"{defs.HEADER_BEARER} {self._token}",
-                    },
-                    params)
-            else:
-                raise Exception("Unsupported method for generateing:", self._method)
+            params = self._generate_data()
+            code, response = self._conn.send_and_recv(
+                self._endpoint,
+                self._method.upper(),
+                {
+                    defs.HEADER_AUTH: f"{defs.HEADER_BEARER} {self._token}",
+                },
+                params)
             return Result(self._method, self._endpoint, code, response, params)
         except:
             return None
 
 
     def run(self):
-        # try:
-            return self._generate_one(1)
-        # except Exception as e:
-        #     self._logger.debug(f"Exception: {e}")
-        #     return None
+        return self._generate_one()
 
 class SaturationThread(BasicGenerator):
     def __init__(self, hostname, base_path, endpoint, method, ep_method_def, 
@@ -195,7 +168,7 @@ class SaturationThread(BasicGenerator):
         elif isinstance(producer, EndpointProducer):
             self._logger.debug(f"Trying the producer {producer.endpoint}"
                 f" with path {producer.path}")
-            resp = ResponseParameter(
+            resp = Parameter(
                 producer.method,
                 producer.path[-1],
                 producer.endpoint,
@@ -214,44 +187,30 @@ class SaturationThread(BasicGenerator):
             self._logger.debug(f"Trying the parameter value {producer}")
             return producer
 
-    # get params from bank
-    def _generate_params(self, _, params, n):
-        param_dict = {}
+    def _generate_object(self, path, param_obj):
+        param_properties = param_obj.get(defs.DOC_PROPERTIES)
+        param_items = param_obj.get(defs.DOC_ITEMS)
+        param_type = param_obj.get(defs.DOC_TYPE)
 
-        req_params = []
-        opt_params = []
-        for param_obj in params:
-            required = param_obj.get(defs.DOC_REQUIRED)
-            if required:
-                req_params.append(param_obj)
-            else:
-                opt_params.append(param_obj)
+        if param_properties is not None: # for objects
+            self._logger.debug(f"Generating object values for path {path}")
+            # TODO: enumerate all object fields up to @n@ fields
+            param_val = {}
+            for k, v in param_properties.items():
+                p = self._generate_object(path + [k], v)
+                if p is not None:
+                    param_val[k] = p
+        elif param_items is not None and param_type == defs.TYPE_ARRAY: # for arrays
+            self._logger.debug(f"Generating array values for path {path}")
+            param_val = self._generate_object(path + [defs.INDEX_ANY], param_items)
+            param_val = [param_val]
+        else: # for primitive types
+            self._logger.debug(f"Generating string values for path {path}")
+            param_name = path[-1]
+            param = Parameter(
+                self._method, param_name, self._endpoint, path,
+                False, None, None, None)
 
-        picked_num = random.randint(0, n)
-        picked_num = min(picked_num, len(opt_params))
-        picked_opt_params = random.sample(opt_params, picked_num)
-
-        for param_obj in req_params + picked_opt_params:
-            param_name = param_obj.get(defs.DOC_NAME)
-            if param_name == "token": # in self._skip_fields:
-                continue
-
-            required = param_obj.get(defs.DOC_REQUIRED)
-            param_schema = param_obj.get(defs.DOC_SCHEMA)
-            if param_schema: # for parameters
-                param_type = param_schema.get(defs.DOC_TYPE)
-            else: # for requestBody
-                param_type = param_obj.get(defs.DOC_TYPE)
-
-            self._logger.debug(f"Filling for parameter {param_name} in {self._endpoint}")
-            param = RequestParameter(
-                self._method,
-                param_name, 
-                self._endpoint, 
-                required, 
-                None, 
-                None
-            )
             if self._analyzer.dsu.find(param) and param_name != "name":
                 self._logger.debug(f"Trying fill parameter {param_name} by real dependencies")
                 # if we already have the value bank for this variable
@@ -275,15 +234,38 @@ class SaturationThread(BasicGenerator):
             else:
                 param_val = None
 
-            # if we cannot find a value for an optional arg, skip it
-            if not param_val and not required and param_type == "string":
-                print(f"Parameter {param_name} is not required in {self._endpoint}")
-                continue
-
             if not param_val:
                 self._logger.debug(f"No dependency found for {(self._endpoint, param_name)}. Trying random values.")
                 param_val = self._random_from_type(param_name, param_type)
 
+        return param_val
+
+    # get params from bank
+    def _generate_params(self, params, n):
+        param_dict = {}
+
+        req_params = []
+        opt_params = []
+        for param_obj in params:
+            required = param_obj.get(defs.DOC_REQUIRED)
+            if required:
+                req_params.append(param_obj)
+            else:
+                opt_params.append(param_obj)
+
+        picked_num = random.randint(0, n)
+        picked_num = min(picked_num, len(opt_params))
+        picked_opt_params = random.sample(opt_params, picked_num)
+
+        for param_obj in req_params + picked_opt_params:
+            param_name = param_obj.get(defs.DOC_NAME)
+            if param_name == "token": # in self._skip_fields:
+                continue
+
+            required = param_obj.get(defs.DOC_REQUIRED)
+            param_val = self._generate_object([param_name], param_obj)
+            
+            # if we cannot find a value for an arg, skip it
             if param_val is not None:
                 param_dict[param_name] = param_val
 
@@ -336,8 +318,9 @@ class WitnessGenerator:
     def _add_new_result(self, result: Result):
         requests = []
         for name, val in result.request_params.items():
-            request = RequestParameter(
-                result.method, name, result.endpoint, True, None, val)
+            request = Parameter(
+                result.method, name, result.endpoint, [name],
+                True, None, None, val)
             requests.append(request)
             if not result.has_error:
                 self._analyzer.insert(request)
@@ -345,8 +328,9 @@ class WitnessGenerator:
         if result.has_error:
             response = ErrorResponse(result.response_body)
         else:
-            response = ResponseParameter(
-                result.method, "", result.endpoint, [], True, 0, None, result.response_body)
+            response = Parameter(
+                result.method, "", result.endpoint, [],
+                True, 0, None, result.response_body)
 
         witness_path = os.path.join(self._exp_dir, 'traces.pkl')
         with open(witness_path, 'rb') as f:
@@ -382,9 +366,6 @@ class WitnessGenerator:
                         raise EndpointNotFoundError(ep)
 
                     for method, ep_method_def in ep_def.items():
-                        if method == "delete": # TODO: skip delete for now
-                            continue
-
                         self._logger.debug(f"Submit job for {method} {ep}")
                         t = generate_type(
                             self._hostname, self._base_path, 
@@ -486,7 +467,7 @@ class WitnessGenerator:
                 for name in param_names:
                     producers = self._annotations.get(name, [])
                     for producer in producers:
-                        resp = ResponseParameter(
+                        resp = Parameter(
                             producer.method,
                             producer.path[-1],
                             producer.endpoint,
@@ -499,7 +480,7 @@ class WitnessGenerator:
                         group = self._analyzer.dsu.get_group(resp)
                         rep = ""
                         for param in group:
-                            if isinstance(param, ResponseParameter):
+                            if param.array_level is not None:
                                 path_str = '.'.join(param.path)
                                 if not rep or len(rep) > len(path_str):
                                     rep = path_str

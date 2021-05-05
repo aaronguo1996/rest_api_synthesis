@@ -4,7 +4,7 @@ import re
 from openapi import defs
 from witnesses import error
 from witnesses.utils import split_by
-from analyzer.entry import RequestParameter
+from analyzer.entry import Parameter
 from schemas.schema_type import SchemaType
 
 class EndpointProducer:
@@ -66,7 +66,7 @@ class DependencyResolver:
         paths = self._doc.get(defs.DOC_PATHS)
         for group in groups:
             params, resps = split_by(
-                lambda x: isinstance(x, RequestParameter), group)
+                lambda x: x.array_level is None, group)
             
             producers = set()
             for resp in resps:

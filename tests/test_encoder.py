@@ -1,6 +1,6 @@
 import unittest
 from synthesizer.petrinet_encoder import *
-from analyzer.entry import TraceEntry, RequestParameter, ResponseParameter
+from analyzer.entry import TraceEntry, Parameter
 from schemas.schema_type import SchemaType
 
 class EncoderTestCase(unittest.TestCase):
@@ -8,104 +8,126 @@ class EncoderTestCase(unittest.TestCase):
         self._encoder = PetriNetEncoder({})
         self._entries = [
             TraceEntry("/users.list", "GET", [], 
-                ResponseParameter(
+                Parameter(
                     "GET", "users", "/users.list", 
                     [], True, 1, SchemaType("user", None), [])
             ),
             TraceEntry("/conversations.members", "GET", [
-                    RequestParameter(
-                        "GET", "channel", "/conversations.members", 
-                        True, SchemaType("channel.id", None), None)
+                    Parameter(
+                        "GET", "channel", "/conversations.members", [], 
+                        True, None, SchemaType("channel.id", None), None)
                 ], 
-                ResponseParameter(
+                Parameter(
                     "GET", "members", "/conversations.members", 
                     [], True, 1, SchemaType("user.id", None), [])
             ),
             TraceEntry("/conversations.info", "GET", [
-                    RequestParameter(
-                        "GET", "channel", "/conversations.info", 
-                        True, SchemaType("channel.id", None), None)
+                    Parameter(
+                        "GET", "channel", "/conversations.info", [],
+                        True, None, SchemaType("channel.id", None), None)
                 ],
-                ResponseParameter(
+                Parameter(
                     "GET", "channel", "/conversations.info", 
                     [], True, 0, SchemaType("channel", None), [])
             ),
             TraceEntry("/conversations.list", "GET", [],
-                ResponseParameter(
+                Parameter(
                     "GET", "channel", "/conversations.list", 
                     [], True, 1, SchemaType("channel", None), [])
             ),
             TraceEntry("/users.lookupByEmail", "GET", [
-                    RequestParameter(
-                        "GET", "email", "/users.lookupByEmail", 
-                        True, SchemaType("user.profile.email", None), None)
+                    Parameter(
+                        "GET", "email", "/users.lookupByEmail", [],
+                        True, None, SchemaType("user.profile.email", None), None)
                 ], 
-                ResponseParameter(
+                Parameter(
                     "GET", "user", "/users.lookupByEmail", 
                     [], True, 0, SchemaType("user", None), None)
             ),
             TraceEntry("/users.info", "GET", [
-                    RequestParameter(
-                        "GET", "user", "/users.info", 
-                        True, SchemaType("user.id", None), None)
+                    Parameter(
+                        "GET", "user", "/users.info", [],
+                        True, None, SchemaType("user.id", None), None)
                 ],
-                ResponseParameter(
+                Parameter(
                     "GET", "user", "/users.info", 
                     [], True, 0, SchemaType("user", None), [])
             ),
             TraceEntry("projection_channel_id", "", [
-                    RequestParameter(
-                        "", "", "projection_channel_id", 
-                        True, SchemaType("channel", None), None)
+                    Parameter(
+                        "", "", "projection_channel_id", [],
+                        True, None, SchemaType("channel", None), None)
                 ],
-                ResponseParameter(
+                Parameter(
                     "", "", "projection_channel_id", 
                     [], True, 0, SchemaType("channel.id", None), None)
             ),
             TraceEntry("projection_user_email", "", [
-                    RequestParameter(
-                        "", "", "projection_user_email", 
-                        True, SchemaType("user", None), None)
+                    Parameter(
+                        "", "", "projection_user_email", [],
+                        True, None, SchemaType("user", None), None)
                 ],
-                ResponseParameter(
+                Parameter(
                     "", "", "projection_user_email", 
                     [], True, 0, SchemaType("user.profile.email", None), None)
             ),
             TraceEntry("join_1_1", "", [ # this works like clone transitions, but allow produce tokens to be leaked
-                    RequestParameter("", "", "join_1", True, SchemaType("channel.name", None), None),
-                    RequestParameter("", "", "join_1", True, SchemaType("channel", None), None),
+                    Parameter(
+                        "", "", "join_1", [],
+                        True, None, SchemaType("channel.name", None), None),
+                    Parameter(
+                        "", "", "join_1", [],
+                        True, None, SchemaType("channel", None), None),
                 ],
-                ResponseParameter("", "", "join_1", [], True, 1, SchemaType("channel", None), None),
+                Parameter(
+                    "", "", "join_1", [], 
+                    True, 1, SchemaType("channel", None), None),
             ),
             TraceEntry("join_1_2", "", [ # this works like clone transitions, but allow produce tokens to be leaked
-                    RequestParameter("", "", "join_1", True, SchemaType("channel.name", None), None),
-                    RequestParameter("", "", "join_1", True, SchemaType("channel", None), None),
+                    Parameter(
+                        "", "", "join_1", [],
+                        True, None, SchemaType("channel.name", None), None),
+                    Parameter(
+                        "", "", "join_1", [],
+                        True, SchemaType("channel", None), None),
                 ],
-                ResponseParameter(
+                Parameter(
                     "", "", "join_1", 
                     [], True, 1, SchemaType("channel.name", None), None),
             ),
             TraceEntry("join_2_1", "", [ # this works like clone transitions, but allow produce tokens to be leaked
-                    RequestParameter("", "", "join_2", True, SchemaType("user.id", None), None),
-                    RequestParameter("", "", "join_2", True, SchemaType("user", None), None),
+                    Parameter(
+                        "", "", "join_2", [],
+                        True, None, SchemaType("user.id", None), None),
+                    Parameter(
+                        "", "", "join_2", [],
+                        True, None, SchemaType("user", None), None),
                 ],
-                ResponseParameter("", "", "join_2", [], True, 1, SchemaType("user.id", None), None),
+                Parameter(
+                    "", "", "join_2", [], 
+                    True, 1, SchemaType("user.id", None), None),
             ),
             TraceEntry("join_2_2", "", [ # this works like clone transitions, but allow produce tokens to be leaked
-                    RequestParameter("", "", "join_2", True, SchemaType("user.id", None), None),
-                    RequestParameter("", "", "join_2", True, SchemaType("user", None), None),
+                    Parameter(
+                        "", "", "join_2", [],
+                        True, None, SchemaType("user.id", None), None),
+                    Parameter(
+                        "", "", "join_2", [],
+                        True, None, SchemaType("user", None), None),
                 ],
-                ResponseParameter("", "", "join_2", [], True, 1, SchemaType("user", None), None),
+                Parameter(
+                    "", "", "join_2", [], 
+                    True, 1, SchemaType("user", None), None),
             ),
             TraceEntry("/conversations.history", "GET", [
-                    RequestParameter(
-                        "GET", "channel", "/conversations.history", 
-                        True, SchemaType("channel.id", None), None),
-                    RequestParameter(
-                        "GET", "last_read", "/conversations.history", 
-                        False, SchemaType("ts", None), None)
+                    Parameter(
+                        "GET", "channel", "/conversations.history", [],
+                        True, None, SchemaType("channel.id", None), None),
+                    Parameter(
+                        "GET", "last_read", "/conversations.history", [],
+                        False, None, SchemaType("ts", None), None)
                 ],
-                ResponseParameter(
+                Parameter(
                     "GET", "messages", "/conversations.history", 
                     [], True, 1, SchemaType("message", None), [])
             ),

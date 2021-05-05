@@ -4,7 +4,7 @@ import pickle
 import time
 import os
 
-from analyzer.entry import TraceEntry, ResponseParameter, RequestParameter
+from analyzer.entry import TraceEntry, Parameter
 from openapi import defs
 from openapi.utils import blacklist
 from program.generator import ProgramGenerator
@@ -412,11 +412,12 @@ class Synthesizer:
                     in_name = obj_name
 
                 endpoint = f"projection({in_name}, {name})"
-                proj_in = RequestParameter(
-                    "", "obj", endpoint, True, SchemaType(in_name, None), None
+                proj_in = Parameter(
+                    "", "obj", endpoint, [],
+                    True, None, SchemaType(in_name, None), None
                 )
                 is_array = prop.get(defs.DOC_TYPE) == "array"
-                proj_out = ResponseParameter(
+                proj_out = Parameter(
                     "", "field", endpoint,
                     [], True, int(is_array),
                     SchemaType(f"{obj_name}.{name}", None), None
@@ -495,10 +496,10 @@ class Synthesizer:
 
                         for j in range(len(parts)):
                             if j != i:
-                                param = RequestParameter(
+                                param = Parameter(
                                     "", "obj", 
                                     f"filter({in_name}, {in_name}.{to_field_typ})", 
-                                    False, 
+                                    [], False, None, 
                                     SchemaType(f"{obj_name}_{j}", None), None
                                 ) 
                                 opt_ins.append(param)
@@ -514,16 +515,18 @@ class Synthesizer:
 
                     endpoint = f"filter({in_name}, {in_name}.{to_field_typ})"
                     filter_in = [
-                        RequestParameter(
-                            "", "obj", endpoint, True, 
+                        Parameter(
+                            "", "obj", endpoint, [], 
+                            True, None, 
                             SchemaType(in_name, None), None
                         ),
-                        RequestParameter(
-                            "", "field", endpoint,
-                            True, SchemaType(f"{field_name}.{name}", None), None
+                        Parameter(
+                            "", "field", endpoint, [],
+                            True, None,
+                            SchemaType(f"{field_name}.{name}", None), None
                         )
                     ] + opt_ins
-                    filter_out = ResponseParameter(
+                    filter_out = Parameter(
                         "", "obj", endpoint,
                         [], True, 1, out_type, None
                     )
