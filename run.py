@@ -129,7 +129,9 @@ def generate_witnesses(configuration, doc, exp_dir, entries, endpoints):
 
     engine.saturate_all(
         endpoints, configuration["witness"]["iterations"],
-        configuration["witness"]["timeout_per_request"])
+        configuration["witness"]["timeout_per_request"],
+        configuration["witness"]["max_opt_params"]
+    )
 
     print("Writing graph to file...")
     with open(os.path.join(exp_dir, "graph.pkl"), "wb") as f:

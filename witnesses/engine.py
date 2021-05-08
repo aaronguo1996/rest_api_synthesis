@@ -53,7 +53,7 @@ class Result:
 class BasicGenerator:
     def __init__(self, hostname, base_path, endpoint, method, ep_method_def,
         token, skip_fields, value_dict, 
-        real_dependencies, annotations, depth_limit):
+        real_dependencies, annotations, depth_limit, opt_param_indices):
         # create a logger for this module
         self._logger = logging.getLogger(__name__)
         self._endpoint = endpoint
@@ -64,6 +64,7 @@ class BasicGenerator:
         self._value_dict = value_dict
         self._conn = Connection(hostname, base_path)
         self._generateing_depth_limit = depth_limit
+        self._opt_param_indices = opt_param_indices
         self._real_dependencies = real_dependencies
         self._annotations = annotations
         self._token = token
@@ -97,14 +98,26 @@ class BasicGenerator:
 
     def _generate_get(self, depth):
         params = self._ep_method_def.get(defs.DOC_PARAMS, [])
-        return self._generate_params(depth + 1, params, 2)
+        return self._generate_params(depth + 1, params, self._opt_param_indices)
 
     def _generate_post(self, depth):
         header_params = self._ep_method_def.get(defs.DOC_PARAMS, [])
-        headers = self._generate_params(depth + 1, header_params, 2)
-        
+        _, opt_header_params = self._filter_optional(header_params)
+        header_param_indices = [idx for idx in self._opt_param_indices if idx < len(opt_header_params)]
+        headers = self._generate_params(depth + 1, header_params, header_param_indices)
+
+        body_param_indices = [idx - len(opt_header_params)
+                              for idx in self._opt_param_indices
+                              if idx >= len(opt_header_params)]
+        body_param_lst = self._get_body_params()
+        body = self._generate_params(depth + 1, body_param_lst, body_param_indices)
+
+        body.update(headers)
+        return body
+
+    def _get_body_params(self):
         request_body = self._ep_method_def.get(defs.DOC_REQUEST)
-        body = {}
+        body_param_lst = []
         if request_body:
             body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_JSON)
             if not body_def:
@@ -115,7 +128,8 @@ class BasicGenerator:
                 requires = body_schema.get(defs.DOC_REQUIRED, [])
                 body_params = body_schema.get(defs.DOC_PROPERTIES, {})
 
-                body_param_lst = []
+                if not isinstance(requires, list):
+                    return []
                 for param_name in body_params:
                     param = body_params[param_name]
                     param.update({
@@ -123,13 +137,33 @@ class BasicGenerator:
                         defs.DOC_REQUIRED: param_name in requires,
                     })
                     body_param_lst.append(param)
-                body = self._generate_params(depth + 1, body_param_lst, 2)    
-
-        body.update(headers)
-        return body
+        return body_param_lst
 
     def _generate_params(self, depth, params):
         raise NotImplementedError
+
+    def _filter_optional(self, params):
+        req_params = []
+        opt_params = []
+        for param_obj in params:
+            required = param_obj.get(defs.DOC_REQUIRED)
+            if required:
+                req_params.append(param_obj)
+            else:
+                opt_params.append(param_obj)
+        return req_params, opt_params
+
+    def _select_params(self):
+        raise NotImplementedError
+
+    def num_optional_params(self):
+        params = self._ep_method_def.get(defs.DOC_PARAMS, [])
+        _, opt_params = self._filter_optional(params)
+        num_opt = len(opt_params)
+        if self._method.upper() == defs.METHOD_POST:
+            _, opt_params = self._filter_optional(self._get_body_params())
+            num_opt += len(opt_params)
+        return num_opt
 
     def _generate_one(self, depth):
         if depth > self._generateing_depth_limit:
@@ -177,11 +211,11 @@ class BasicGenerator:
 class SaturationThread(BasicGenerator):
     def __init__(self, hostname, base_path, endpoint, method, ep_method_def, 
         token, skip_fields, value_dict, 
-        real_dependencies, annotations, analyzer, depth_limit):
+        real_dependencies, annotations, analyzer, depth_limit, opt_param_indices):
         super().__init__(
             hostname, base_path,
             endpoint, method, ep_method_def, token, skip_fields, value_dict,
-            real_dependencies, annotations, depth_limit)
+            real_dependencies, annotations, depth_limit, opt_param_indices)
         self._analyzer = analyzer
 
     def _try_producer(self, producer):
@@ -215,23 +249,13 @@ class SaturationThread(BasicGenerator):
             return producer
 
     # get params from bank
-    def _generate_params(self, _, params, n):
+    def _generate_params(self, _, params, opt_indices):
         param_dict = {}
 
-        req_params = []
-        opt_params = []
-        for param_obj in params:
-            required = param_obj.get(defs.DOC_REQUIRED)
-            if required:
-                req_params.append(param_obj)
-            else:
-                opt_params.append(param_obj)
+        req_params, opt_params = self._filter_optional(params)
+        selected_opt_params = list(map(lambda idx: opt_params[idx], opt_indices))
 
-        picked_num = random.randint(0, n)
-        picked_num = min(picked_num, len(opt_params))
-        picked_opt_params = random.sample(opt_params, picked_num)
-
-        for param_obj in req_params + picked_opt_params:
+        for param_obj in req_params + selected_opt_params:
             param_name = param_obj.get(defs.DOC_NAME)
             if param_name == "token": # in self._skip_fields:
                 continue
@@ -370,7 +394,7 @@ class WitnessGenerator:
         for r in responses:
             self._analyzer.insert(r)
 
-    def _run_all(self, generate_type, endpoints, iterations, timeout):
+    def _run_all(self, generate_type, endpoints, iterations, timeout, max_opt_params):
         for i in range(1, iterations+1):
             # fire many threads at one time
             with ThreadPoolExecutor(max_workers=8) as executor: # TODO: change this to configuration
@@ -387,15 +411,34 @@ class WitnessGenerator:
 
                         self._logger.debug(f"Submit job for {method} {ep}")
                         t = generate_type(
-                            self._hostname, self._base_path, 
+                            self._hostname, self._base_path,
                             ep, method, ep_method_def,
                             self._token,
                             self._skip_fields,
-                            self._value_dict, 
+                            self._value_dict,
                             self._real_dependencies,
                             self._annotations,
-                            self._analyzer, self._depth_limit)
-                        futures.append(executor.submit(t.run))
+                            self._analyzer, self._depth_limit, [])
+                        num_params = t.num_optional_params()
+
+                        def generate_opt_param_subsets(num_params, num_choose, indices):
+                            if num_params == 0 or num_choose == 0:
+                                t = generate_type(
+                                    self._hostname, self._base_path,
+                                    ep, method, ep_method_def,
+                                    self._token,
+                                    self._skip_fields,
+                                    self._value_dict,
+                                    self._real_dependencies,
+                                    self._annotations,
+                                    self._analyzer, self._depth_limit, indices)
+                                futures.append(executor.submit(t.run))
+                                return
+                            generate_opt_param_subsets(num_params - 1, num_choose, indices)
+                            generate_opt_param_subsets(num_params - 1, num_choose - 1,
+                                                       [num_params - 1] + indices)
+
+                        generate_opt_param_subsets(num_params, min(num_params, max_opt_params), [])
                 for future in as_completed(futures):
                     try:
                         results.append(future.result(timeout=timeout))
@@ -447,11 +490,11 @@ class WitnessGenerator:
         self._logger.info(f"Coverage at iteration {i}: {coverage}")
         return coverage
 
-    def saturate_all(self, endpoints, iterations, timeout):
+    def saturate_all(self, endpoints, iterations, timeout, max_opt_params):
         if os.path.exists(RESULT_FILE):
             os.remove(RESULT_FILE)
 
-        self._run_all(SaturationThread, endpoints, iterations, timeout)
+        self._run_all(SaturationThread, endpoints, iterations, timeout, max_opt_params)
 
     def get_param_names(self, ep_method_def):
         header_params = ep_method_def.get(defs.DOC_PARAMS)

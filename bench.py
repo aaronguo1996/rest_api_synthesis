@@ -279,12 +279,12 @@ class Bencher:
                     # reslsfjsa.append(results)
                     res = sorted(results, key=lambda x: x[-1])
                     for r in res:
-                        print(r[1], r[0])
+                        print(r[1], get_solution_strs([r[0]])[0])
 
                     for rank, res_sol in enumerate(res):
                         for tgt_sol in tgt_sols:
                             if compare_program_strings(tgt_sol, get_solution_strs([res_sol[0]])[0]):
-                                return rank, res_sol[0]
+                                return rank + 1, res_sol[0]
                     return None, None
 
                 ranks = [get_solution_rank() for _ in range(self.filter_num)]

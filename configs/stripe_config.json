@@ -27,7 +27,8 @@
         "timeout_total": 600,
         "timeout_per_request": 60,
         "iterations": 1,
-        "plot_every": 10
+        "plot_every": 10,
+        "max_opt_params": 2
     },
     "synthesis": {
         "expand_group": true,
