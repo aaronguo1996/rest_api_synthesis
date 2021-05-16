@@ -2,7 +2,7 @@ from collections import defaultdict
 from synthesizer.utils import make_entry_name
 
 from analyzer.multiplicity import MUL_ONE_ONE, MUL_ZERO_MORE, MUL_ZERO_ONE
-from analyzer.dynamic import Goal
+from analyzer.dynamic import Goal, BiasType
 
 SPACE = '    '
 MAX_COST = 9999
@@ -448,7 +448,7 @@ class FilterExpr(Expression):
     def execute(self, analyzer):
         obj, score1 = self._obj.execute(analyzer)
         val, score2 = self._val.execute(analyzer)
-        
+
         if obj is None or val is None:
             if obj is None:
                 print("[Filter] obj cannot be evaluated")
@@ -474,7 +474,7 @@ class FilterExpr(Expression):
                 tmp = None
                 print("[Filter] cannot find field", p, "in", tmp)
                 break
-            
+
         if tmp == val:
             # result.append(o)
 
