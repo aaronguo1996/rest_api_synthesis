@@ -1,35 +1,39 @@
 import json
 import re
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
+from witnesses.utils import add_as_object
 
 from schemas.schema_type import SchemaType
 from analyzer.entry import TraceEntry, Parameter
 from openapi import defs
+from analyzer.utils import name_to_path
+from witnesses.utils import add_as_object
 
 JSON_TYPE = "application/json"
 HOSTNAME_PREFIX = "https://"
 HOSTNAME_PREFIX_LEN = len(HOSTNAME_PREFIX)
 
-def match_with_path(path, url):
+def match_with_path(path, request_obj, url):
     # print("matching", url, "with", path)
     path_segments = path.split('/')
     url_segments = url.split('/')
     if len(path_segments) != len(url_segments):
         return None
-
     path_params = []
     for p, u in zip(path_segments, url_segments):
         if len(p) >= 2 and p[0] == '{' and p[-1] == '}':
             param = p[1:-1]
-            path_params.append({
-                "name": param,
-                "value": u,
-            })
+            if param not in request_obj:
+                path_params.append({
+                    "name": param,
+                    "value": u,
+                })
+            else:
+                return None
         elif p == u:
             continue
         else:
             return None
-
     return path_params
 
 class LogParser:
@@ -64,15 +68,9 @@ class LogParser:
         # match the endpoint names with those in the doc and get path params
         endpoints = self.doc.get("paths")
         path_params = None
-        for path, path_def in endpoints.items():
-            if method.lower() in path_def:
-                path_params = match_with_path(path, endpoint)
-                if path_params is not None:
-                    # print("Find path", path, "for entry", endpoint)
-                    endpoint = path
-                    break
-
-        request_params = path_params or []
+        entry_params = []
+        
+        request_params = []
         request_params += request.get("queryString", [])
 
         post_data = request.get("postData", {})
@@ -87,14 +85,48 @@ class LogParser:
                     "value": v
                 })
 
-        request_params = [x for x in request_params if x["name"] not in skip_fields]
+        # here we assume each parameter has associative param name
+        request_obj = {}
         for rp in request_params:
+            decoded_name = unquote(rp["name"])
+            param_path = name_to_path(decoded_name)
+            # print(endpoint, "decode", rp["name"], "into", param_path)
+            request_obj = add_as_object(request_obj, param_path, unquote(rp["value"]))
+            # print(endpoint, "get param object", request_obj)
+
+        for path, path_def in endpoints.items():
+            if method.lower() in path_def:
+                path_params = match_with_path(path, request_obj, endpoint)
+                if path_params is not None:
+                    # print("Find path", path, "for entry", endpoint)
+                    endpoint = path
+                    entry_def = path_def.get(method.lower())
+                    entry_params = TraceEntry.from_openapi_params(
+                        endpoint, method, entry_def)
+                    request_obj.update(path_params)
+                    break
+
+        for param_name, param_val in request_obj.items():
+            if param_name in skip_fields:
+                continue
+
+            doc_param = None
+            for doc_param in entry_params:
+                if doc_param.arg_name == param_name:
+                    break
+
+            if doc_param is None:
+                print("cannot find entry def for", endpoint)
+                is_required = True
+            else:
+                is_required = doc_param.is_required
+
             p = Parameter(
-                method, rp["name"], endpoint, [],
-                True, None, None, rp["value"])
+                method, param_name, endpoint, [param_name],
+                is_required, None, None, param_val)
             parameters.append(p)
 
-        return parameters
+        return endpoint, parameters
 
     def _resolve_response(self, entry, method, endpoint):
         response_text = entry["response"]["content"]["text"]
@@ -138,7 +170,8 @@ class LogParser:
         if not method:
             raise Exception("Method not found in the request entry")
 
-        parameters = self._resolve_params(skip_fields, method, endpoint, request)
+        endpoint, parameters = self._resolve_params(
+            skip_fields, method, endpoint, request)
         response = self._resolve_response(entry, method, endpoint)
 
         return TraceEntry(endpoint, method, parameters, response)

@@ -2,7 +2,7 @@ import re
 import logging
 
 from schemas.schema_type import SchemaType
-from analyzer.entry import ErrorResponse, Parameter
+from analyzer.entry import ErrorResponse
 from analyzer.utils import get_representative
 from openapi import defs
 from synthesizer.utils import make_entry_name
@@ -100,6 +100,7 @@ class LogAnalyzer:
         self.type_fields = {}
         self.type_partitions = {}
         self.type_aliases = {}
+        self.type_values = {}
         # temporary field
         self._checked_fields = {}
 
@@ -150,7 +151,9 @@ class LogAnalyzer:
                             print("empty overlap")
                         new_partitions.append(overlap)
                         split = [f for f in part if f not in typ_fields]
-                        if split: # sometimes this is empty because typ_fields include all the elements in split but has more
+                        if split: 
+                            # sometimes this is empty because 
+                            # typ_fields include all the elements in split but has more
                             new_partitions.append(split)
                             print("splitting", part, "into", split)
 
@@ -188,8 +191,10 @@ class LogAnalyzer:
                 p.value = bool(p.value)
 
         for param in params:
-            flatten_params, aliases = param.flatten(path_to_defs, skip_fields)
+            flatten_params, aliases, values = param.flatten(
+                path_to_defs, skip_fields)
             self.type_aliases.update(aliases)
+            self.insert_value(aliases, values)
 
             for p in flatten_params:
                 if p.arg_name in entry_params:
@@ -200,10 +205,11 @@ class LogAnalyzer:
                 self.insert(p)
 
     def _analyze_response(self, skip_fields, response, path_to_defs):
-        responses, aliases = response.flatten(
+        responses, aliases, values = response.flatten(
             path_to_defs, skip_fields
         )
         self.type_aliases.update(aliases)
+        self.insert_value(aliases, values)
 
         for r in responses:
             self._add_type_fields(r)
@@ -219,6 +225,9 @@ class LogAnalyzer:
             # do not add error responses to DSU
             if isinstance(entry.response, ErrorResponse):
                 continue
+
+            if entry.endpoint == "/v1/subscriptions" and entry.method.upper() == "POST":
+                print(entry.parameters)
 
             # match docs to correct integers and booleans
             entry_def = paths.get(entry.endpoint)
@@ -239,6 +248,26 @@ class LogAnalyzer:
         if prefilter:
             self._partition_type()
 
+    def insert_value(self, aliases, value_map):
+        # update the types to their aliases
+        type_values = {}
+        for t, v in self.type_values.items():
+            if t in aliases:
+                alias_t = aliases.get(t)
+                if alias_t is not None:
+                    values = self.type_values[t]
+                    alias_values = self.type_values.get(alias_t, [])
+                    type_values[alias_t] = alias_values + values
+
+        self.type_values.update(type_values)
+
+        # add new values to the bank mapping
+        for t, v in value_map.items():
+            if t not in self.type_values:
+                self.type_values[t] = []
+
+            self.type_values[t] += v
+
     def insert(self, param):
         if param.value is None:
             return
@@ -246,8 +275,13 @@ class LogAnalyzer:
         # skip empty values, integers and booleans for merge, 
         # but add them as separate nodes, they are meaningless
         if not param.value or isinstance(param.value, int) or isinstance(param.value, bool):
-            # print(param.func_name, param.arg_name, param.value)
             param.value = str(param.value)
+            if isinstance(param.value, int):
+                param.type = SchemaType(defs.TYPE_INT, None)
+            
+            if isinstance(param.value, bool):
+                param.type = SchemaType(defs.TYPE_BOOL, None)
+
             self.dsu.union(param, param)
             return
 
@@ -284,10 +318,17 @@ class LogAnalyzer:
                 rep = group[0].arg_name
 
             # for debug
-            if rep == "source.id" or rep == "payment_source.id":
+            if rep == "product.name":
                 group_params = []
                 for param in group:
-                    group_params.append((param.func_name, param.method, param.path, param.value, param.type))
+                    if param.type is not None:
+                        group_params.append((
+                            param.func_name, 
+                            param.method, 
+                            param.path, 
+                            param.value, 
+                            param.type
+                        ))
 
                 sorted(group_params)
                 for p in group_params:
@@ -304,7 +345,7 @@ class LogAnalyzer:
                     # add an edge between the method and its return type
                     if '[' not in rep and not re.search("image_.*", rep):
                         if param.type:
-                            if "unknown_" in param.type.name:
+                            if param.type.name is None:
                                 continue
 
                             p = param.type.get_oldest_parent()
@@ -322,7 +363,7 @@ class LogAnalyzer:
                         else:
                             edges.add((trans, rep))
                 else:
-                    if trans == "/v1/customers/{customer}_GET":
+                    if trans == "/v1/subscriptions_POST":
                         print(rep, "connected with", trans, "by parameter", param.arg_name, param.value)
                     # add an edge between parameter name and the method
                     if '[' not in rep and not re.search("image_.*", rep):
@@ -431,14 +472,24 @@ class LogAnalyzer:
         }
 
     def _find_descendant(self, param):
+        descendants = []
+
         params = self.dsu._parents.keys()
         for p in params:
+            if ((param.array_level is None and p.array_level is None) or
+                (param.array_level is not None and p.array_level is not None)):
+                same_array_level = True
+            else:
+                same_array_level = False
+
             if (p.func_name == param.func_name and
                 p.method.upper() == param.method.upper() and
+                same_array_level and
                 param.path == p.path[:len(param.path)]):
-
-                return p
-        return None
+                descendants.append(p)
+                
+        print("find descendants", descendants)
+        return descendants
 
     def get_values_by_type(self, typ):
         params = self.dsu._parents.keys()
@@ -474,49 +525,82 @@ class LogAnalyzer:
         return param
 
     def set_type(self, param):
+        """set type for a given parameter
+        if the parameter is an ad-hoc object,
+        it will be splitted into several sub-params
+
+        Args:
+            param: the request/response parameter to be splitted
+        """
         if param.type and re.search('^/.*_response$', param.type.name):
             return
         
-        descendant = self._find_descendant(param)
-        # if param does not belong to any group, create a new type
-        if descendant is None or descendant.type is None:
-            # print(f"{param} does not belong to any group")
+        # find all the descendants
+        descendants = self._find_descendant(param)
+        
+        parents = []
+        
+        # no descendants found
+        if len(descendants) == 0:
             param.type = SchemaType(str(param), None)
-        else:
-            if descendant.type:
-                param_type = descendant.type.get_oldest_parent()
-                # get the fields
-                func_fields = self.type_fields.get(param_type.name, {})
-                fields = func_fields.get(param.func_name)
-                if fields is None: # we add all partitions that we can find
-                    parts = self.type_partitions.get(param_type.name)
-                    if parts is None:
-                        # print("no partition available for type when fields not available", param_type)
-                        param.type = param_type
-                    else:
-                        param.type = [
-                            SchemaType(f"{param_type.name}_{i}", None)
-                            for i in range(len(parts))
-                        ]
-                else:
-                    # get all the partitions that cover the fields
-                    partitions = self.type_partitions.get(param_type.name)
-                    if partitions is None:
-                        # print("no partition available for type when fields available", param_type)
-                        param.type = param_type
-                    else:
-                        indices = []
-                        for i, part in enumerate(partitions):
-                            if part[0] in fields:
-                                indices.append(i)
+            parents.append(param)
 
-                        param.type = [
-                            SchemaType(f"{param_type.name}_{i}", None)
-                            for i in indices
-                        ]
+        for descendant in descendants:
+            # find the root type for each descendant
+            parent = descendant.get_parent_param()
+            print("get parent param", parent)
+            group = self.dsu.get_group(parent)
+            if len(group) == 0:
+                print("dsu group is empty")
+            _, rep_type = get_representative(group)
+            print("get representative type", rep_type)
+
+            # this should happen rarely
+            if rep_type is not None:
+                parent.type = rep_type
+
+            if parent.type is None:
+                print("parent has no rep type found, assign default name")
+                parent.type = SchemaType(str(descendant), None)
+            
+            # get the fields
+            func_fields = self.type_fields.get(parent.type.name, {})
+            fields = func_fields.get(parent.func_name)
+            if fields is None: # we add all partitions that we can find
+                parts = self.type_partitions.get(parent.type.name)
+                if parts is not None:
+                    parent.type = [
+                        SchemaType(f"{parent.type.name}_{i}", None)
+                        for i in range(len(parts))
+                    ]
             else:
-                # print(f"{param} does not have a descendant type {descendant}")
-                param.type = descendant.type
+                # get all the partitions that cover the fields
+                partitions = self.type_partitions.get(parent.type.name)
+                if partitions is not None:
+                    indices = []
+                    for i, part in enumerate(partitions):
+                        if part[0] in fields:
+                            indices.append(i)
+
+                    param.type = [
+                        SchemaType(f"{parent.type.name}_{i}", None)
+                        for i in indices
+                    ]
+
+            parents.append(parent)
+
+        # dedup parents by path
+        seen = set()
+        results = []
+        for p in parents:
+            key = tuple(p.path)
+            if key in seen:
+                continue
+
+            seen.add(key)
+            results.append(p)
+
+        return results
 
     def reset_context(self):
         self._checked_fields = {}

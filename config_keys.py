@@ -8,3 +8,5 @@ KEY_TEST_SUITES = "test_suites"
 KEY_SYNTHESIS = "synthesis"
 KEY_SYN_PREFILTER = "enable_prefilter"
 KEY_BLACKLIST = "blacklist"
+
+FILE_TRACE = "traces.pkl"

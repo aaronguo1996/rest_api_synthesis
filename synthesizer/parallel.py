@@ -52,8 +52,8 @@ def run_encoder(inputs, outputs, path_len):
             encoder.block_prev(perms)
             path = encoder.solve()
 
-    # print("Finished encoder running for path length", path_len, 
-    #     "after time", time.time() - start, flush=True)
+    print("Finished encoder running for path length", path_len, 
+        "after time", time.time() - start, flush=True)
 
 def spawn_encoders(inputs, outputs, solver_num, timeout=500):
     with pebble.ProcessPool(max_workers=solver_num) as pool:

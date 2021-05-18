@@ -29,7 +29,7 @@ class PetriNetEncoder:
         # self.create_petrinet()
 
     @TimeStats(key=STATS_ENCODE)
-    def init(self, inputs):
+    def init(self, inputs, outputs):
         self._solver.reset()
         self._path_len = 0
         self._prev_result = []
@@ -38,7 +38,7 @@ class PetriNetEncoder:
         self._add_variables(self._path_len)
         self._set_initial(inputs)
         self._add_copy_transitions()
-        self._run_approximation(inputs)
+        self._run_approximation(inputs, outputs)
 
     @TimeStats(key=STATS_ENCODE)
     def increment(self):
@@ -50,8 +50,8 @@ class PetriNetEncoder:
         # reset the temporary constraint when path length changes
         self._constraints["temporary"] = []
 
-    def _run_approximation(self, inputs):
-        # print("before approximation:", len(self._net.transition()))
+    def _run_approximation(self, inputs, output):
+        print("before approximation:", len(self._net.transition()))
         # on top of the input types, 
         # we also need to add output types of transitions with no required args
         self._reachables = set()
@@ -69,7 +69,7 @@ class PetriNetEncoder:
                 self._reachables.add(trans)
 
         reachables = self._approx.approx_reachability(
-            input_places + null_places, set(), set()
+            input_places + null_places, output
         )
         self._reachables = self._reachables.union(reachables)
         # print("/users.lookupByEmail_GET" in self._reachables)
@@ -80,7 +80,21 @@ class PetriNetEncoder:
         # print("projection(objs_conversation, id)_" in self._reachables)
         # print("/chat.postMessage_POST" in self._reachables)
         # print("projection(/chat.postMessage_POST_response, message)_" in self._reachables)
-        # print("after approximation:", len(self._reachables))
+        projection_cnt = 0
+        filter_cnt = 0
+        clone_cnt = 0
+        for t in self._reachables:
+            if "projection" in t:
+                projection_cnt += 1
+            elif "filter" in t:
+                filter_cnt += 1
+            elif "clone" in t:
+                clone_cnt += 1
+
+        print("after approximation:", len(self._reachables))
+        print("projection number", projection_cnt)
+        print("filter number", filter_cnt)
+        print("clone number", clone_cnt)
 
     def check_constraints_binding(self):
         # constraints
@@ -156,7 +170,7 @@ class PetriNetEncoder:
         else:
             result, path = self.check_constraints_binding()
 
-        # print("Check time:", time.time() - start, flush=True)
+        print("Check time:", time.time() - start, flush=True)
         start = time.time()
         if self._path_len > 0 and result == "sat":
             results = []
@@ -186,7 +200,7 @@ class PetriNetEncoder:
     def get_length_of(self, path_len, inputs, outputs):
         start = time.time()
         
-        self.init(inputs)
+        self.init(inputs, outputs)
         for _ in range(path_len):
             self.increment()
         self.set_final(outputs)
@@ -245,6 +259,29 @@ class PetriNetEncoder:
             # maps from place name to a triple (required cnts, optional in, optional out)
             tokens = {}
             inputs = trans.input()
+            # params with the same path prefix are grouped together and
+            # at least one of them is required
+            path_groups = {}
+
+            if entry is not None:
+                for param in entry.parameters:
+                    key = tuple(param.path[:-1])
+                    if key:
+                        if key not in path_groups:
+                            path_groups[key] = []
+
+                        path_groups[key].append(param)
+            
+                for params in path_groups.values():
+                    if params[0].is_required:
+                        tk_sum = 0
+                        for param in params:
+                            cur = self._place_to_variable.get((param.type.name, t))
+                            tk_sum += Int(cur)
+                        pre.append(tk_sum >= 1)
+                        
+                param_map = {param.type.name: param for param in entry.parameters}
+
             for place, _ in inputs:
                 # count required and optional arguments
                 required = 0
@@ -253,9 +290,12 @@ class PetriNetEncoder:
                 if entry is None:
                     required = 1
                 else:
-                    for param in entry.parameters:
-                        required += int(str(param.type) == place.name and param.is_required)
-                        optional += int(str(param.type) == place.name and not param.is_required)
+                    param = param_map[place.name]
+                    path_key = tuple(param.path[:-1])
+                    if param.is_required and path_key not in path_groups:
+                        required += 1
+                    else:
+                        optional += 1
 
                 cur = self._place_to_variable.get((place.name, t))
                 pre.append(Int(cur) >= required)

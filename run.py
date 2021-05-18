@@ -6,6 +6,8 @@ import os
 import json
 import logging
 import random
+from re import M
+from synthesizer.constructor import Constructor
 from graphviz import Digraph
 
 # analyze traces
@@ -19,6 +21,8 @@ from synthesizer.filtering import run_filter
 from synthesizer.parallel import spawn_encoders
 from globs import init_synthesizer, get_solution_strs
 from witnesses.engine import WitnessGenerator
+from synthesizer.utils import make_entry_name
+from analyzer.ascription import Ascription
 
 # test imports
 from tests.run_test import run_test
@@ -76,12 +80,9 @@ def parse_entries(doc, configuration, exp_dir):
 
         with open(trace_file, 'wb') as f:
             pickle.dump(entries, f)
-
-        # print("Write", len(entries), "entries into file")
     else:
         with open(trace_file, 'rb') as f:
             entries = pickle.load(f)
-        print("Read", len(entries), "entries from file")
 
     return entries
 
@@ -92,6 +93,32 @@ def run_dynamic(configuration, entries, endpoint, limit=500):
     )
     seqs = analysis.get_sequences(endpoint=endpoint, limit=limit)
     print(seqs)
+
+def create_entries(doc, config, ascription):
+    entries = {}
+
+    paths = doc.get(defs.DOC_PATHS)
+    endpoints = config.get(keys.KEY_ENDPOINTS)
+    if not endpoints:
+        endpoints = paths.keys()
+
+    for endpoint, ep_def in paths.items():
+        if endpoint not in endpoints:
+            continue
+
+        for method, method_def in ep_def.items():
+            typed_entries = ascription.ascribe_type(endpoint, method, method_def)
+
+            for entry in typed_entries:
+                # store results
+                entry_name = make_entry_name(entry.endpoint, entry.method)
+                if endpoint == "/users.lookupByEmail":
+                    print("*******", [(p.arg_name, p.path, p.is_required, p.type) for p in entry.parameters])
+                    p = entry.response
+                    print("*******", (p.arg_name, p.path, p.is_required, p.type))
+                entries[entry_name] = entry
+
+    return entries
 
 def generate_witnesses(configuration, doc, exp_dir, entries, endpoints):
     enable_debug = configuration.get(keys.KEY_DEBUG)
@@ -111,9 +138,12 @@ def generate_witnesses(configuration, doc, exp_dir, entries, endpoints):
         for g in groups:
             logging.debug(g)
 
+    ascription = Ascription(log_analyzer)
+    entries = create_entries(doc, configuration, ascription)
+
     print("Getting more traces...")
     engine = WitnessGenerator(
-        doc, log_analyzer,
+        doc, entries, log_analyzer,
         configuration["witness"]["token"],
         configuration["witness"]["value_dict"],
         configuration["witness"]["annotation_path"],
@@ -130,6 +160,13 @@ def generate_witnesses(configuration, doc, exp_dir, entries, endpoints):
     engine.saturate_all(
         endpoints, configuration["witness"]["iterations"],
         configuration["witness"]["timeout_per_request"])
+
+    print("Writing typed entries to file...")
+    constructor = Constructor(doc, log_analyzer)
+    projs_and_filters = constructor.construct_graph()
+    entries.update(projs_and_filters)
+    with open(os.path.join(exp_dir, "entries.pkl"), "wb") as f:
+        pickle.dump(entries, f)
 
     print("Writing graph to file...")
     with open(os.path.join(exp_dir, "graph.pkl"), "wb") as f:
@@ -171,6 +208,10 @@ def main():
     print("Loading witnesses...")
     if args.dynamic or args.witness or args.filtering:
         entries = parse_entries(doc, configuration, exp_dir)
+
+    if args.parallel or args.synthesis:
+        with open(os.path.join(exp_dir, "entries.pkl"), "rb") as f:
+            entries = pickle.load(f)
 
     if args.dynamic:
         run_dynamic(configuration, entries, "/conversations.list", 500)
@@ -216,59 +257,35 @@ def main():
                 print(p.pretty())
 
         elif args.parallel:
-            init_synthesizer(doc, configuration, log_analyzer, exp_dir)
+            init_synthesizer(doc, configuration, entries, exp_dir)
             inputs = {
-                "channel_name": SchemaType("objs_conversation.name", None),
-                # "email": SchemaType("objs_user_profile.email", None)
+                # "customer_id": SchemaType("customer.id", None),
+                "product_name": SchemaType("product.name", None),
+                "cur": SchemaType("fee.currency", None),
+                "amt": SchemaType("unit_amount_/v1/prices_POST_unit_amount", None),
             }
-            outputs = [
-                SchemaType("objs_user_profile.email", None),
-                # SchemaType("objs_message", None)
-            ]
+            outputs = [SchemaType("plan.id", None)]
+            # inputs = {
+            #     "email": SchemaType("objs_user_profile.email", None),
+            # }
+            # outputs = [SchemaType("objs_message", None)]
             spawn_encoders(
                 inputs, outputs,
                 configuration["synthesis"]["solver_number"]
             )
         elif args.synthesis:
-            synthesizer = Synthesizer(doc, configuration, log_analyzer, exp_dir)
+            synthesizer = Synthesizer(doc, configuration, entries, exp_dir)
             synthesizer.init()
             solutions = synthesizer.run_n(
                 [],
                 {
-                    # "channel_id": SchemaType("defs_dm_id", None),
-                    # "user_id": SchemaType("defs_user_id", None),
-                    # "email": SchemaType("objs_user_profile.email", None)
-                    # "customer_id": SchemaType("Customer.id", None),
-                    # "location_id": SchemaType("Location.id", None),
-                    # "subscription_plan_id": SchemaType("CatalogObject.id", None)
-                    # "product_name": SchemaType("product.name", None),
-                    # "product_id": SchemaType("product.id", None),
-                    # "customer_id": SchemaType("customer.id", None),
-                    # "cur": SchemaType("fee.currency", None),
-                    # "amt": SchemaType("/v1/prices:unit_amount:POST", None),
-                    # "subscription": SchemaType("Subscription", None),
-                    # "subscription_plan_id": SchemaType("CatalogObject.id", None),
-                    # "subscription_plan_id": SchemaType("CatalogObject.id", None)
-                    # "customer_name": SchemaType("Customer.given_name", None),
-                    # "order": SchemaType("Customer.id", None),
-                    # "name": SchemaType("DeviceCode.name", None),
-                    # "order_id": SchemaType("Transaction.id", None),
-                    # "type": SchemaType("CatalogObject.type", None)
-                    # "customer_id": SchemaType("Customer.id", None)
-                    # "subscription_id": SchemaType("subscription.id", None),
-                    # "payment": SchemaType("/v1/subscriptions/{subscription_exposed_id}:default_payment_method:POST", None),
+                    "customer_id": SchemaType("customer.id", None),
+                    "product_id": SchemaType("product.id", None),
                 },
                 [
-                    # SchemaType("objs_message", None)
-                    # SchemaType("Transaction.order_id", None)
-                    # SchemaType("invoiceitem", None)
-                    # SchemaType("charge", None)
-                    # SchemaType("refund", None)
-                    # SchemaType("Customer", None)
-                    # SchemaType("subscription", None)
-                    # SchemaType("payment_source.last4", None)
+                    SchemaType("plan.id", None),
                 ],
-                10 #configuration["synthesis"]["solution_num"]
+                1 # configuration["synthesis"]["solution_num"]
             )
 
             for prog in [r.pretty(synthesizer._entries, 0) for r in solutions]:

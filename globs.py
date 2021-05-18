@@ -3,9 +3,9 @@ import os
 
 from synthesizer.synthesizer import Synthesizer
 
-def init_synthesizer(doc, configuration, analyzer, exp_dir):
+def init_synthesizer(doc, configuration, entries, exp_dir):
     global synthesizer
-    synthesizer = Synthesizer(doc, configuration, analyzer, exp_dir)
+    synthesizer = Synthesizer(doc, configuration, entries, exp_dir)
     synthesizer.init()
 
 def get_petri_net_data():

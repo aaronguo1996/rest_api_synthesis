@@ -2,10 +2,7 @@ from typing import List
 import re
 
 from openapi import defs
-from witnesses import error
 from witnesses.utils import split_by
-from analyzer.entry import Parameter
-from schemas.schema_type import SchemaType
 
 class EndpointProducer:
     def __init__(self, ep: str, method: str, ep_method_def, path: List[str]):
