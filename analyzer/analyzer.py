@@ -1,11 +1,12 @@
 import re
 import logging
 
-from schemas.schema_type import SchemaType
 from analyzer.entry import ErrorResponse
-from analyzer.utils import get_representative
+from analyzer.utils import get_representative, same_type_name
 from openapi import defs
 from synthesizer.utils import make_entry_name
+from schemas import types
+import consts
 
 class DSU:
     # TODO: record types for each param here
@@ -31,19 +32,13 @@ class DSU:
             self._parents[x] = x
             self._sizes[x] = 1
             self._nexts[x] = x
-            try:
-                self._values[x] = set([x.value])
-            except:
-                self._values[x] = set([str(x.value)])
+            self._values[x] = set([x.value])
 
         if y not in self._parents:
             self._parents[y] = y
             self._sizes[y] = 1
             self._nexts[y] = y
-            try:
-                self._values[y] = set([y.value])
-            except:
-                self._values[y] = set([str(y.value)])
+            self._values[y] = set([y.value])
 
         # hard code rules for Slack, FIXME: check the type
         if (("name" in y.arg_name and y.type and "objs_message" in y.type.name) or 
@@ -74,7 +69,6 @@ class DSU:
         return groups
 
     def get_value_bank(self, x):
-        # print("[get_value_bank] root for", x, "is", self.find(x))
         return self._values.get(self.find(x), set())
 
     def get_group(self, x):
@@ -104,6 +98,7 @@ class LogAnalyzer:
         # temporary field
         self._checked_fields = {}
 
+    # FIXME: this function no longer works, please fix me if you want to use it
     def _add_type_fields(self, r):
         if r.type is None:
             return
@@ -185,16 +180,16 @@ class LogAnalyzer:
                     .get(defs.DOC_PROPERTIES)
 
         def correct_value(p, typ):
-            if typ == "integer":
+            if typ == defs.TYPE_INT:
                 p.value = int(p.value)
-            elif typ == "boolean":
+            elif typ == defs.TYPE_BOOL:
                 p.value = bool(p.value)
+            elif typ == defs.TYPE_NUM:
+                p.value = float(p.value)
 
         for param in params:
-            flatten_params, aliases, values = param.flatten(
-                path_to_defs, skip_fields)
-            self.type_aliases.update(aliases)
-            self.insert_value(aliases, values)
+            flatten_params, values = param.flatten(path_to_defs, skip_fields)
+            self.insert_value(values)
 
             for p in flatten_params:
                 if p.arg_name in entry_params:
@@ -205,18 +200,14 @@ class LogAnalyzer:
                 self.insert(p)
 
     def _analyze_response(self, skip_fields, response, path_to_defs):
-        responses, aliases, values = response.flatten(
-            path_to_defs, skip_fields
-        )
-        self.type_aliases.update(aliases)
-        self.insert_value(aliases, values)
-
+        responses, values = response.flatten(path_to_defs, skip_fields)
+        self.insert_value(values)
         for r in responses:
             self._add_type_fields(r)
             self.insert(r)
 
     def analyze(self, paths, entries, skip_fields, blacklist,
-        path_to_defs="#/components/schemas", prefilter=False):
+        path_to_defs=consts.REF_PREFIX, prefilter=False):
         '''
             Match the value of each request argument or response parameter
             in a log entry and union the common ones
@@ -226,9 +217,6 @@ class LogAnalyzer:
             if isinstance(entry.response, ErrorResponse):
                 continue
 
-            if entry.endpoint == "/v1/subscriptions" and entry.method.upper() == "POST":
-                print(entry.parameters)
-
             # match docs to correct integers and booleans
             entry_def = paths.get(entry.endpoint)
             if entry.endpoint in blacklist:
@@ -237,30 +225,14 @@ class LogAnalyzer:
             if entry_def:
                 entry_def = entry_def.get(entry.method.lower())
 
-            self._analyze_params(
-                skip_fields, entry_def, entry.parameters, path_to_defs
-            )
-            
-            self._analyze_response(
-                skip_fields, entry.response, path_to_defs
-            )
+            params = entry.parameters
+            self._analyze_params(skip_fields, entry_def, params, path_to_defs)
+            self._analyze_response(skip_fields, entry.response, path_to_defs)
 
         if prefilter:
             self._partition_type()
 
-    def insert_value(self, aliases, value_map):
-        # update the types to their aliases
-        type_values = {}
-        for t, v in self.type_values.items():
-            if t in aliases:
-                alias_t = aliases.get(t)
-                if alias_t is not None:
-                    values = self.type_values[t]
-                    alias_values = self.type_values.get(alias_t, [])
-                    type_values[alias_t] = alias_values + values
-
-        self.type_values.update(type_values)
-
+    def insert_value(self, value_map):
         # add new values to the bank mapping
         for t, v in value_map.items():
             if t not in self.type_values:
@@ -272,25 +244,21 @@ class LogAnalyzer:
         if param.value is None:
             return
 
-        # skip empty values, integers and booleans for merge, 
+        # skip empty values, we can do nothing with them
+        if not param.value:
+            return
+        
+        # integers and booleans for merge 
         # but add them as separate nodes, they are meaningless
-        if not param.value or isinstance(param.value, int) or isinstance(param.value, bool):
-            param.value = str(param.value)
-            if isinstance(param.value, int):
-                param.type = SchemaType(defs.TYPE_INT, None)
-            
-            if isinstance(param.value, bool):
-                param.type = SchemaType(defs.TYPE_BOOL, None)
-
+        if isinstance(param.value, int) or isinstance(param.value, bool):
             self.dsu.union(param, param)
             return
 
-        value = str(param.value)
-        if value not in self.value_to_param:
-            self.value_to_param[value] = param
+        if param.value not in self.value_to_param:
+            self.value_to_param[param.value] = param
 
-        root = self.value_to_param[value]
-        
+        root = self.value_to_param[param.value]
+
         self.dsu.union(root, param)
 
     def analysis_result(self):
@@ -487,8 +455,7 @@ class LogAnalyzer:
                 same_array_level and
                 param.path == p.path[:len(param.path)]):
                 descendants.append(p)
-                
-        print("find descendants", descendants)
+
         return descendants
 
     def get_values_by_type(self, typ):
@@ -504,20 +471,11 @@ class LogAnalyzer:
         return values
 
     def find_same_type(self, param):
-        typ_name = self.type_aliases.get(param.type.name)
-
-        if typ_name is not None:
-            param.type = SchemaType(typ_name, None)
-            return param
-        else:
-            typ_name = param.type.name
-
         params = self.dsu._parents.keys()
         for p in params:
-            if p.type and p.type.name == typ_name:
+            if p == param or same_type_name(p, param):
                 group = self.dsu.get_group(p)
                 _, rep_type = get_representative(group)
-                # TODO: we do not want to find the parent of this type, correct?
                 param.type = rep_type
                 # print("find type for param", rep, rep_type.name, rep_type.schema)
                 break
@@ -542,7 +500,7 @@ class LogAnalyzer:
         
         # no descendants found
         if len(descendants) == 0:
-            param.type = SchemaType(str(param), None)
+            param.type = types.PrimString(str(param), None)
             parents.append(param)
 
         for descendant in descendants:

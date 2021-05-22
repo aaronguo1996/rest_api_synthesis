@@ -27,6 +27,8 @@ DOC_OK = "ok"
 DOC_STRIPE = "x-stripeResource"
 DOC_TOKEN = "token"
 DOC_EXPAND = "expand"
+DOC_PATTERN = "pattern"
+DOC_ENUM = "enum"
 
 # definitions of types in OpenAPI
 TYPE_NONE = "none"

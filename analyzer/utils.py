@@ -1,6 +1,7 @@
 import re
 
 from openapi import defs
+import consts
 
 def get_representative(group):
     rep = ""
@@ -53,3 +54,19 @@ def path_to_name(path):
             name += f"[{field}]"
 
     return name
+
+def same_type_name(param1, param2):
+    return (
+        param1.type is not None and
+        param1.type.name is not None and
+        param2.type is not None and
+        param2.type.name is not None and
+        param1.type.name == param2.type.name
+    )
+
+def ignore_arg_name(skip_fields, arg_name):
+    return (arg_name in skip_fields or
+        consts.CUSTOM_PREFIX == arg_name[:2])
+
+def make_response_name(endpoint, method):
+    return f"{endpoint}_{method.upper()}_response"
