@@ -1,7 +1,5 @@
 from collections import defaultdict
 
-DEFAULT_LENGTH_LIMIT = 12
-
 def group_types(types):
     type_dict = defaultdict(int)
     for t in types:

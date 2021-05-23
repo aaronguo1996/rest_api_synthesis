@@ -16,7 +16,7 @@ from openapi import defs
 from witnesses.dependencies import DependencyResolver, EndpointProducer, EnumProducer
 from witnesses.request import Connection
 from synthesizer.utils import make_entry_name
-import config_keys as keys
+import consts
 from analyzer.utils import path_to_name
 
 RESULT_FILE = os.path.join("output/", "results.pkl")
@@ -309,7 +309,7 @@ class WitnessGenerator:
                 result.method, "", result.endpoint, [],
                 True, 0, None, result.response_body)
 
-        witness_path = os.path.join(self._exp_dir, keys.FILE_TRACE)
+        witness_path = os.path.join(self._exp_dir, consts.FILE_TRACE)
         with open(witness_path, 'rb') as f:
             entries = pickle.load(f)
             print(len(entries))

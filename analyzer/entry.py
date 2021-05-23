@@ -1,4 +1,4 @@
-from analyzer.utils import ignore_arg_name
+from analyzer.utils import ignore_arg_name, make_response_name
 from collections import defaultdict
 
 from openapi import defs
@@ -45,7 +45,11 @@ class Parameter:
             if k in skip_fields:
                 continue
 
-            field_schema = self.type.object_fields[k]
+            try:
+                field_schema = self.type.get_object_field(k)
+            except:
+                raise Exception(self.method, self.func_name, self.path, self.is_required, self.value, self.type)
+
             if field_schema is None: # field not defined in the doc
                 continue
 
@@ -74,10 +78,13 @@ class Parameter:
             else:
                 array_level = self.array_level + 1
 
-            p = Parameter(
-                self.method, defs.INDEX_ANY, self.func_name,
-                self.path + [defs.INDEX_ANY], self.is_required,
-                array_level, self.type.item, self.value[i])
+            try:
+                p = Parameter(
+                    self.method, defs.INDEX_ANY, self.func_name,
+                    self.path + [defs.INDEX_ANY], self.is_required,
+                    array_level, self.type.item, self.value[i])
+            except:
+                raise Exception(self.method, self.func_name, self.path, self.is_required, self.value)
 
             it_results, it_values = p.flatten(path_to_defs, skip_fields)
             results += it_results
@@ -107,10 +114,11 @@ class Parameter:
             isinstance(self.type, types.ObjectType)):
             fields = self.type.object_fields
             for field, field_typ in fields.items():
+                value = None if self.value is None else self.value[field]
                 p = Parameter(
                     self.method, self.arg_name, self.func_name,
                     self.path + [field], self.is_required,
-                    self.array_level, field_typ, self.value[field])
+                    self.array_level, field_typ, value)
                 results += p.flatten_ad_hoc(skip_fields)
         else:
             results.append(self)
@@ -248,8 +256,12 @@ class TraceEntry:
                 .get(defs.HEADER_FORM) \
                 .get(defs.DOC_SCHEMA)
 
-        response_name = f"{endpoint}_{method.upper()}_response"
+        response_name = make_response_name(endpoint, method)
         response_typ = types.construct_type(response_name, response_schema)
+        if endpoint == "/v1/coupons":
+            print(response_schema)
+            if isinstance(response_typ, types.ObjectType):
+                print("object type", response_typ.object_fields)
         entry_response = Parameter(
             method, "", endpoint, [], True, 
             int(response_schema.get(defs.DOC_TYPE) == defs.TYPE_ARRAY), 

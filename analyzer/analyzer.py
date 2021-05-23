@@ -203,7 +203,6 @@ class LogAnalyzer:
         responses, values = response.flatten(path_to_defs, skip_fields)
         self.insert_value(values)
         for r in responses:
-            self._add_type_fields(r)
             self.insert(r)
 
     def analyze(self, paths, entries, skip_fields, blacklist,
@@ -214,7 +213,8 @@ class LogAnalyzer:
         '''
         for entry in entries:
             # do not add error responses to DSU
-            if isinstance(entry.response, ErrorResponse):
+            if (isinstance(entry.response, ErrorResponse) or
+                entry.endpoint not in paths):
                 continue
 
             # match docs to correct integers and booleans
@@ -316,7 +316,7 @@ class LogAnalyzer:
                             if param.type.name is None:
                                 continue
 
-                            p = param.type.get_oldest_parent()
+                            p = param.type
                             # if trans == "/v1/customers/{customer}_GET":
                             #     print(trans, "connected with", rep, "by parameter", param.arg_name, param.value)
 
@@ -490,75 +490,19 @@ class LogAnalyzer:
         Args:
             param: the request/response parameter to be splitted
         """
-        if param.type and re.search('^/.*_response$', param.type.name):
+        if (param.type and param.type.name is not None and
+            re.search(r'^/.*_response$', param.type.name)):
             return
         
-        # find all the descendants
-        descendants = self._find_descendant(param)
+        params = self.dsu._parents.keys()
+        for p in params:
+            if p == param:
+                group = self.dsu.get_group(p)
+                _, rep_type = get_representative(group)
+                param.type = rep_type
+                break
         
-        parents = []
-        
-        # no descendants found
-        if len(descendants) == 0:
-            param.type = types.PrimString(str(param), None)
-            parents.append(param)
-
-        for descendant in descendants:
-            # find the root type for each descendant
-            parent = descendant.get_parent_param()
-            print("get parent param", parent)
-            group = self.dsu.get_group(parent)
-            if len(group) == 0:
-                print("dsu group is empty")
-            _, rep_type = get_representative(group)
-            print("get representative type", rep_type)
-
-            # this should happen rarely
-            if rep_type is not None:
-                parent.type = rep_type
-
-            if parent.type is None:
-                print("parent has no rep type found, assign default name")
-                parent.type = SchemaType(str(descendant), None)
-            
-            # get the fields
-            func_fields = self.type_fields.get(parent.type.name, {})
-            fields = func_fields.get(parent.func_name)
-            if fields is None: # we add all partitions that we can find
-                parts = self.type_partitions.get(parent.type.name)
-                if parts is not None:
-                    parent.type = [
-                        SchemaType(f"{parent.type.name}_{i}", None)
-                        for i in range(len(parts))
-                    ]
-            else:
-                # get all the partitions that cover the fields
-                partitions = self.type_partitions.get(parent.type.name)
-                if partitions is not None:
-                    indices = []
-                    for i, part in enumerate(partitions):
-                        if part[0] in fields:
-                            indices.append(i)
-
-                    param.type = [
-                        SchemaType(f"{parent.type.name}_{i}", None)
-                        for i in indices
-                    ]
-
-            parents.append(parent)
-
-        # dedup parents by path
-        seen = set()
-        results = []
-        for p in parents:
-            key = tuple(p.path)
-            if key in seen:
-                continue
-
-            seen.add(key)
-            results.append(p)
-
-        return results
+        return param
 
     def reset_context(self):
         self._checked_fields = {}

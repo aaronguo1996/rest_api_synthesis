@@ -12,10 +12,9 @@ from graphviz import Digraph
 
 # analyze traces
 from analyzer import analyzer, dynamic, parser
-from schemas.schema_type import SchemaType
 from openapi import defs
 from openapi.utils import read_doc, get_schema_forest
-import config_keys as keys
+import consts
 from synthesizer.synthesizer import Synthesizer
 from synthesizer.filtering import run_filter
 from synthesizer.parallel import spawn_encoders
@@ -23,6 +22,7 @@ from globs import init_synthesizer, get_solution_strs
 from witnesses.engine import WitnessGenerator
 from synthesizer.utils import make_entry_name
 from analyzer.ascription import Ascription
+from openapi.parser import OpenAPIParser
 
 # test imports
 from tests.run_test import run_test
@@ -54,25 +54,27 @@ def build_cmd_parser():
     return parser
 
 def prep_exp_dir(config):
-    exp_name = config["exp_name"]
+    exp_name = config[consts.KEY_EXP_NAME]
     exp_dir = os.path.join("experiment_data/", exp_name)
     if not os.path.exists(exp_dir):
         os.makedirs(exp_dir)
 
     return exp_dir
 
-def parse_entries(doc, configuration, exp_dir):
-    trace_file = os.path.join(exp_dir, 'traces.pkl')
+def parse_entries(configuration, exp_dir, base_path, endpoints):
+    trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
     if not os.path.exists(trace_file):
         print("Parsing OpenAPI document...")
         # entries = None
         log_parser = parser.LogParser(
-            configuration["log_file"], configuration["hostname"], doc)
+            configuration[consts.KEY_LOG_FILE], 
+            configuration[consts.KEY_HOSTNAME],
+            base_path, endpoints)
         entries = log_parser.parse_entries(
-            configuration["analysis"]["uninteresting_endpoints"],
-            configuration.get(keys.KEY_SKIP_FIELDS),
+            configuration[consts.KEY_ANALYSIS][consts.KEY_UNINTERESTING],
+            configuration.get(consts.KEY_SKIP_FIELDS),
         )
-        if configuration["enable_debug"]:
+        if configuration[consts.KEY_DEBUG]:
             # write entries to log file
             logging.debug("========== Start Logging Parse Results ==========")
             for e in entries:
@@ -89,7 +91,7 @@ def parse_entries(doc, configuration, exp_dir):
 def run_dynamic(configuration, entries, endpoint, limit=500):
     analysis = dynamic.DynamicAnalysis(
         entries,
-        configuration.get(keys.KEY_SKIP_FIELDS)
+        configuration.get(consts.KEY_SKIP_FIELDS)
     )
     seqs = analysis.get_sequences(endpoint=endpoint, limit=limit)
     print(seqs)
@@ -98,7 +100,7 @@ def create_entries(doc, config, ascription):
     entries = {}
 
     paths = doc.get(defs.DOC_PATHS)
-    endpoints = config.get(keys.KEY_ENDPOINTS)
+    endpoints = config.get(consts.KEY_ENDPOINTS)
     if not endpoints:
         endpoints = paths.keys()
 
@@ -121,16 +123,19 @@ def create_entries(doc, config, ascription):
     return entries
 
 def generate_witnesses(configuration, doc, exp_dir, entries, endpoints):
-    enable_debug = configuration.get(keys.KEY_DEBUG)
+    enable_debug = configuration.get(consts.KEY_DEBUG)
 
     print("Analyzing provided log...")
     log_analyzer = analyzer.LogAnalyzer()
+    prefilter = configuration.get(consts.KEY_SYNTHESIS) \
+                            .get(consts.KEY_SYN_PREFILTER)
+    skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
     log_analyzer.analyze(
         doc.get(defs.DOC_PATHS),
         entries, 
-        configuration.get(keys.KEY_SKIP_FIELDS),
-        configuration.get(keys.KEY_BLACKLIST),
-        prefilter=configuration.get(keys.KEY_SYNTHESIS).get(keys.KEY_SYN_PREFILTER))
+        skip_fields,
+        configuration.get(consts.KEY_BLACKLIST),
+        prefilter=prefilter)
 
     groups = log_analyzer.analysis_result()
     if enable_debug:
@@ -138,41 +143,41 @@ def generate_witnesses(configuration, doc, exp_dir, entries, endpoints):
         for g in groups:
             logging.debug(g)
 
-    ascription = Ascription(log_analyzer)
+    ascription = Ascription(log_analyzer, skip_fields)
     entries = create_entries(doc, configuration, ascription)
 
     print("Getting more traces...")
     engine = WitnessGenerator(
         doc, entries, log_analyzer,
-        configuration["witness"]["token"],
-        configuration["witness"]["value_dict"],
-        configuration["witness"]["annotation_path"],
+        configuration[consts.KEY_WITNESS][consts.KEY_TOKEN],
+        configuration[consts.KEY_WITNESS][consts.KEY_VALUE_DICT],
+        configuration[consts.KEY_WITNESS][consts.KEY_ANNOTATION],
         exp_dir,
-        configuration["witness"]["gen_depth"],
-        configuration["path_to_definitions"],
-        configuration.get(keys.KEY_SKIP_FIELDS),
-        configuration["witness"]["plot_every"],
+        configuration[consts.KEY_WITNESS][consts.KEY_GEN_DEPTH],
+        configuration[consts.KEY_PATH_TO_DEFS],
+        configuration.get(consts.KEY_SKIP_FIELDS),
+        configuration[consts.KEY_WITNESS][consts.KEY_PLOT_EVERY],
     )
 
-    if configuration["analysis"]["plot_graph"]:
+    if configuration[consts.KEY_ANALYSIS][consts.KEY_PLOT_GRAPH]:
         engine.to_graph(endpoints, "dependencies_0")
 
     engine.saturate_all(
-        endpoints, configuration["witness"]["iterations"],
-        configuration["witness"]["timeout_per_request"])
+        endpoints, configuration[consts.KEY_WITNESS][consts.KEY_ITERATIONS],
+        configuration[consts.KEY_WITNESS][consts.KEY_TIMEOUT])
 
     print("Writing typed entries to file...")
     constructor = Constructor(doc, log_analyzer)
     projs_and_filters = constructor.construct_graph()
     entries.update(projs_and_filters)
-    with open(os.path.join(exp_dir, "entries.pkl"), "wb") as f:
+    with open(os.path.join(exp_dir, consts.FILE_ENTRIES), "wb") as f:
         pickle.dump(entries, f)
 
     print("Writing graph to file...")
-    with open(os.path.join(exp_dir, "graph.pkl"), "wb") as f:
+    with open(os.path.join(exp_dir, consts.FILE_GRAPH), "wb") as f:
         pickle.dump(log_analyzer, f)
 
-    if configuration["analysis"]["plot_graph"]:
+    if configuration[consts.KEY_ANALYSIS][consts.KEY_PLOT_GRAPH]:
         dot = Digraph(strict=True)
         log_analyzer.to_graph(dot, endpoints=endpoints)
         dot.render(os.path.join("output/", "dependencies"), view=False)
@@ -186,8 +191,8 @@ def main():
         configuration = json.loads(config.read())
 
     # clear the log file if exists
-    output_file = configuration.get(keys.KEY_OUTPUT)
-    enable_debug = configuration.get(keys.KEY_DEBUG)
+    output_file = configuration.get(consts.KEY_OUTPUT)
+    enable_debug = configuration.get(consts.KEY_DEBUG)
     if enable_debug and os.path.exists(output_file):
         os.remove(output_file)
 
@@ -195,11 +200,12 @@ def main():
         filename=output_file, level=logging.DEBUG)
 
     print("Reading OpenAPI document...")
-    doc_file = configuration.get(keys.KEY_DOC_FILE)
+    doc_file = configuration.get(consts.KEY_DOC_FILE)
     doc = read_doc(doc_file)
-    SchemaType.doc_obj = doc
+    openapi_parser = OpenAPIParser(doc)
+    base_path, doc_entries = openapi_parser.parse()
 
-    endpoints = configuration.get(keys.KEY_ENDPOINTS)
+    endpoints = configuration.get(consts.KEY_ENDPOINTS)
     if not endpoints:
         endpoints = doc.get(defs.DOC_PATHS).keys()
 
@@ -207,10 +213,10 @@ def main():
 
     print("Loading witnesses...")
     if args.dynamic or args.witness or args.filtering:
-        entries = parse_entries(doc, configuration, exp_dir)
+        entries = parse_entries(configuration, exp_dir, base_path, doc_entries)
 
     if args.parallel or args.synthesis:
-        with open(os.path.join(exp_dir, "entries.pkl"), "rb") as f:
+        with open(os.path.join(exp_dir, consts.FILE_ENTRIES), "rb") as f:
             entries = pickle.load(f)
 
     if args.dynamic:
@@ -220,11 +226,11 @@ def main():
         generate_witnesses(configuration, doc, exp_dir, entries, endpoints)
     
     else:
-        with open(os.path.join(exp_dir, "graph.pkl"), "rb") as f:
+        with open(os.path.join(exp_dir, consts.FILE_GRAPH), "rb") as f:
             log_analyzer = pickle.load(f)
         
         if args.test:
-            suites = configuration.get(keys.KEY_TEST_SUITES)
+            suites = configuration.get(consts.KEY_TEST_SUITES)
             if not suites:
                 raise Exception("Test suites need to be specified in configuration file")
 
@@ -235,7 +241,7 @@ def main():
 
             dyn_analysis = dynamic.DynamicAnalysis(
                 entries,
-                configuration.get(keys.KEY_SKIP_FIELDS),
+                configuration.get(consts.KEY_SKIP_FIELDS),
                 abstraction_level=dynamic.CMP_ENDPOINT_AND_ARG_VALUE
             )
 
@@ -271,7 +277,7 @@ def main():
             # outputs = [SchemaType("objs_message", None)]
             spawn_encoders(
                 inputs, outputs,
-                configuration["synthesis"]["solver_number"]
+                configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
             )
         elif args.synthesis:
             synthesizer = Synthesizer(doc, configuration, entries, exp_dir)

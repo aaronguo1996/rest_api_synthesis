@@ -13,8 +13,8 @@ from stats.graph_stats import GraphStats
 from stats.time_stats import TimeStats, STATS_GRAPH
 from synthesizer.hypergraph_encoder import HyperGraphEncoder
 from synthesizer.petrinet_encoder import PetriNetEncoder
-from synthesizer.utils import make_entry_name, DEFAULT_LENGTH_LIMIT
-import config_keys as keys
+from synthesizer.utils import make_entry_name
+import consts
 
 STATE_FULL = -1
 STATE_NORMAL = 0
@@ -196,7 +196,7 @@ class Synthesizer:
                 self._encoder.block_prev(perms)
                 result = self._encoder.solve()
 
-            if self._encoder._path_len > DEFAULT_LENGTH_LIMIT:
+            if self._encoder._path_len > consts.DEFAULT_LENGTH_LIMIT:
                 print("Exceeding the default length limit")
                 break
 

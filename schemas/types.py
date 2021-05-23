@@ -95,12 +95,16 @@ class SchemaObject(BaseType):
 
         return schema.is_type_of(obj)
 
+    def get_object_field(self, field):
+        schema = BaseType.object_lib.get(self.name)
+        return schema.get_object_field(field)
+
 class ObjectType(BaseType):
     """Ad-hoc objects
 
     """
-    def __init__(self, fields, parent=None):
-        super().__init__(None, parent)
+    def __init__(self, name, fields, parent=None):
+        super().__init__(name, parent)
         self.object_fields = fields
         self.fields = []
 
@@ -151,6 +155,9 @@ class ObjectType(BaseType):
         else:
             return None, -1
 
+    def get_object_field(self, field):
+        return self.object_fields.get(field)
+
 class ArrayType(BaseType):
     def __init__(self, name, item_typ, parent=None):
         super().__init__(name, parent)
@@ -162,33 +169,29 @@ class ArrayType(BaseType):
     @staticmethod
     def is_array_type(expected_type):
         typ = expected_type.get(defs.DOC_PROPERTIES, expected_type)
-        if (defs.DOC_ITEMS in typ and 
+        if (defs.DOC_ITEMS in typ and
             typ.get(defs.DOC_TYPE, None) == defs.TYPE_ARRAY):
             return typ
         else:
             return None
 
-    def _of_array_type(self, obj, expected_type):
-        array_type = self.is_array_type(expected_type)
-        if array_type:
-            # if the field has type array of items
-            if not isinstance(obj, list):
+    def _of_array_type(self, obj):
+        # if the field has type array of items
+        if not isinstance(obj, list):
+            return None, -1
+
+        score = 1
+        for o in obj:
+            _, field_score = self.item.is_type_of(o)
+            if field_score < 0:
                 return None, -1
+            else:
+                score += field_score
 
-            score = 1
-            for o in obj:
-                _, field_score = self.item.is_type_of(o)
-                if field_score < 0:
-                    return None, -1
-                else:
-                    score += field_score
-
-            return expected_type, score
-
-        return None, -1
+        return expected_type, score
 
     def is_type_of(self, obj):
-        return self._of_array_type(obj, self.schema)
+        return self._of_array_type(obj)
 
     def get_schema_type(self, k):
         return None
@@ -201,25 +204,31 @@ class UnionType(BaseType):
     @staticmethod
     def is_union_type(expected_type):
         return (
-            expected_type.get(defs.DOC_ONEOF) or 
+            expected_type.get(defs.DOC_ONEOF) or
             expected_type.get(defs.DOC_ANYOF) or
             expected_type.get(defs.DOC_ALLOF)
         )
 
-    def _of_union_type(self, obj, expected_type):
-        union_type = self.is_union_type(expected_type)
-        if union_type is not None:
-            for t in self.items:
-                # if the field matches any of the union type
-                _, field_score = t.is_type_of(obj)
-                if field_score >= 0:
-                    return t, field_score
-
-        # none of match, returns false
-        return None, -1
+    def _of_union_type(self, obj):
+        for t in self.items:
+            # if the field matches any of the union type
+            _, field_score = t.is_type_of(obj)
+            if field_score >= 0:
+                return t, field_score
 
     def is_type_of(self, obj):
-        return self._of_union_type(obj, self.schema)
+        return self._of_union_type(obj)
+
+    def get_object_field(self, field):
+        for t in self.items:
+            if (isinstance(t, UnionType) or
+                isinstance(t, ObjectType) or
+                isinstance(t, SchemaObject)):
+                field_type = t.get_object_field(field)
+                if field_type is not None:
+                    return field_type
+
+        return None
 
 def construct_prim_type(schema):
     typ = schema.get(defs.DOC_TYPE)
@@ -241,36 +250,40 @@ def construct_prim_type(schema):
     elif typ == defs.TYPE_NUM:
         return PrimNum()
     elif typ == defs.TYPE_OBJECT:
-        return ObjectType({})
+        return ObjectType(None, {})
     else:
         raise Exception("Unknown primitive type", schema)
 
 def construct_type(name, schema):
+    ret_type = None
+
     array_schema = ArrayType.is_array_type(schema)
     if array_schema is not None:
         item_schema = array_schema.get(defs.DOC_ITEMS)
         item_type = construct_type(name, item_schema)
         ret_type = ArrayType(name, item_type)
-        item_type.parent = ret_type
-    
-    union_schema = UnionType.is_union_type(schema)
-    if union_schema is not None:
-        item_types = []
-        ret_type = UnionType(name, item_types)
-        for item_schema in union_schema:
-            item_type = construct_type(name, item_schema)
-            item_types.append(item_type)
-        
-    object_schema = ObjectType.is_schema_type(schema)
-    if object_schema is not None:
-        fields = {}
-        ret_type = ObjectType(name, fields)
-        for k, v in object_schema.items():
-            field_type = construct_type(k, v)
-            field_type.parent = ret_type
-            ret_type.add_field(k, field_type)
-    else:
-        ret_type = construct_prim_type(schema)
+
+    if ret_type is None:
+        union_schema = UnionType.is_union_type(schema)
+        if union_schema is not None:
+            item_types = []
+            ret_type = UnionType(name, item_types)
+            for item_schema in union_schema:
+                item_type = construct_type(name, item_schema)
+                item_types.append(item_type)
+
+    if ret_type is None:
+        object_schema = ObjectType.is_schema_type(schema)
+        if object_schema is not None:
+            fields = {}
+            for k, v in object_schema.items():
+                field_name = None if name is None else f"{name}.{k}"
+                field_type = construct_type(field_name, v)
+                fields[k] = field_type
+
+            ret_type = ObjectType(name, fields)
+        else:
+            ret_type = construct_prim_type(schema)
 
     return ret_type
 
@@ -297,10 +310,3 @@ def infer_type_for(path_to_defs, skip_fields, value):
         return obj_candidates[-1][0]
     else:
         return None
-
-def construct_object_lib(doc):
-    # get all the schemas
-    schemas = doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS)
-    for name, schema in schemas.items():
-        typ = construct_type(name, schema)
-        BaseType.object_lib[name] = typ
