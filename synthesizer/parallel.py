@@ -6,7 +6,7 @@ import time
 
 from synthesizer.hypergraph_encoder import HyperGraphEncoder
 from synthesizer.petrinet_encoder import PetriNetEncoder
-from synthesizer.utils import DEFAULT_LENGTH_LIMIT
+import consts
 import globs
 
 def run_encoder(inputs, outputs, path_len):
@@ -18,10 +18,11 @@ def run_encoder(inputs, outputs, path_len):
     for typ in outputs:
         output_map[typ.name] += 1
         
-    solver_type = globs.synthesizer._config["synthesis"]["solver_type"]
-    if solver_type == "petri net":
+    config = globs.synthesizer._config
+    solver_type = config[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_TYPE]
+    if solver_type == consts.SOLVER_PN:
         encoder = PetriNetEncoder({})
-    elif solver_type == "hypergraph":
+    elif solver_type == consts.SOLVER_HYPER:
         encoder = HyperGraphEncoder({})
     else:
         raise Exception("Unknown solver type in config")
@@ -52,13 +53,18 @@ def run_encoder(inputs, outputs, path_len):
             encoder.block_prev(perms)
             path = encoder.solve()
 
-    # print("Finished encoder running for path length", path_len, 
-    #     "after time", time.time() - start, flush=True)
+    print("Finished encoder running for path length", path_len, 
+        "after time", time.time() - start, flush=True)
 
 def spawn_encoders(inputs, outputs, solver_num, timeout=500):
     with pebble.ProcessPool(max_workers=solver_num) as pool:
-        futures = [pool.schedule(run_encoder, args=(inputs, outputs, i), timeout=timeout)
-            for i in range(DEFAULT_LENGTH_LIMIT + 1)]
+        futures = []
+        for i in range(consts.DEFAULT_LENGTH_LIMIT + 1):
+            future = pool.schedule(
+                run_encoder, 
+                args=(inputs, outputs, i),
+                timeout=timeout)
+            futures.append(future)
         
         for i, future in enumerate(futures):
             try:

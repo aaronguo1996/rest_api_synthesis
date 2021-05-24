@@ -6,19 +6,23 @@ import os
 import json
 import logging
 import random
+from re import M
+from synthesizer.constructor import Constructor
 from graphviz import Digraph
 
 # analyze traces
 from analyzer import analyzer, dynamic, parser
-from schemas.schema_type import SchemaType
 from openapi import defs
 from openapi.utils import read_doc, get_schema_forest
-import config_keys as keys
+import consts
 from synthesizer.synthesizer import Synthesizer
 from synthesizer.filtering import run_filter
 from synthesizer.parallel import spawn_encoders
 from globs import init_synthesizer, get_solution_strs
 from witnesses.engine import WitnessGenerator
+from synthesizer.utils import make_entry_name
+from analyzer.ascription import Ascription
+from openapi.parser import OpenAPIParser
 
 # test imports
 from tests.run_test import run_test
@@ -50,25 +54,27 @@ def build_cmd_parser():
     return parser
 
 def prep_exp_dir(config):
-    exp_name = config["exp_name"]
+    exp_name = config[consts.KEY_EXP_NAME]
     exp_dir = os.path.join("experiment_data/", exp_name)
     if not os.path.exists(exp_dir):
         os.makedirs(exp_dir)
 
     return exp_dir
 
-def parse_entries(doc, configuration, exp_dir):
-    trace_file = os.path.join(exp_dir, 'traces.pkl')
+def parse_entries(configuration, exp_dir, base_path, endpoints):
+    trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
     if not os.path.exists(trace_file):
         print("Parsing OpenAPI document...")
         # entries = None
         log_parser = parser.LogParser(
-            configuration["log_file"], configuration["hostname"], doc)
+            configuration[consts.KEY_LOG_FILE], 
+            configuration[consts.KEY_HOSTNAME],
+            base_path, endpoints)
         entries = log_parser.parse_entries(
-            configuration["analysis"]["uninteresting_endpoints"],
-            configuration.get(keys.KEY_SKIP_FIELDS),
+            configuration[consts.KEY_ANALYSIS][consts.KEY_UNINTERESTING],
+            configuration.get(consts.KEY_SKIP_FIELDS),
         )
-        if configuration["enable_debug"]:
+        if configuration[consts.KEY_DEBUG]:
             # write entries to log file
             logging.debug("========== Start Logging Parse Results ==========")
             for e in entries:
@@ -76,34 +82,61 @@ def parse_entries(doc, configuration, exp_dir):
 
         with open(trace_file, 'wb') as f:
             pickle.dump(entries, f)
-
-        # print("Write", len(entries), "entries into file")
     else:
         with open(trace_file, 'rb') as f:
             entries = pickle.load(f)
-        print("Read", len(entries), "entries from file")
 
     return entries
 
 def run_dynamic(configuration, entries, endpoint, limit=500):
     analysis = dynamic.DynamicAnalysis(
         entries,
-        configuration.get(keys.KEY_SKIP_FIELDS)
+        configuration.get(consts.KEY_SKIP_FIELDS)
     )
     seqs = analysis.get_sequences(endpoint=endpoint, limit=limit)
     print(seqs)
 
-def generate_witnesses(configuration, doc, exp_dir, entries, endpoints):
-    enable_debug = configuration.get(keys.KEY_DEBUG)
+def create_entries(doc, config, ascription):
+    entries = {}
+
+    endpoints = config.get(consts.KEY_ENDPOINTS)
+    if not endpoints:
+        endpoints = doc.keys()
+
+    for endpoint, ep_def in doc.items():
+        if endpoint not in endpoints:
+            continue
+
+        for _, method_def in ep_def.items():
+            typed_entries = ascription.ascribe_type(method_def)
+
+            for entry in typed_entries:
+                # store results
+                entry_name = make_entry_name(entry.endpoint, entry.method)
+                if endpoint == "/users.lookupByEmail":
+                    print("*******", [(p.arg_name, p.path, p.is_required, p.type) for p in entry.parameters])
+                    p = entry.response
+                    print("*******", (p.arg_name, p.path, p.is_required, p.type))
+                entries[entry_name] = entry
+
+    return entries
+
+def generate_witnesses(
+    configuration, doc, doc_entries, hostname, base_path, 
+    exp_dir, entries, endpoints):
+    enable_debug = configuration.get(consts.KEY_DEBUG)
 
     print("Analyzing provided log...")
     log_analyzer = analyzer.LogAnalyzer()
+    prefilter = configuration.get(consts.KEY_SYNTHESIS) \
+                            .get(consts.KEY_SYN_PREFILTER)
+    skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
     log_analyzer.analyze(
-        doc.get(defs.DOC_PATHS),
-        entries, 
-        configuration.get(keys.KEY_SKIP_FIELDS),
-        configuration.get(keys.KEY_BLACKLIST),
-        prefilter=configuration.get(keys.KEY_SYNTHESIS).get(keys.KEY_SYN_PREFILTER))
+        doc_entries,
+        entries,
+        skip_fields,
+        configuration.get(consts.KEY_BLACKLIST),
+        prefilter=prefilter)
 
     groups = log_analyzer.analysis_result()
     if enable_debug:
@@ -111,33 +144,43 @@ def generate_witnesses(configuration, doc, exp_dir, entries, endpoints):
         for g in groups:
             logging.debug(g)
 
+    ascription = Ascription(log_analyzer, skip_fields)
+    entries = create_entries(doc_entries, configuration, ascription)
+
     print("Getting more traces...")
     engine = WitnessGenerator(
-        doc, log_analyzer,
-        configuration["witness"]["token"],
-        configuration["witness"]["value_dict"],
-        configuration["witness"]["annotation_path"],
+        doc_entries, hostname, base_path, 
+        entries, log_analyzer,
+        configuration[consts.KEY_WITNESS][consts.KEY_TOKEN],
+        configuration[consts.KEY_WITNESS][consts.KEY_VALUE_DICT],
+        configuration[consts.KEY_WITNESS][consts.KEY_ANNOTATION],
         exp_dir,
-        configuration["witness"]["gen_depth"],
-        configuration["path_to_definitions"],
-        configuration.get(keys.KEY_SKIP_FIELDS),
-        configuration["witness"]["plot_every"],
+        configuration[consts.KEY_WITNESS][consts.KEY_GEN_DEPTH],
+        configuration[consts.KEY_PATH_TO_DEFS],
+        configuration.get(consts.KEY_SKIP_FIELDS),
+        configuration[consts.KEY_WITNESS][consts.KEY_PLOT_EVERY],
     )
 
-    if configuration["analysis"]["plot_graph"]:
+    if configuration[consts.KEY_ANALYSIS][consts.KEY_PLOT_GRAPH]:
         engine.to_graph(endpoints, "dependencies_0")
 
     engine.saturate_all(
-        endpoints, configuration["witness"]["iterations"],
-        configuration["witness"]["timeout_per_request"],
-        configuration["witness"]["max_opt_params"]
-    )
+        endpoints, configuration[consts.KEY_WITNESS][consts.KEY_ITERATIONS],
+        configuration[consts.KEY_WITNESS][consts.KEY_TIMEOUT],
+        configuration[consts.KEY_WITNESS][consts.KEY_MAX_OPT])
+
+    print("Writing typed entries to file...")
+    constructor = Constructor(doc, log_analyzer)
+    projs_and_filters = constructor.construct_graph()
+    entries.update(projs_and_filters)
+    with open(os.path.join(exp_dir, consts.FILE_ENTRIES), "wb") as f:
+        pickle.dump(entries, f)
 
     print("Writing graph to file...")
-    with open(os.path.join(exp_dir, "graph.pkl"), "wb") as f:
+    with open(os.path.join(exp_dir, consts.FILE_GRAPH), "wb") as f:
         pickle.dump(log_analyzer, f)
 
-    if configuration["analysis"]["plot_graph"]:
+    if configuration[consts.KEY_ANALYSIS][consts.KEY_PLOT_GRAPH]:
         dot = Digraph(strict=True)
         log_analyzer.to_graph(dot, endpoints=endpoints)
         dot.render(os.path.join("output/", "dependencies"), view=False)
@@ -151,8 +194,8 @@ def main():
         configuration = json.loads(config.read())
 
     # clear the log file if exists
-    output_file = configuration.get(keys.KEY_OUTPUT)
-    enable_debug = configuration.get(keys.KEY_DEBUG)
+    output_file = configuration.get(consts.KEY_OUTPUT)
+    enable_debug = configuration.get(consts.KEY_DEBUG)
     if enable_debug and os.path.exists(output_file):
         os.remove(output_file)
 
@@ -160,11 +203,12 @@ def main():
         filename=output_file, level=logging.DEBUG)
 
     print("Reading OpenAPI document...")
-    doc_file = configuration.get(keys.KEY_DOC_FILE)
+    doc_file = configuration.get(consts.KEY_DOC_FILE)
     doc = read_doc(doc_file)
-    SchemaType.doc_obj = doc
+    openapi_parser = OpenAPIParser(doc)
+    hostname, base_path, doc_entries = openapi_parser.parse()
 
-    endpoints = configuration.get(keys.KEY_ENDPOINTS)
+    endpoints = configuration.get(consts.KEY_ENDPOINTS)
     if not endpoints:
         endpoints = doc.get(defs.DOC_PATHS).keys()
 
@@ -172,20 +216,27 @@ def main():
 
     print("Loading witnesses...")
     if args.dynamic or args.witness or args.filtering:
-        entries = parse_entries(doc, configuration, exp_dir)
+        entries = parse_entries(configuration, exp_dir, base_path, doc_entries)
+
+    if args.parallel or args.synthesis:
+        with open(os.path.join(exp_dir, consts.FILE_ENTRIES), "rb") as f:
+            entries = pickle.load(f)
 
     if args.dynamic:
         run_dynamic(configuration, entries, "/conversations.list", 500)
     
     elif args.witness:
-        generate_witnesses(configuration, doc, exp_dir, entries, endpoints)
+        generate_witnesses(
+            configuration, doc, doc_entries, hostname, base_path,
+            exp_dir, entries, endpoints
+        )
     
     else:
-        with open(os.path.join(exp_dir, "graph.pkl"), "rb") as f:
+        with open(os.path.join(exp_dir, consts.FILE_GRAPH), "rb") as f:
             log_analyzer = pickle.load(f)
         
         if args.test:
-            suites = configuration.get(keys.KEY_TEST_SUITES)
+            suites = configuration.get(consts.KEY_TEST_SUITES)
             if not suites:
                 raise Exception("Test suites need to be specified in configuration file")
 
@@ -196,7 +247,7 @@ def main():
 
             dyn_analysis = dynamic.DynamicAnalysis(
                 entries,
-                configuration.get(keys.KEY_SKIP_FIELDS),
+                configuration.get(consts.KEY_SKIP_FIELDS),
                 abstraction_level=dynamic.CMP_ENDPOINT_AND_ARG_VALUE
             )
 
@@ -218,59 +269,35 @@ def main():
                 print(p.pretty())
 
         elif args.parallel:
-            init_synthesizer(doc, configuration, log_analyzer, exp_dir)
+            init_synthesizer(doc, configuration, entries, exp_dir)
             inputs = {
-                "channel_name": SchemaType("objs_conversation.name", None),
-                # "email": SchemaType("objs_user_profile.email", None)
+                # "customer_id": SchemaType("customer.id", None),
+                "product_name": SchemaType("product.name", None),
+                "cur": SchemaType("fee.currency", None),
+                "amt": SchemaType("unit_amount_/v1/prices_POST_unit_amount", None),
             }
-            outputs = [
-                SchemaType("objs_user_profile.email", None),
-                # SchemaType("objs_message", None)
-            ]
+            outputs = [SchemaType("plan.id", None)]
+            # inputs = {
+            #     "email": SchemaType("objs_user_profile.email", None),
+            # }
+            # outputs = [SchemaType("objs_message", None)]
             spawn_encoders(
                 inputs, outputs,
-                configuration["synthesis"]["solver_number"]
+                configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
             )
         elif args.synthesis:
-            synthesizer = Synthesizer(doc, configuration, log_analyzer, exp_dir)
+            synthesizer = Synthesizer(doc, configuration, entries, exp_dir)
             synthesizer.init()
             solutions = synthesizer.run_n(
                 [],
                 {
-                    # "channel_id": SchemaType("defs_dm_id", None),
-                    # "user_id": SchemaType("defs_user_id", None),
-                    # "email": SchemaType("objs_user_profile.email", None)
-                    # "customer_id": SchemaType("Customer.id", None),
-                    # "location_id": SchemaType("Location.id", None),
-                    # "subscription_plan_id": SchemaType("CatalogObject.id", None)
-                    # "product_name": SchemaType("product.name", None),
-                    # "product_id": SchemaType("product.id", None),
-                    # "customer_id": SchemaType("customer.id", None),
-                    # "cur": SchemaType("fee.currency", None),
-                    # "amt": SchemaType("/v1/prices:unit_amount:POST", None),
-                    # "subscription": SchemaType("Subscription", None),
-                    # "subscription_plan_id": SchemaType("CatalogObject.id", None),
-                    # "subscription_plan_id": SchemaType("CatalogObject.id", None)
-                    # "customer_name": SchemaType("Customer.given_name", None),
-                    # "order": SchemaType("Customer.id", None),
-                    # "name": SchemaType("DeviceCode.name", None),
-                    # "order_id": SchemaType("Transaction.id", None),
-                    # "type": SchemaType("CatalogObject.type", None)
-                    # "customer_id": SchemaType("Customer.id", None)
-                    # "subscription_id": SchemaType("subscription.id", None),
-                    # "payment": SchemaType("/v1/subscriptions/{subscription_exposed_id}:default_payment_method:POST", None),
+                    "customer_id": SchemaType("customer.id", None),
+                    "product_id": SchemaType("product.id", None),
                 },
                 [
-                    # SchemaType("objs_message", None)
-                    # SchemaType("Transaction.order_id", None)
-                    # SchemaType("invoiceitem", None)
-                    # SchemaType("charge", None)
-                    # SchemaType("refund", None)
-                    # SchemaType("Customer", None)
-                    # SchemaType("subscription", None)
-                    # SchemaType("payment_source.last4", None)
+                    SchemaType("plan.id", None),
                 ],
-                10 #configuration["synthesis"]["solution_num"]
+                1 # configuration["synthesis"]["solution_num"]
             )
 
             for prog in [r.pretty(synthesizer._entries, 0) for r in solutions]:

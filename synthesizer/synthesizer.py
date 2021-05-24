@@ -4,31 +4,30 @@ import pickle
 import time
 import os
 
-from analyzer.entry import TraceEntry, ResponseParameter, RequestParameter
+from analyzer.entry import TraceEntry, Parameter
 from openapi import defs
 from openapi.utils import blacklist
 from program.generator import ProgramGenerator
 from program.program import ProgramGraph, all_topological_sorts
-from schemas.schema_type import SchemaType
 from stats.graph_stats import GraphStats
 from stats.time_stats import TimeStats, STATS_GRAPH
 from synthesizer.hypergraph_encoder import HyperGraphEncoder
 from synthesizer.petrinet_encoder import PetriNetEncoder
-from synthesizer.utils import make_entry_name, DEFAULT_LENGTH_LIMIT
-import config_keys as keys
+from synthesizer.utils import make_entry_name
+import consts
 
 STATE_FULL = -1
 STATE_NORMAL = 0
 
 class Synthesizer:
-    def __init__(self, doc, config, analyzer, exp_dir):
+    def __init__(self, doc, config, entries, exp_dir):
         self._doc = doc
         self._config = config
-        self._analyzer = analyzer
         self._groups = {}
         self._group_names = {}
         self._landmarks = []
         self._unique_entries = {}
+        self._entries = entries
         self._program_generator = ProgramGenerator({})
         # flags
         self._expand_group = config["synthesis"]["expand_group"]
@@ -176,7 +175,7 @@ class Synthesizer:
             output_map[typ.name] += 1
 
         start = time.time()
-        self._encoder.init(input_map)
+        self._encoder.init(input_map, output_map)
         self._encoder.set_final(output_map)
         # self._encoder.add_all_constraints()
 
@@ -197,7 +196,7 @@ class Synthesizer:
                 self._encoder.block_prev(perms)
                 result = self._encoder.solve()
 
-            if self._encoder._path_len > DEFAULT_LENGTH_LIMIT:
+            if self._encoder._path_len > consts.DEFAULT_LENGTH_LIMIT:
                 print("Exceeding the default length limit")
                 break
 
@@ -220,137 +219,31 @@ class Synthesizer:
         return solutions
 
     def _add_transitions(self):
-        entries = self._create_entries()
-        projections = self._create_projections()
-        filters = self._create_filters()
-        entries.update(projections)
-        entries.update(filters)
-        self._entries = entries
-        unique_entries = self._group_transitions(entries)
-
-        # slack logs
+        unique_entries = self._group_transitions(self._entries)
         lst = [
-            # "/chat.delete_POST",
-            # "/conversations.members_GET",
-            # "/users.info_GET",
-            # '/users.list_GET',
+            # "/v1/subscriptions_POST",
+            # "/v1/prices_GET",
+            # "projection(/v1/prices_GET_response, data.[?])_",
+            # "projection(price, id)_",
+            "/v1/products_POST",
+            "/v1/prices_POST",
+            "/v1/invoiceitems_POST",
             # "/conversations.open_POST",
-            # "/chat.postMessage_POST",
             # "/users.lookupByEmail_GET",
-            # "projection(/conversations.list_GET_response, channels)_",
-            # "projection(/conversations.open_POST_response, channel)_",
-            # "projection(/users.info_GET_response, user)_",
-            # "projection(/conversations.members_GET_response, members)_",
-            # 'projection(/users.conversations_GET_response, channels)_',
-            # "projection(objs_user, profile)_",
-            # "projection(objs_user_profile, email)_",
-            # "projection(objs_user, id)_",
-            # "projection(objs_user_profile, user_id)_",
-            # "projection(objs_conversation, id)_",
-            # "projection(/chat.postMessage_POST_response, message)_",
-            # "projection(/users.lookupByEmail_GET_response, user)_",
+            # "/chat.postMessage_POST",
         ]
-
-        # stripe logs
-        # lst = [
-        #     "/v1/products_POST",
-        #     "/v1/customers_GET",
-        #     "/v1/customers/{customer}_GET",
-        #     "/v1/prices_POST",
-        #     "/v1/invoiceitems_POST",
-        #     "projection(customer, email)_",
-        #     "projection(product, id)_",
-        #     "projection(price, id)_",
-        #     "/v1/subscriptions_POST",
-        #     "projection(charge, invoice)_",
-        #     "projection(invoice, id)_",
-        #     "/v1/invoices_GET",
-        #     "projection(subscription, latest_invoice)_",
-        #     "/v1/subscriptions/{subscription_exposed_id}_POST",
-        #     "projection(invoiceitem, amount)_",
-        #     "projection(product, active)_",
-        #     "/v1/invoices/{invoice}/send_POST",
-        #     "projection(customer, default_source)_",
-        #     "projection(payment_source, last4)_",
-        #     "projection(payment_source, id)_",
-        #     "/v1/customers/{customer}/sources_GET",
-        #     "projection(/v1/customers/{customer}/sources_GET_response, data)_",
-        #     "filter(payment_source, payment_source.id)_",
-        # ]
-        # lst = [
-        #     # "/v2/catalog/object/{object_id}_DELETE",
-        #     "projection(OrderLineItem, name)_",
-        #     # "projection(Transaction, id)_",
-        #     # "/v2/invoices/search_POST"
-        #     # "projection(Tender, note)_",
-        #     # "filter(Subscription, Subscription.plan_id)_",
-        #     # "filter(Subscription, Subscription.plan_id)_",
-        #     # "projection(/v2/subscriptions/search_response, subscriptions)_",
-        #     # "projection(/v2/invoices/search_response, invoices)_"
-        # ]
 
         for name in lst:
             e = self._entries.get(name)
             print('-----')
             print(name)
-            print([(p.arg_name, p.type.name) for p in e.parameters])
+            print([(p.arg_name, p.type.name, p.is_required) for p in e.parameters])
             print(e.response.type, flush=True)
 
-        for name, e in entries.items():
+        for name, e in self._entries.items():
             self._program_generator.add_signature(name, e)
 
         self._unique_entries = unique_entries
-
-    def _create_entries(self):
-        entries = {}
-
-        paths = self._doc.get(defs.DOC_PATHS)
-        endpoints = self._config.get(keys.KEY_ENDPOINTS)
-        if not endpoints:
-            endpoints = paths.keys()
-
-        for endpoint, ep_def in paths.items():
-            if endpoint not in endpoints:
-                continue
-
-            for method, method_def in ep_def.items():
-                if method.lower() == "delete": # do not handle delete for now
-                    continue
-
-                results = self._create_entry(endpoint, method, method_def)
-                # print("Endpoint:", endpoint, "Results:", results)
-                for entry in results:
-                    # set parameter and response types
-                    for p in entry.parameters:
-                        self._analyzer.set_type(p)
-
-                    self._analyzer.set_type(entry.response)
-
-                    # store results
-                    entry_name = make_entry_name(entry.endpoint, entry.method)
-                    entries[entry_name] = entry
-
-        return entries
-
-    def _create_entry(self, endpoint, method, entry_def):
-        return TraceEntry.from_openapi(
-            self._config.get(keys.KEY_SKIP_FIELDS),
-            endpoint, method, entry_def,
-        )
-
-    def _create_projections(self):
-        projections = {}
-        objs = self._doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS)
-        for obj_name, obj_def in objs.items():
-            # skip temporary types defined by ourselves
-            if blacklist(obj_name):
-                continue
-
-            projection_entries = self._create_projection(obj_name, obj_def)
-            projections.update(projection_entries)
-
-        # return self._group_transitions(projections)
-        return projections
 
     def _group_transitions(self, transitions):
         # group projections with the same input and output
@@ -370,171 +263,5 @@ class Synthesizer:
                 rep = self._groups[key][0]
                 self._groups[key].append(proj)
                 self._group_names[rep].append(proj)
-
-        return results
-
-    def _create_projection(self, obj_name, obj_def):
-        results = {}
-        if (defs.DOC_ONEOF in obj_def or
-            defs.DOC_ANYOF in obj_def or
-            defs.DOC_ALLOF in obj_def):
-            one_ofs = obj_def.get(defs.DOC_ONEOF, [])
-            any_ofs = obj_def.get(defs.DOC_ANYOF, [])
-            all_ofs = obj_def.get(defs.DOC_ALLOF, [])
-            for s in one_ofs + any_ofs + all_ofs:
-                projection = self._create_projection(obj_name, s)
-                results.update(projection)
-        elif defs.DOC_PROPERTIES in obj_def:
-            properties = obj_def.get(defs.DOC_PROPERTIES)
-            for name, prop in properties.items():
-                typ_path = obj_name.split('.')
-                # root_typ = typ_path[0]
-                if len(typ_path) > 1:
-                    to_field_typ = '.'.join(typ_path[1:] + [name])
-                else:
-                    to_field_typ = name
-
-                in_name = None
-
-                parts = self._analyzer.type_partitions.get(obj_name)
-                if parts is not None:
-                    for i, part in enumerate(parts):
-                        for p in part:
-                            if to_field_typ == p[:len(to_field_typ)]:
-                                in_name = f"{obj_name}_{i}"
-                                break
-                            if in_name is not None:
-                                break
-                        else:
-                            in_name = None
-
-                if in_name is None:
-                    in_name = obj_name
-
-                endpoint = f"projection({in_name}, {name})"
-                proj_in = RequestParameter(
-                    "", "obj", endpoint, True, SchemaType(in_name, None), None
-                )
-                is_array = prop.get(defs.DOC_TYPE) == "array"
-                proj_out = ResponseParameter(
-                    "", "field", endpoint,
-                    [], True, int(is_array),
-                    SchemaType(f"{obj_name}.{name}", None), None
-                )
-                # FIXME: this is probably wrong in other cases
-                proj_in = self._analyzer.find_same_type(proj_in)
-                proj_out = self._analyzer.find_same_type(proj_out)
-                entry = TraceEntry(endpoint, "", [proj_in], proj_out)
-                result_key = make_entry_name(endpoint, "")
-                results[result_key] = entry
-
-                # add nested objects
-                if (prop.get(defs.DOC_TYPE) == "object" or
-                    defs.DOC_PROPERTIES in prop):
-                    projections = self._create_projection(
-                        f"{proj_out.type.name}.{name}", prop)
-                    results.update(projections)
-
-        return results
-
-    def _create_filters(self):
-        filters = {}
-        objs = self._doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS)
-        for obj_name, obj_def in objs.items():
-            # skip temporary types defined by ourselves
-            if blacklist(obj_name):
-                continue
-
-            filter_entries = self._create_filter(obj_name, obj_name, obj_def)
-            filters.update(filter_entries)
-
-        return filters
-
-    def _create_filter(self, obj_name, field_name, field_def):
-        results = {}
-        if (defs.DOC_ONEOF in field_def or
-            defs.DOC_ANYOF in field_def or
-            defs.DOC_ALLOF in field_def):
-            one_ofs = field_def.get(defs.DOC_ONEOF, [])
-            any_ofs = field_def.get(defs.DOC_ANYOF, [])
-            all_ofs = field_def.get(defs.DOC_ALLOF, [])
-            for s in one_ofs + any_ofs + all_ofs:
-                equi_filter = self._create_filter(obj_name, field_name, s)
-                results.update(equi_filter)
-                # func_name = f"filter({obj_name}, {field_name})"
-                # obj_entry = equi_filter.pop(func_name)
-                # obj_entry.func_name = f"{func_name}_{i}"
-                # results[func_name] = obj_entry
-        elif defs.DOC_PROPERTIES in field_def: # if the object has sub-fields
-            properties = field_def.get(defs.DOC_PROPERTIES)
-            for name, prop in properties.items():
-                if (prop.get(defs.DOC_TYPE) == "object" or
-                    defs.DOC_PROPERTIES in prop):
-                    projections = self._create_filter(
-                        obj_name, f"{field_name}.{name}", prop)
-                    results.update(projections)
-                else:
-                    
-
-                    typ_path = field_name.split('.')
-                    if len(typ_path) > 1:
-                        to_field_typ = '.'.join(typ_path[1:] + [name])
-                    else:
-                        to_field_typ = name
-
-                    in_name = None
-                    parts = self._analyzer.type_partitions.get(obj_name)
-                    opt_ins = []
-                    if parts is not None:
-                        for i, part in enumerate(parts):
-                            if to_field_typ in part:
-                                in_name = f"{obj_name}_{i}"
-                                break
-                            else:
-                                in_name = None
-
-                        for j in range(len(parts)):
-                            if j != i:
-                                param = RequestParameter(
-                                    "", "obj", 
-                                    f"filter({in_name}, {in_name}.{to_field_typ})", 
-                                    False, 
-                                    SchemaType(f"{obj_name}_{j}", None), None
-                                ) 
-                                opt_ins.append(param)
-
-                        out_type = [
-                            SchemaType(f"{obj_name}_{j}", None)
-                            for j in range(len(parts))
-                        ]
-
-                    if in_name is None:
-                        in_name = obj_name
-                        out_type = SchemaType(obj_name, None)
-
-                    endpoint = f"filter({in_name}, {in_name}.{to_field_typ})"
-                    filter_in = [
-                        RequestParameter(
-                            "", "obj", endpoint, True, 
-                            SchemaType(in_name, None), None
-                        ),
-                        RequestParameter(
-                            "", "field", endpoint,
-                            True, SchemaType(f"{field_name}.{name}", None), None
-                        )
-                    ] + opt_ins
-                    filter_out = ResponseParameter(
-                        "", "obj", endpoint,
-                        [], True, 1, out_type, None
-                    )
-                    filter_in = [self._analyzer.find_same_type(fin)
-                        for fin in filter_in]
-                    
-                    if parts is None:
-                        filter_out = self._analyzer.find_same_type(filter_out)
-                        
-                    entry = TraceEntry(endpoint, "", filter_in, filter_out)
-                    result_key = make_entry_name(endpoint, "")
-                    results[result_key] = entry
 
         return results

@@ -1,7 +1,7 @@
 {
     "exp_name": "stripe_api_test",
     "log_file": "data/logs/dashboard.stripe.com.20210331.har",
-    "doc_file": "data/openapi/stripe_spec3_sdk_full.json",
+    "doc_file": "data/openapi/stripe_spec3_sdk_large.json",
     "enable_debug": true,
     "debug_output": "debug.log",
     "hostname": "https://dashboard.stripe.com",
@@ -38,7 +38,8 @@
         "solution_number": 300,
         "enable_prefilter": false
     },
-    "endpoints": [],
+    "endpoints": [
+    ],
     "ignore_field_names": [
         "text",
         "blocks",
@@ -54,7 +55,6 @@
         "ok",
         "topic",
         "x-*",
-        "expand%5B%5D",
         "expand"
     ],
     "blacklist": [

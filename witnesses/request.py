@@ -28,9 +28,9 @@ class Connection:
 
     def send_and_recv(self, endpoint, method, headers, data):
         url, body = self.replace_path_params(endpoint, data)
-        headers.update({"User-Agent": "RestSyn/0.1"})
+        headers.update({"User-Agent": "APIphany/0.1"})
         resp = requests.request(method, url, params=body, headers=headers)
-        
+
         self._logger.info(f"Sending to {url} the message {body}")
         return_code = resp.status_code
         resp_body = resp.text

@@ -25,6 +25,12 @@ DOC_ID = "id"
 DOC_REQUEST = "requestBody"
 DOC_OK = "ok"
 DOC_STRIPE = "x-stripeResource"
+DOC_TOKEN = "token"
+DOC_EXPAND = "expand"
+DOC_PATTERN = "pattern"
+DOC_ENUM = "enum"
+DOC_URL = "url"
+DOC_SERVERS = "servers"
 
 # definitions of types in OpenAPI
 TYPE_NONE = "none"

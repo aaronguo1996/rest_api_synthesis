@@ -1,20 +1,9 @@
-from schemas.schema_type import SchemaType
+from analyzer.utils import ignore_arg_name, make_response_name
+from collections import defaultdict
+import re
+
 from openapi import defs
-
-class Parameter:
-    def __init__(self, method, arg_name, func_name, is_required, typ, value=None):
-        self.method = method
-        self.arg_name = arg_name
-        self.func_name = func_name
-        self.value = value
-        self.type = typ
-        self.is_required = is_required
-
-    def __str__(self):
-        return self.__dict__
-
-    def __repr__(self):
-        return self.__str__()
+from schemas import types
 
 class ErrorResponse:
     def __init__(self, msg):
@@ -32,153 +21,162 @@ class ErrorResponse:
 
         return self._error_msg == other._error_msg
         
-class ResponseParameter(Parameter):
+class Parameter:
     def __init__(self, method, arg_name, func_name, 
         path, is_required, array_level, typ, value):
-        super().__init__(method, arg_name, func_name, is_required, typ, value)
+        self.method = method
+        self.arg_name = arg_name
+        self.func_name = func_name
+        self.value = value
+        self.type = typ
+        self.is_required = is_required
         self.path = path
         self.array_level = array_level
 
-    def _assign_type(self, value):
-        if isinstance(value, dict):
-            type_dict = value.copy()
-            for k in type_dict:
-                type_dict[k] = self._assign_type(type_dict[k])
-        elif isinstance(value, list):
-            item_types = [self._assign_type(v) for v in value]
-            item_type = {}
-            for t in item_types:
-                item_type.update(t)
-
-            type_dict = {
-                "type": "array",
-                "items": item_type,
-            }
-        else:
-            type_dict = {
-                "type": "string",
-            }
-        
-        return type_dict
-
-    def flatten(self, path_to_defs, skip_fields):
+    def _flatten_object(self, path_to_defs, skip_fields):
         results = []
-        aliases = {}
+        values = defaultdict(list)
 
-        if self.arg_name in skip_fields or "x-" == self.arg_name[:2]:
-            return results, aliases
+        try:
+            # store the value into a mapping
+            if self.type is not None and self.type.name is not None:
+                # if re.search(r"^.*_response$", self.type.name):
+                #     return [self], values
 
-        if isinstance(self.value, dict):
-            # print("Inferring type for", self.func_name, self.arg_name)
-            if defs.DOC_OK not in self.value: # should only impact Slack API
-                obj_type = SchemaType.infer_type_for(
-                        path_to_defs, skip_fields, self.value)
-            else:
-                obj_type = None
-
-            if (self.type is not None and 
-                "unknown_obj" not in self.type.name and
-                obj_type is not None and # when we know its type
-                self.type.name != obj_type.name):
-                aliases[self.type.name] = obj_type.name
-                
-            if obj_type is not None:
-                if self.type is None:
-                    self.type = obj_type
-                else:
-                    self.type.name = obj_type.name
-                    self.type.schema = obj_type.schema
-
-            if self.type is None:
-                assigned_type = self._assign_type(self.value)
-                self.type = SchemaType("unknown_obj", assigned_type)
-
+                values[self.type.name].append(self.value)
+            
             for k, v in self.value.items():
                 if k in skip_fields:
                     continue
 
-                field_schema = self.type.get_field_schema(k)
+                field_schema, is_required = self.type.get_object_field(k)                
                 if field_schema is None: # field not defined in the doc
                     continue
 
-                if (self.type is not None and 
-                    self.type.schema is not None and 
-                    field_schema is not None):
-                    typ = SchemaType(
-                        self.type.name + "." + k, 
-                        field_schema,
-                        self.type)
-                else:
-                    typ = None
-
-                p = ResponseParameter(
+                p = Parameter(
                     self.method, k, self.func_name,
-                    self.path + [k], self.is_required, self.array_level, 
-                    typ, v
+                    self.path + [k],
+                    is_required and self.is_required,
+                    self.array_level, 
+                    field_schema, v
                 )
-                fd_results, fd_aliases = p.flatten(path_to_defs, skip_fields)
+                fd_results, fd_values = p.flatten(path_to_defs, skip_fields)
                 results += fd_results
-                aliases.update(fd_aliases)
-        elif isinstance(self.value, list):
-            # infer type for each element in the array
-            # if we are able to match an object type against it, 
-            # we get rid of the index from the path
-            # if we cannot match an object against it, 
-            # leave the index as the arg name
-            for i in range(len(self.value)):
-                # print("[flatten] inferring type for", self.value[i])
-                item_type = SchemaType.infer_type_for(
-                    path_to_defs, skip_fields, self.value[i])
+                for t in fd_values:
+                    values[t] += fd_values[t]
 
-                if self.type is None:
-                    self.type = SchemaType(
-                        "unknown_list",
-                        self._assign_type(self.value))
-                if item_type is None:
-                    item_type = SchemaType(
-                        self.type.name,
-                        self.type.schema.get("items"),
-                        self.type.parent)
-                item_type.parent = self.type.parent
+        except:
+            raise Exception(self.method, self.func_name, self.path, self.is_required, self.value, self.type)
+        
+        return results, values
 
-                if self.type is not None and item_type.name != "unknown_obj":
-                    aliases[self.type.name] = item_type.name
+    def _flatten_array(self, path_to_defs, skip_fields):
+        results = []
+        values = defaultdict(list)
 
-                p = ResponseParameter(
+        for i in range(len(self.value)):
+            if self.type is not None and self.type.name is not None:
+                values[self.type.name].append(self.value)
+
+            if self.array_level is None:
+                array_level = None
+            else:
+                array_level = self.array_level + 1
+
+            try:
+                p = Parameter(
                     self.method, defs.INDEX_ANY, self.func_name,
                     self.path + [defs.INDEX_ANY], self.is_required,
-                    self.array_level + 1,
-                    item_type, self.value[i])
+                    array_level, self.type.item, self.value[i])
+            except:
+                raise Exception(self.method, self.func_name, self.path, self.is_required, self.value)
 
-                it_results, it_aliases = p.flatten(path_to_defs, skip_fields)
-                results += it_results
-                aliases.update(it_aliases)
+            it_results, it_values = p.flatten(path_to_defs, skip_fields)
+            results += it_results
+            for t in it_values:
+                values[t] += it_values[t]
+
+        return results, values
+
+    def flatten(self, path_to_defs, skip_fields):
+        if ignore_arg_name(skip_fields, self.arg_name):
+            return [], {}
+
+        if isinstance(self.value, dict):
+            return self._flatten_object(path_to_defs, skip_fields)
+        elif isinstance(self.value, list):
+            return self._flatten_array(path_to_defs, skip_fields)
         else:
-            if self.type is None:
-                self.type = SchemaType.infer_type_for(
-                    path_to_defs, skip_fields, self.value)
+            return [self], {}
 
-            # if we see a scalar value for the same type name,
-            # invalidate its definition as an object
-            aliases[self.type.name] = None
+    def flatten_ad_hoc(self, skip_fields):
+        results = []
+        
+        if ignore_arg_name(skip_fields, self.arg_name):
+            return results
 
-            return [self], aliases
+        if self.type is not None:
+            if isinstance(self.type, types.ObjectType):
+                fields = self.type.object_fields
+                for field, field_typ in fields.items():
+                    value = None if self.value is None else self.value[field]
+                    is_required = (
+                        self.is_required and 
+                        field in self.type.required_fields)
+                    p = Parameter(
+                        self.method, field, self.func_name,
+                        self.path + [field], is_required,
+                        self.array_level, field_typ, value)
+                    results += p.flatten_ad_hoc(skip_fields)
+            elif isinstance(self.type, types.ArrayType):
+                item_type = self.type.item
+                value = None if self.value is None else self.value[0]
+                array_level = None if self.array_level is None \
+                    else self.array_level + 1
+                p = Parameter(
+                    self.method, defs.INDEX_ANY, self.func_name,
+                    self.path + [defs.INDEX_ANY], self.is_required,
+                    array_level, item_type, value
+                )
+                results += p.flatten_ad_hoc(skip_fields)
+            elif isinstance(self.type, types.UnionType):
+                items = self.type.items
+                p = Parameter(
+                    self.method, self.arg_name, self.func_name,
+                    self.path, self.is_required, self.array_level,
+                    items[0], self.value # TODO: is this sufficient?
+                )
+                results += p.flatten_ad_hoc(skip_fields)
+            else:
+                results.append(self)
+        else:
+            results.append(self)
 
-        return results, aliases
+        return results
+
 
     def __eq__(self, other): 
-        if not isinstance(other, ResponseParameter):
+        if not isinstance(other, Parameter):
             # don't attempt to compare against unrelated types
             return NotImplemented
 
+        same_array_level = (
+            (self.array_level is None and other.array_level is None) or
+            (self.array_level is not None and other.array_level is not None)
+        )
+
         return (self.arg_name == other.arg_name and
                 self.func_name == other.func_name and
-                self.method.upper() == other.method.upper() and 
+                self.method.upper() == other.method.upper() and
+                same_array_level and
                 self.path == other.path)
 
     def __str__(self):
         return self.arg_name + '_' + self.func_name + '_' + \
             self.method.upper() + '_' + '.'.join(self.path)
+
+    def __repr__(self):
+        return self.__str__()
 
     def __hash__(self):
         return hash((
@@ -189,33 +187,13 @@ class ResponseParameter(Parameter):
         ))
 
     @staticmethod
-    def from_openapi(endpoint, method, arg_name, is_required, array_level):
-        return ResponseParameter(
+    def from_openapi(endpoint, method, arg_name, 
+        type_def, is_required, array_level):
+        # pass definition here and construct a type for it
+        typ = types.construct_type(None, type_def)
+        return Parameter(
             method, arg_name, endpoint,
-            [arg_name], is_required, array_level, None, None)
-
-class RequestParameter(Parameter):
-    def __init__(self, method, arg_name, func_name, is_required, typ, value):
-        super().__init__(method, arg_name, func_name, is_required, typ, value)
-
-    def __eq__(self, other): 
-        if not isinstance(other, RequestParameter):
-            # don't attempt to compare against unrelated types
-            return NotImplemented
-
-        return (self.arg_name == other.arg_name and
-                self.method.upper() == other.method.upper() and
-                self.func_name == other.func_name)
-
-    def __str__(self):
-        return self.func_name + ':' + self.arg_name + ':' + self.method.upper()
-
-    def __hash__(self):
-        return hash((self.arg_name, self.method.upper(), self.func_name))
-
-    @staticmethod
-    def from_openapi(endpoint, method, arg_name, is_required):
-        return RequestParameter(method, arg_name, endpoint, is_required, None, None)
+            [arg_name], is_required, array_level, typ, None)
 
 class TraceEntry:
     def __init__(self, endpoint, method, parameters, response):
@@ -242,30 +220,20 @@ class TraceEntry:
             self.response == other.response)
 
     @staticmethod
-    def from_openapi(skip_fields, endpoint, method, entry_def):
-        """read definition from openapi and generate several entries
-
-        Args:
-            skip_fields ([type]): [description]
-            endpoint ([type]): [description]
-            method ([type]): [description]
-            entry_def ([type]): [description]
-
-        Returns:
-            [type]: [description]
-        """
+    def from_openapi_params(endpoint, method, entry_def):
         entry_params = []
         
         # read parameters
         parameters = entry_def.get(defs.DOC_PARAMS, {})
         for p in parameters:
             name = p.get(defs.DOC_NAME)
-            if name == "token":
+            if name == defs.DOC_TOKEN:
                 continue
 
-            param = RequestParameter.from_openapi(
+            param = Parameter.from_openapi(
                 endpoint, method, name,
-                p.get(defs.DOC_REQUIRED, False))
+                p.get(defs.DOC_SCHEMA),
+                p.get(defs.DOC_REQUIRED, False), None)
             entry_params.append(param)
 
         # read request body
@@ -284,15 +252,24 @@ class TraceEntry:
                 requires = schema.get(defs.DOC_REQUIRED, [])
                 properties = schema.get(defs.DOC_PROPERTIES)
 
-                for name in properties.keys():
-                    if name == "token":
+                for name, typ_def in properties.items():
+                    if name == defs.DOC_TOKEN:
                         continue
 
-                    param = RequestParameter.from_openapi(
-                        endpoint, method, name,
-                        name in requires,
+                    param = Parameter.from_openapi(
+                        endpoint, method, name, typ_def,
+                        name in requires, None,
                     )
                     entry_params.append(param)
+        
+        return entry_params
+
+    @staticmethod
+    def from_openapi(endpoint, method, entry_def):
+        """read definition from openapi and generate several entries
+        """
+        entry_params = TraceEntry.from_openapi_params(
+            endpoint, method, entry_def)
 
         # read responses
         responses = entry_def.get(defs.DOC_RESPONSES)
@@ -308,64 +285,12 @@ class TraceEntry:
                 .get(defs.HEADER_FORM) \
                 .get(defs.DOC_SCHEMA)
 
-        requires = response_schema.get(defs.DOC_REQUIRED, [])
-        response_params = response_schema.get(defs.DOC_PROPERTIES)
-        if response_params is None:
-            # def expand_oneof(schema):
-            #     results = []
-            #     if defs.DOC_ONEOF in schema:
-            #         oneof_params = schema.get(defs.DOC_ONEOF)
-            #         for p in oneof_params:
-            #             results += expand_oneof(p)
-            #     else:
-            #         results.append(schema.get(defs.DOC_PROPERTIES))
+        response_name = make_response_name(endpoint, method)
+        response_typ = types.construct_type(response_name, response_schema)
+        entry_response = Parameter(
+            method, "", endpoint, [], True, 
+            int(response_schema.get(defs.DOC_TYPE) == defs.TYPE_ARRAY), 
+            response_typ, None
+        )
 
-            #     return results
-        
-            # response_params = expand_oneof(response_schema)
-
-            while defs.DOC_ONEOF in response_schema:
-                response_schemas = response_schema.get(defs.DOC_ONEOF)
-                response_schema = response_schemas[0]
-
-            response_params = response_schema.get(defs.DOC_PROPERTIES)
-
-        # FIXME: magic thing to get Stripe API work, better implementation later
-        if response_params is None or defs.DOC_STRIPE in response_schema:
-            entry_response = ResponseParameter(
-                method, "", endpoint, [], True, 0, None, None
-            )
-
-            results = [
-                TraceEntry(endpoint, method, entry_params, entry_response)
-            ]
-        else:
-            response_typ = SchemaType(f"{endpoint}_{method.upper()}_response", None)
-            entry_response = ResponseParameter(
-                method, "", endpoint, [], True, 0, response_typ, None
-            )
-
-            response_param = RequestParameter(
-                method, "", endpoint, True, response_typ, None
-            )
-
-            results = [
-                TraceEntry(endpoint, method, entry_params, entry_response)
-            ]
-
-            for name, rp in response_params.items():
-                if name in skip_fields:
-                    continue
-
-                # print("name:", name)
-                param = ResponseParameter.from_openapi(
-                    endpoint, method, name,
-                    name in requires, int(rp.get(defs.DOC_TYPE) == "array"))
-
-                e = TraceEntry(
-                    f"projection({endpoint}_{method.upper()}_response, {name})",
-                    "", [response_param], param)
-                results.append(e)
-
-        return results
-
+        return TraceEntry(endpoint, method, entry_params, entry_response)

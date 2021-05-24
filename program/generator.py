@@ -150,10 +150,11 @@ class ProgramGenerator:
 
             typ = param.type.name
             if param.is_required and param.type.name not in typ_subst:
-                raise Exception(
-                    f"Given path is spurious, "
-                    f"no program can be generated for {sig.endpoint}"
-                )
+                # raise Exception(
+                #     f"Given path is spurious, "
+                #     f"no program can be generated for {sig.endpoint}"
+                # )
+                pass
 
             exprs = typ_subst.get(typ)
             if exprs is not None:

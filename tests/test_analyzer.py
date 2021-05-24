@@ -1,6 +1,6 @@
 import unittest
 from analyzer.analyzer import *
-# from analyzer.entry import DocEntry, RequestParameter, ResponseParameter
+from analyzer.entry import Parameter
 
 class AnalyzerTestCase(unittest.TestCase):
     @staticmethod
@@ -13,7 +13,7 @@ class AnalyzerTestCase(unittest.TestCase):
 
     def test_find_same_type(self):
         typ = SchemaType("objs_user.id", None)
-        param = ResponseParameter(
+        param = Parameter(
             "", "", "projection(objs_user, id)", 
             [], True, 0, typ, None)
         param = self._analyzer.find_same_type(param)
@@ -22,7 +22,7 @@ class AnalyzerTestCase(unittest.TestCase):
         self.assertNotEqual(param.type.schema, None)
 
         typ = SchemaType("objs_user.profile.email", None)
-        param = ResponseParameter(
+        param = Parameter(
             "", "", "projection(objs_user.profile, email)", 
             [], True, 0, typ, None)
         param = self._analyzer.find_same_type(param)
@@ -31,7 +31,7 @@ class AnalyzerTestCase(unittest.TestCase):
         self.assertNotEqual(param.type.schema, None)
 
         typ = SchemaType("objs_conversation.creator", None)
-        param = ResponseParameter(
+        param = Parameter(
             "", "", "projection(objs_conversation, creator)", 
             [], True, 0, typ, None)
         param = self._analyzer.find_same_type(param)
@@ -40,7 +40,7 @@ class AnalyzerTestCase(unittest.TestCase):
         self.assertNotEqual(param.type.schema, None)
 
         typ = SchemaType("objs_conversation.id", None)
-        param = ResponseParameter(
+        param = Parameter(
             "", "", "projection(objs_conversation, id)", 
             [], True, 0, typ, None)
         param = self._analyzer.find_same_type(param)
@@ -49,7 +49,7 @@ class AnalyzerTestCase(unittest.TestCase):
         self.assertNotEqual(param.type.schema, None)
 
         typ = SchemaType("objs_conversation.priority", None)
-        param = ResponseParameter(
+        param = Parameter(
             "", "", "projection(objs_conversation, priority)", 
             [], True, 0, typ, None)
         param = self._analyzer.find_same_type(param)
@@ -58,7 +58,7 @@ class AnalyzerTestCase(unittest.TestCase):
         self.assertNotEqual(param.type.schema, None)
 
         typ = SchemaType("objs_user.profile.fields", None)
-        param = ResponseParameter(
+        param = Parameter(
             "", "", "projection(objs_user.profile, fields)", 
             [], True, 0, typ, None)
         param = self._analyzer.find_same_type(param)
@@ -76,7 +76,7 @@ class AnalyzerTestCase(unittest.TestCase):
         self.assertEqual(param.type.name, "defs_user_id")
 
         # case II: the parameter is an object
-        param = ResponseParameter(
+        param = Parameter(
             "GET", "user", "/users.info", 
             ["user"], True, 1, None, None)
         self._analyzer.set_type(param)
@@ -84,14 +84,14 @@ class AnalyzerTestCase(unittest.TestCase):
         self.assertEqual(param.type.name, "objs_user")
 
         # case III: the parameter is not in the graph
-        param = ResponseParameter(
+        param = Parameter(
             "GET", "user", "/users.members", 
             ["user"], True, 1, None, None)
         self._analyzer.set_type(param)
         self.assertNotEqual(param.type, None)
         self.assertEqual(param.type.name, str(param))
 
-        param = ResponseParameter(
+        param = Parameter(
             "GET", "response_metadata", "/conversations.list", 
             ["response_metadata"], False, 0, None, None)
         self._analyzer.set_type(param)
