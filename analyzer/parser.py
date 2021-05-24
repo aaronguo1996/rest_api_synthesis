@@ -4,14 +4,10 @@ from urllib.parse import urlparse, unquote
 from witnesses.utils import add_as_object
 
 from analyzer.entry import TraceEntry, Parameter
-from openapi import defs
 from analyzer.utils import name_to_path
 from witnesses.utils import add_as_object
-from analyzer import consts
-
-JSON_TYPE = "application/json"
-HOSTNAME_PREFIX = "https://"
-HOSTNAME_PREFIX_LEN = len(HOSTNAME_PREFIX)
+from analyzer import consts as har_consts
+import consts
 
 def match_with_path(path, request_obj, url):
     # print("matching", url, "with", path)
@@ -53,7 +49,7 @@ class LogParser:
         entries = []
         with open(self._log_file, 'r') as f:
             har_file = json.loads(f.read())
-            har_entries = har_file[consts.HAR_LOG][consts.HAR_ENTRIES]
+            har_entries = har_file[har_consts.HAR_LOG][har_consts.HAR_ENTRIES]
             # exclude all the non-json responses
             entries += self._resolve_entries(har_entries, skips, skip_fields)
 
@@ -66,32 +62,31 @@ class LogParser:
         # match the endpoint names with those in the doc and get path params
         endpoints = self._endpoints
         path_params = None
-        entry_params = []
         
         request_params = []
-        request_params += request.get(consts.HAR_QUERY, [])
+        request_params += request.get(har_consts.HAR_QUERY, [])
 
-        post_data = request.get(consts.HAR_PARAMS, {})
-        if consts.HAR_PARAMS in post_data:
-            post_params = post_data.get(consts.HAR_PARAMS)
+        post_data = request.get(har_consts.HAR_PARAMS, {})
+        if har_consts.HAR_PARAMS in post_data:
+            post_params = post_data.get(har_consts.HAR_PARAMS)
             request_params += post_params
         else:
-            post_body = json.loads(post_data.get(consts.HAR_TEXT, "{}"))
+            post_body = json.loads(post_data.get(har_consts.HAR_TEXT, "{}"))
             for k, v in post_body.items():
                 request_params.append({
-                    consts.HAR_NAME: k,
-                    consts.HAR_VALUE: v
+                    har_consts.HAR_NAME: k,
+                    har_consts.HAR_VALUE: v
                 })
 
         # here we assume each parameter has associative param name
         request_obj = {}
         for rp in request_params:
-            decoded_name = unquote(rp[consts.HAR_NAME])
+            decoded_name = unquote(rp[har_consts.HAR_NAME])
             param_path = name_to_path(decoded_name)
             # print(endpoint, "decode", rp["name"], "into", param_path)
             request_obj = add_as_object(
                 request_obj, param_path, 
-                unquote(rp[consts.HAR_VALUE])
+                unquote(rp[har_consts.HAR_VALUE])
             )
             # print(endpoint, "get param object", request_obj)
 
@@ -133,9 +128,9 @@ class LogParser:
         return endpoint, parameters, entry_def
 
     def _resolve_response(self, entry, method, endpoint, entry_def):
-        response_text = entry.get(consts.HAR_RESPONSE) \
-                            .get(consts.HAR_CONTENT) \
-                            .get(consts.HAR_TEXT)
+        response_text = entry.get(har_consts.HAR_RESPONSE) \
+                            .get(har_consts.HAR_CONTENT) \
+                            .get(har_consts.HAR_TEXT)
         response_body = json.loads(response_text)
 
         if entry_def.response.type is None:
@@ -152,12 +147,12 @@ class LogParser:
             resolve a request/response entry into an LogEntry object
         '''
 
-        request = entry.get(consts.HAR_REQUEST, None)
+        request = entry.get(har_consts.HAR_REQUEST, None)
 
         if not request:
             raise Exception("Request not found in the log entry")
 
-        url_obj = urlparse(request.get(consts.HAR_URL, ""))
+        url_obj = urlparse(request.get(har_consts.HAR_URL, ""))
         endpoint = url_obj.path
         base_path = self._base_path
         if base_path != "/" and base_path == endpoint[:len(base_path)]:
@@ -170,7 +165,7 @@ class LogParser:
         if endpoint[:host_len] == self._hostname:
             endpoint = endpoint[host_len:]
 
-        method = request.get(consts.HAR_METHOD, None)
+        method = request.get(har_consts.HAR_METHOD, None)
 
         if not method:
             raise Exception("Method not found in the request entry")
@@ -192,18 +187,18 @@ class LogParser:
         for e in entries:
             should_skip = False
             for s in skips:
-                if re.search(s, e[consts.HAR_REQUEST][consts.HAR_URL]):
+                if re.search(s, e[har_consts.HAR_REQUEST][har_consts.HAR_URL]):
                     should_skip = True
                     break
 
             if should_skip:
                 continue
 
-            mime_type = e.get(consts.HAR_RESPONSE) \
-                        .get(consts.HAR_CONTENT) \
-                        .get(consts.HAR_MIME)
-            if (mime_type == JSON_TYPE and
-                self._hostname in e[consts.HAR_REQUEST][consts.HAR_URL]):
+            mime_type = e.get(har_consts.HAR_RESPONSE) \
+                        .get(har_consts.HAR_CONTENT) \
+                        .get(har_consts.HAR_MIME)
+            if (mime_type == consts.JSON_TYPE and
+                self._hostname in e[har_consts.HAR_REQUEST][har_consts.HAR_URL]):
                 entry = self._resolve_entry(skip_fields, e)
                 if entry is not None:
                     result_entries.append(entry)
@@ -213,8 +208,8 @@ class LogParser:
     def _sanitize_hostname(self):
         # check whether the provided hostname starts with https://
         # prepend it if not
-        if self._hostname[:HOSTNAME_PREFIX_LEN] != HOSTNAME_PREFIX:
-            self._hostname = HOSTNAME_PREFIX + self._hostname
+        if self._hostname[:consts.HOSTNAME_PREFIX_LEN] != consts.HOSTNAME_PREFIX:
+            self._hostname = consts.HOSTNAME_PREFIX + self._hostname
 
         # check whether the provided hostname ends with /
         # remove it if exists

@@ -14,7 +14,11 @@ class Ascription:
         # add projections for ad-hoc objects
         if len(responses) > 1:
             resp_name = make_response_name(endpoint, method)
-            resp_type = (resp_name, None)
+            resp_type = types.ObjectType(
+                resp_name,
+                response.type.object_fields,
+                response.type.required_fields
+            )
             resp_param = Parameter(
                 method, "", endpoint, [], 
                 True, None, resp_type, None)
@@ -33,11 +37,7 @@ class Ascription:
 
         return entry_response, results
 
-    def ascribe_type(self, endpoint, method, entry_def):
-        entry = TraceEntry.from_openapi(
-            endpoint, method, entry_def,
-        )
-
+    def ascribe_type(self, entry):
         parameters = []
         for p in entry.parameters:
             # decompose ad-hoc objects if necessary
@@ -46,7 +46,8 @@ class Ascription:
         entry.parameters = parameters
 
         entry.response, results = self.ascribe_response(
-            endpoint, method, 
+            entry.endpoint,
+            entry.method, 
             entry.response
         )
         results.append(entry)

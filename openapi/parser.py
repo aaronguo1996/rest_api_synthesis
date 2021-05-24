@@ -10,9 +10,9 @@ class OpenAPIParser:
 
     def parse(self):
         self._construct_object_lib()
-        base_path = self._parse_server()
+        hostname, base_path = self._parse_server()
         entries = self._construct_entries()
-        return base_path, entries
+        return hostname, base_path, entries
 
     def _construct_object_lib(self):
         # get all schemas
@@ -28,8 +28,9 @@ class OpenAPIParser:
         for path, path_def in paths.items():
             entries[path] = {}
             for method, path_method_def in path_def.items():
+                method = method.upper()
                 entry = TraceEntry.from_openapi(path, method, path_method_def)
-                entries[path][method.upper()] = entry
+                entries[path][method] = entry
 
         return entries
 
@@ -38,5 +39,6 @@ class OpenAPIParser:
         servers = self._doc.get(defs.DOC_SERVERS)
         server = servers[0].get(defs.DOC_URL)
         server_result = urlparse(server)
+        hostname = server_result.netloc
         base_path = server_result.path
-        return base_path
+        return hostname, base_path

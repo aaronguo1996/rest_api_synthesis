@@ -99,17 +99,16 @@ def run_dynamic(configuration, entries, endpoint, limit=500):
 def create_entries(doc, config, ascription):
     entries = {}
 
-    paths = doc.get(defs.DOC_PATHS)
     endpoints = config.get(consts.KEY_ENDPOINTS)
     if not endpoints:
-        endpoints = paths.keys()
+        endpoints = doc.keys()
 
-    for endpoint, ep_def in paths.items():
+    for endpoint, ep_def in doc.items():
         if endpoint not in endpoints:
             continue
 
-        for method, method_def in ep_def.items():
-            typed_entries = ascription.ascribe_type(endpoint, method, method_def)
+        for _, method_def in ep_def.items():
+            typed_entries = ascription.ascribe_type(method_def)
 
             for entry in typed_entries:
                 # store results
@@ -122,7 +121,9 @@ def create_entries(doc, config, ascription):
 
     return entries
 
-def generate_witnesses(configuration, doc, exp_dir, entries, endpoints):
+def generate_witnesses(
+    configuration, doc, doc_entries, hostname, base_path, 
+    exp_dir, entries, endpoints):
     enable_debug = configuration.get(consts.KEY_DEBUG)
 
     print("Analyzing provided log...")
@@ -131,8 +132,8 @@ def generate_witnesses(configuration, doc, exp_dir, entries, endpoints):
                             .get(consts.KEY_SYN_PREFILTER)
     skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
     log_analyzer.analyze(
-        doc.get(defs.DOC_PATHS),
-        entries, 
+        doc_entries,
+        entries,
         skip_fields,
         configuration.get(consts.KEY_BLACKLIST),
         prefilter=prefilter)
@@ -144,11 +145,12 @@ def generate_witnesses(configuration, doc, exp_dir, entries, endpoints):
             logging.debug(g)
 
     ascription = Ascription(log_analyzer, skip_fields)
-    entries = create_entries(doc, configuration, ascription)
+    entries = create_entries(doc_entries, configuration, ascription)
 
     print("Getting more traces...")
     engine = WitnessGenerator(
-        doc, entries, log_analyzer,
+        doc_entries, hostname, base_path, 
+        entries, log_analyzer,
         configuration[consts.KEY_WITNESS][consts.KEY_TOKEN],
         configuration[consts.KEY_WITNESS][consts.KEY_VALUE_DICT],
         configuration[consts.KEY_WITNESS][consts.KEY_ANNOTATION],
@@ -203,7 +205,7 @@ def main():
     doc_file = configuration.get(consts.KEY_DOC_FILE)
     doc = read_doc(doc_file)
     openapi_parser = OpenAPIParser(doc)
-    base_path, doc_entries = openapi_parser.parse()
+    hostname, base_path, doc_entries = openapi_parser.parse()
 
     endpoints = configuration.get(consts.KEY_ENDPOINTS)
     if not endpoints:
@@ -223,7 +225,10 @@ def main():
         run_dynamic(configuration, entries, "/conversations.list", 500)
     
     elif args.witness:
-        generate_witnesses(configuration, doc, exp_dir, entries, endpoints)
+        generate_witnesses(
+            configuration, doc, doc_entries, hostname, base_path,
+            exp_dir, entries, endpoints
+        )
     
     else:
         with open(os.path.join(exp_dir, consts.FILE_GRAPH), "rb") as f:

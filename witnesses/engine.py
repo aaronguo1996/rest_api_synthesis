@@ -1,30 +1,28 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
-import re
-from witnesses.utils import add_as_object
 from graphviz import Digraph
-from urllib.parse import urlparse
 from xeger import Xeger
 import json
 import logging
 import os
 import pickle
 import random
+import re
 import time
 
 from analyzer.entry import ErrorResponse, Parameter, TraceEntry
+from analyzer.utils import path_to_name
 from openapi import defs
+from schemas import types
+from synthesizer.utils import make_entry_name
 from witnesses.dependencies import DependencyResolver, EndpointProducer, EnumProducer
 from witnesses.request import Connection
-from synthesizer.utils import make_entry_name
 import consts
-from analyzer.utils import path_to_name
 
 RESULT_FILE = os.path.join("output/", "results.pkl")
 
 class Result:
-    def __init__(self, method, endpoint, code, response, params):
-        self.method = method
-        self.endpoint = endpoint
+    def __init__(self, entry, code, params, response):
+        self.entry = entry
         self.return_code = code
         
         if code < defs.CODE_ERROR:
@@ -76,21 +74,23 @@ class BasicGenerator:
             self._logger.debug(f"Witness {param_name} in the value_dict")
             defined_regex = self._value_dict.get(param_name)
 
-        if param_type == defs.TYPE_ARRAY:
+        if isinstance(param_type, types.ArrayType):
             return []
-        elif param_type == defs.TYPE_INT:
+        elif isinstance(param_type, types.PrimInt):
             int_range = defined_regex or range(0,5)
             return random.choice(int_range)
-        elif param_type == defs.TYPE_NUM:
+        elif isinstance(param_type, types.PrimNum):
             float_range = defined_regex or (0, 1)
             return random.uniform(*float_range)
-        elif param_type == defs.TYPE_BOOL:
+        elif isinstance(param_type, types.PrimBool):
             return random.choice([True, False])
-        elif param_type == defs.TYPE_OBJECT:
+        elif isinstance(param_type, types.ObjectType):
             return {}
-        else:
+        elif isinstance(param_type, types.PrimString):
             regex = defined_regex or r"^[a-z0-9]{10,}$"
             return x.xeger(regex)
+        elif isinstance(param_type, types.PrimEnum):
+            return random.choice(param_type.enums)
 
     def _generate_params(self, params):
         raise NotImplementedError
@@ -109,9 +109,7 @@ class BasicGenerator:
                 },
                 params,
             )
-            return Result(
-                entry.method, entry.endpoint,
-                code, response, params)
+            return Result(entry, code, params, response)
         except:
             return None
 
@@ -201,7 +199,7 @@ class SaturationThread(BasicGenerator):
             self._logger.debug(
                 f"No dependency found for {(self._entry.endpoint, param.arg_name)}. "
                 f"Trying random values.")
-            param_val = self._random_from_type(param.arg_name, param_type.name)
+            param_val = self._random_from_type(param.arg_name, param_type)
 
         return param_val
 
@@ -214,8 +212,8 @@ class SaturationThread(BasicGenerator):
         for param_obj in params:
             required = param_obj.is_required
             if required:
-                print(param_obj.arg_name, param_obj.path, param_obj.func_name)
-                print(param_obj, "is required")
+                # print(param_obj.arg_name, param_obj.path, param_obj.func_name)
+                # print(param_obj, "is required")
                 req_params.append(param_obj)
             else:
                 opt_params.append(param_obj)
@@ -242,18 +240,19 @@ class SaturationThread(BasicGenerator):
         return param_dict
 
 class WitnessGenerator:
-    def __init__(self, openapi_doc, entries, analyzer,
-        token, val_dict, ann_path, exp_dir,
+    def __init__(self, openapi_entries, hostname, base_path,
+        entries, analyzer, token, val_dict, ann_path, exp_dir,
         depth_limit=3, path_to_defs="#/components/schemas", 
         skip_fields=[], plot_freq = 1):
         self._logger = logging.getLogger(__name__)
         # parse the spec into dict
-        self._doc = openapi_doc
-        self._paths = self._doc.get(defs.DOC_PATHS)
+        self._doc_entries = openapi_entries
+        self._hostname = hostname
+        self._base_path = base_path
         self._entries = entries
         
         # resolve dependencies from the spec
-        resolver = DependencyResolver(openapi_doc)
+        resolver = DependencyResolver(openapi_entries)
         self._analyzer = analyzer
         groups = analyzer.analysis_result()
 
@@ -270,12 +269,7 @@ class WitnessGenerator:
         self._depth_limit = depth_limit
         self._exp_dir = exp_dir
 
-        # start a new connection for generateing
-        servers = self._doc.get("servers")
-        server = servers[0].get("url")
-        server_result = urlparse(server)
-        self._hostname = server_result.netloc
-        self._base_path = server_result.path
+        # start a new connection for generating
         self._logger.debug(f"Get hostname: {self._hostname}"
             f" and basePath: {self._base_path}")
 
@@ -289,15 +283,22 @@ class WitnessGenerator:
 
     def _add_new_result(self, result: Result):
         params = []
+        entry = result.entry
         for name, val in result.request_params.items():
+            # find the corresponding param type
+            for param in entry.parameters:
+                if param.arg_name == name:
+                    break
+
             request = Parameter(
-                result.method, name, result.endpoint, [name],
-                True, None, None, val)
+                entry.method, name, entry.endpoint, [name],
+                True, None, param.type, val)
             params.append(request)
-            requests, aliases, values = request.flatten(
-                self._path_to_defs, self._skip_fields)
-            self._analyzer.type_aliases.update(aliases)
-            self._analyzer.insert_value(aliases, values)
+            requests, values = request.flatten(
+                self._path_to_defs,
+                self._skip_fields
+            )
+            self._analyzer.insert_value(values)
             if not result.has_error:
                 for request in requests:
                     self._analyzer.insert(request)
@@ -306,8 +307,8 @@ class WitnessGenerator:
             response = ErrorResponse(result.response_body)
         else:
             response = Parameter(
-                result.method, "", result.endpoint, [],
-                True, 0, None, result.response_body)
+                entry.method, "", entry.endpoint, [],
+                True, 0, entry.response.type, result.response_body)
 
         witness_path = os.path.join(self._exp_dir, consts.FILE_TRACE)
         with open(witness_path, 'rb') as f:
@@ -315,8 +316,8 @@ class WitnessGenerator:
             print(len(entries))
             entries.append(
                 TraceEntry(
-                    result.endpoint,
-                    result.method,
+                    entry.endpoint,
+                    entry.method,
                     params,
                     response,
                 ))
@@ -327,10 +328,11 @@ class WitnessGenerator:
         if result.has_error:
             return
 
-        responses, aliases, values = response.flatten(
-            self._path_to_defs, self._skip_fields)
-        self._analyzer.type_aliases.update(aliases)
-        self._analyzer.insert_value(aliases, values)
+        responses, values = response.flatten(
+            self._path_to_defs,
+            self._skip_fields
+        )
+        self._analyzer.insert_value(values)
         for r in responses:
             self._analyzer.insert(r)
 
@@ -341,6 +343,10 @@ class WitnessGenerator:
                 futures = []
                 results = []
                 for entry in self._entries.values():
+                    # skip delete methods
+                    if entry.method.upper() == defs.METHOD_DELETE:
+                        continue
+
                     # skip projections
                     if re.search(r"^projection(.*, .*)$", entry.endpoint):
                         continue
@@ -368,7 +374,7 @@ class WitnessGenerator:
                 if generate_result:
                     self._add_new_result(generate_result)
 
-            resolver = DependencyResolver(self._doc)
+            resolver = DependencyResolver(self._doc_entries)
             groups = self._analyzer.analysis_result()
             self._real_dependencies = resolver.get_dependencies_from_groups(groups)
 
@@ -399,7 +405,7 @@ class WitnessGenerator:
         for r in results:
             if r and not r.has_error:
                 cnt += 1
-                self._covered_endpoints.add(r.endpoint)
+                self._covered_endpoints.add(r.entry.endpoint)
         
         coverage = cnt / len(results)
         self._logger.info(f"Coverage at iteration {i}: {coverage}")
@@ -412,24 +418,8 @@ class WitnessGenerator:
         self._run_all(SaturationThread, endpoints, iterations, timeout)
 
     def get_param_names(self, ep_method_def):
-        header_params = ep_method_def.get(defs.DOC_PARAMS)
-        if header_params:
-            param_names = [p[defs.DOC_NAME] for p in header_params]
-        else:
-            param_names = []
-
-        request_body = ep_method_def.get(defs.DOC_REQUEST)
-        if request_body:
-            body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_JSON)
-            if not body_def:
-                body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_FORM)
-
-            if body_def is not None:
-                body_schema = body_def.get(defs.DOC_SCHEMA)
-                body_params = body_schema.get(defs.DOC_PROPERTIES, {})
-                param_names += list(body_params.keys())
-
-        return param_names
+        params = ep_method_def.parameters
+        return [p.arg_name for p in params]
 
     def to_graph(self, endpoints, filename):
         dot = Digraph(strict=True)
@@ -438,7 +428,7 @@ class WitnessGenerator:
         # print(self._inferred_dependencies.get("user"))
         for ep in endpoints:
             # print(ep)
-            ep_def = self._paths.get(ep)
+            ep_def = self._doc_entries.get(ep)
             for _, ep_method_def in ep_def.items():
                 param_names = self.get_param_names(ep_method_def)
                 for name in param_names:

@@ -158,33 +158,12 @@ class LogAnalyzer:
                 self.type_partitions[t] = new_partitions
 
     def _analyze_params(self, skip_fields, entry_def, params, path_to_defs):
-        entry_params = {}
-        if entry_def:
-            header_params = entry_def.get(defs.DOC_PARAMS, {})
-            for p in header_params:
-                param_name = p.get(defs.DOC_NAME)
-                param_type = p.get(defs.DOC_SCHEMA).get(defs.DOC_TYPE)
-                entry_params[param_name] = {
-                    defs.DOC_TYPE: param_type,
-                }
-
-            body_params = entry_def.get(defs.DOC_REQUEST, {})
-            if body_params:
-                body_params = body_params.get(defs.DOC_CONTENT, {})
-                if defs.HEADER_FORM in body_params:
-                    body_params = body_params.get(defs.HEADER_FORM)
-                else:
-                    body_params = body_params.get(defs.HEADER_JSON)
-                body_params = body_params \
-                    .get(defs.DOC_SCHEMA) \
-                    .get(defs.DOC_PROPERTIES)
-
-        def correct_value(p, typ):
-            if typ == defs.TYPE_INT:
+        def correct_value(p):
+            if isinstance(p.type, types.PrimInt):
                 p.value = int(p.value)
-            elif typ == defs.TYPE_BOOL:
+            elif isinstance(p.type, types.PrimBool):
                 p.value = bool(p.value)
-            elif typ == defs.TYPE_NUM:
+            elif isinstance(p.type, types.PrimNum):
                 p.value = float(p.value)
 
         for param in params:
@@ -192,11 +171,7 @@ class LogAnalyzer:
             self.insert_value(values)
 
             for p in flatten_params:
-                if p.arg_name in entry_params:
-                    param = entry_params.get(p.arg_name)
-                    typ = param.get(defs.DOC_TYPE)
-                    correct_value(p, typ)
-
+                correct_value(p)
                 self.insert(p)
 
     def _analyze_response(self, skip_fields, response, path_to_defs):
@@ -223,7 +198,7 @@ class LogAnalyzer:
                 continue
 
             if entry_def:
-                entry_def = entry_def.get(entry.method.lower())
+                entry_def = entry_def.get(entry.method.upper())
 
             params = entry.parameters
             self._analyze_params(skip_fields, entry_def, params, path_to_defs)
@@ -492,7 +467,7 @@ class LogAnalyzer:
         """
         if (param.type and param.type.name is not None and
             re.search(r'^/.*_response$', param.type.name)):
-            return
+            return param
         
         params = self.dsu._parents.keys()
         for p in params:

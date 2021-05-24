@@ -11,6 +11,7 @@ class BaseType:
     def __init__(self, name, parent):
         self.name = name
         self.parent = parent
+        self.aliases = set()
 
     def __str__(self):
         return self.name
@@ -75,10 +76,10 @@ class PrimString(BaseType):
 class PrimEnum(BaseType):
     def __init__(self, enums):
         super().__init__(defs.TYPE_STRING, None)
-        self._enums = enums
+        self.enums = enums
 
     def is_type_of(self, obj):
-        if isinstance(obj, str) and obj in self._enums:
+        if isinstance(obj, str) and obj in self.enums:
             return self, 1
 
         return None, -1
@@ -97,15 +98,20 @@ class SchemaObject(BaseType):
 
     def get_object_field(self, field):
         schema = BaseType.object_lib.get(self.name)
+        # print("SchemaObject: get_object_field from", self.name, "field", field, "type", type(schema))
+        if schema is None:
+            raise Exception("Unknown object definition", self.name)
+
         return schema.get_object_field(field)
 
 class ObjectType(BaseType):
     """Ad-hoc objects
 
     """
-    def __init__(self, name, fields, parent=None):
+    def __init__(self, name, fields, required_fields=[], parent=None):
         super().__init__(name, parent)
         self.object_fields = fields
+        self.required_fields = required_fields
         self.fields = []
 
     def __str__(self):
@@ -156,7 +162,12 @@ class ObjectType(BaseType):
             return None, -1
 
     def get_object_field(self, field):
-        return self.object_fields.get(field)
+        # print("get_object_field from", self.name, "field name", field, "with fields", self.object_fields.keys())
+        field_type = self.object_fields.get(field)
+        if field_type is not None and self.name is not None:
+            field_type.aliases.add(f"{self.name}.{field}")
+
+        return field_type, (field in self.required_fields)
 
 class ArrayType(BaseType):
     def __init__(self, name, item_typ, parent=None):
@@ -188,7 +199,7 @@ class ArrayType(BaseType):
             else:
                 score += field_score
 
-        return expected_type, score
+        return self, score
 
     def is_type_of(self, obj):
         return self._of_array_type(obj)
@@ -224,11 +235,14 @@ class UnionType(BaseType):
             if (isinstance(t, UnionType) or
                 isinstance(t, ObjectType) or
                 isinstance(t, SchemaObject)):
-                field_type = t.get_object_field(field)
+                field_type, is_required = t.get_object_field(field)
                 if field_type is not None:
-                    return field_type
+                    if self.name is not None:
+                        field_type.aliases.add(f"{self.name}.{field}")
 
-        return None
+                    return field_type, is_required
+
+        return None, False
 
 def construct_prim_type(schema):
     typ = schema.get(defs.DOC_TYPE)
@@ -274,6 +288,7 @@ def construct_type(name, schema):
 
     if ret_type is None:
         object_schema = ObjectType.is_schema_type(schema)
+        required_fields = schema.get(defs.DOC_REQUIRED, [])
         if object_schema is not None:
             fields = {}
             for k, v in object_schema.items():
@@ -281,7 +296,7 @@ def construct_type(name, schema):
                 field_type = construct_type(field_name, v)
                 fields[k] = field_type
 
-            ret_type = ObjectType(name, fields)
+            ret_type = ObjectType(name, fields, required_fields)
         else:
             ret_type = construct_prim_type(schema)
 
