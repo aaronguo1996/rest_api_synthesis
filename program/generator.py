@@ -2,8 +2,9 @@ from collections import defaultdict
 import itertools
 import functools
 import re
-from synthesizer.utils import make_entry_name
 
+from synthesizer.utils import make_entry_name
+from analyzer.utils import path_to_name
 from program.program import (Program, VarExpr, ProjectionExpr,
                              FilterExpr, MapExpr, AssignExpr, AppExpr)
 from schemas.schema_type import SchemaType
@@ -162,7 +163,8 @@ class ProgramGenerator:
                 arg_exprs = []
                 for expr in exprs:
                     expr.set_type(SchemaType(typ, None))
-                    arg_exprs.append((param.arg_name, expr))
+                    arg_name = path_to_name(param.path)
+                    arg_exprs.append((arg_name, expr))
 
                 old_args_list = [args[:] for args in args_list]
                 for args in args_list:

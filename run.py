@@ -6,23 +6,23 @@ import os
 import json
 import logging
 import random
-from re import M
-from synthesizer.constructor import Constructor
 from graphviz import Digraph
 
 # analyze traces
 from analyzer import analyzer, dynamic, parser
+from analyzer.ascription import Ascription
+from globs import init_synthesizer
 from openapi import defs
+from openapi.parser import OpenAPIParser
 from openapi.utils import read_doc, get_schema_forest
-import consts
-from synthesizer.synthesizer import Synthesizer
+from schemas import types
+from synthesizer.constructor import Constructor
 from synthesizer.filtering import run_filter
 from synthesizer.parallel import spawn_encoders
-from globs import init_synthesizer, get_solution_strs
-from witnesses.engine import WitnessGenerator
+from synthesizer.synthesizer import Synthesizer
 from synthesizer.utils import make_entry_name
-from analyzer.ascription import Ascription
-from openapi.parser import OpenAPIParser
+from witnesses.engine import WitnessGenerator
+import consts
 
 # test imports
 from tests.run_test import run_test
@@ -113,7 +113,8 @@ def create_entries(doc, config, ascription):
             for entry in typed_entries:
                 # store results
                 entry_name = make_entry_name(entry.endpoint, entry.method)
-                if endpoint == "/users.lookupByEmail":
+                if endpoint == "/v1/prices":
+                    print(entry.method)
                     print("*******", [(p.arg_name, p.path, p.is_required, p.type) for p in entry.parameters])
                     p = entry.response
                     print("*******", (p.arg_name, p.path, p.is_required, p.type))
@@ -131,6 +132,14 @@ def generate_witnesses(
     prefilter = configuration.get(consts.KEY_SYNTHESIS) \
                             .get(consts.KEY_SYN_PREFILTER)
     skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
+    f = doc_entries["/v1/subscriptions"]["POST"]
+    for param in f.parameters:
+        if param.arg_name == "items":
+            print(param.type)
+            # print(param.type.item)
+            print(param.type.item.get_object_field("plan"))
+            print(param.type.item.get_object_field("price"))
+
     log_analyzer.analyze(
         doc_entries,
         entries,
@@ -155,7 +164,6 @@ def generate_witnesses(
         configuration[consts.KEY_WITNESS][consts.KEY_VALUE_DICT],
         configuration[consts.KEY_WITNESS][consts.KEY_ANNOTATION],
         exp_dir,
-        configuration[consts.KEY_WITNESS][consts.KEY_GEN_DEPTH],
         configuration[consts.KEY_PATH_TO_DEFS],
         configuration.get(consts.KEY_SKIP_FIELDS),
         configuration[consts.KEY_WITNESS][consts.KEY_PLOT_EVERY],
@@ -291,13 +299,13 @@ def main():
             solutions = synthesizer.run_n(
                 [],
                 {
-                    "customer_id": SchemaType("customer.id", None),
-                    "product_id": SchemaType("product.id", None),
+                    "customer_id": types.PrimString("customer.id"),
+                    "product_id": types.PrimString("product.id", None),
                 },
                 [
-                    SchemaType("plan.id", None),
+                    types.SchemaObject("subscription", None),
                 ],
-                1 # configuration["synthesis"]["solution_num"]
+                configuration[consts.KEY_SYNTHESIS][consts.KEY_SOL_NUM]
             )
 
             for prog in [r.pretty(synthesizer._entries, 0) for r in solutions]:

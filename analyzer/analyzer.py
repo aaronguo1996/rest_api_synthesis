@@ -157,7 +157,7 @@ class LogAnalyzer:
 
                 self.type_partitions[t] = new_partitions
 
-    def _analyze_params(self, skip_fields, entry_def, params, path_to_defs):
+    def _analyze_params(self, skip_fields, params, path_to_defs):
         def correct_value(p):
             if isinstance(p.type, types.PrimInt):
                 p.value = int(p.value)
@@ -171,6 +171,7 @@ class LogAnalyzer:
             self.insert_value(values)
 
             for p in flatten_params:
+                # print(p.arg_name, p.func_name, p.value)
                 correct_value(p)
                 self.insert(p)
 
@@ -192,20 +193,15 @@ class LogAnalyzer:
                 entry.endpoint not in paths):
                 continue
 
-            # match docs to correct integers and booleans
-            entry_def = paths.get(entry.endpoint)
-            if entry.endpoint in blacklist:
-                continue
-
-            if entry_def:
-                entry_def = entry_def.get(entry.method.upper())
-
-            params = entry.parameters
-            self._analyze_params(skip_fields, entry_def, params, path_to_defs)
-            self._analyze_response(skip_fields, entry.response, path_to_defs)
-
-        if prefilter:
-            self._partition_type()
+            self._analyze_params(
+                skip_fields, 
+                entry.parameters, 
+                path_to_defs)
+            
+            self._analyze_response(
+                skip_fields, 
+                entry.response, 
+                path_to_defs)
 
     def insert_value(self, value_map):
         # add new values to the bank mapping
@@ -225,7 +221,8 @@ class LogAnalyzer:
         
         # integers and booleans for merge 
         # but add them as separate nodes, they are meaningless
-        if isinstance(param.value, int) or isinstance(param.value, bool):
+        if ((isinstance(param.value, int) and param.value > 2) or
+            isinstance(param.value, bool)):
             self.dsu.union(param, param)
             return
 
@@ -250,7 +247,7 @@ class LogAnalyzer:
         edges = set()
         for group in groups:
             # pick representative in each group, the shortest path name
-            rep, _ = get_representative(group)
+            rep = get_representative(group)
             
             if not rep:
                 if not allow_only_input:
@@ -261,7 +258,7 @@ class LogAnalyzer:
                 rep = group[0].arg_name
 
             # for debug
-            if rep == "product.name":
+            if rep == "charge.customer":
                 group_params = []
                 for param in group:
                     if param.type is not None:
@@ -270,10 +267,10 @@ class LogAnalyzer:
                             param.method, 
                             param.path, 
                             param.value, 
-                            param.type
+                            param.type,
+                            param.type.aliases
                         ))
 
-                sorted(group_params)
                 for p in group_params:
                     print(p)
 
@@ -292,9 +289,6 @@ class LogAnalyzer:
                                 continue
 
                             p = param.type
-                            # if trans == "/v1/customers/{customer}_GET":
-                            #     print(trans, "connected with", rep, "by parameter", param.arg_name, param.value)
-
                             if p.name == param.type.name:
                                 edges.add((trans, rep))
                             else:
@@ -327,7 +321,7 @@ class LogAnalyzer:
         nodes, edges = [], []
         for group in groups:
             # pick representative in each group, the shortest path name
-            rep, _ = get_representative(group)
+            rep = get_representative(group)
             
             if not rep:
                 continue
@@ -450,8 +444,9 @@ class LogAnalyzer:
         for p in params:
             if p == param or same_type_name(p, param):
                 group = self.dsu.get_group(p)
-                _, rep_type = get_representative(group)
-                param.type = rep_type
+                rep = get_representative(group)
+                if rep is not None:
+                    param.type.name = rep
                 # print("find type for param", rep, rep_type.name, rep_type.schema)
                 break
         
@@ -473,8 +468,9 @@ class LogAnalyzer:
         for p in params:
             if p == param:
                 group = self.dsu.get_group(p)
-                _, rep_type = get_representative(group)
-                param.type = rep_type
+                rep = get_representative(group)
+                if rep is not None:
+                    param.type.name = rep
                 break
         
         return param

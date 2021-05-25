@@ -10,7 +10,7 @@ import re
 import time
 
 from analyzer.entry import ErrorResponse, Parameter, TraceEntry
-from analyzer.utils import path_to_name
+from analyzer.utils import path_to_name, name_to_path
 from openapi import defs
 from schemas import types
 from synthesizer.utils import make_entry_name
@@ -25,7 +25,7 @@ class Result:
     def __init__(self, entry, code, params, response):
         self.entry = entry
         self.return_code = code
-        
+
         if code < defs.CODE_ERROR:
             self.has_error = False
             self.response_body = json.loads(response)
@@ -36,7 +36,12 @@ class Result:
         if self.response_body.get("error") is not None:
             self.has_error = True
 
-        self.request_params = params
+        self.request_params = {}
+        for name, val in params.items():
+            path = name_to_path(name)
+            self.request_params = utils.add_as_object(
+                self.request_params, path, val
+            )
 
     def __eq__(self, other):
         return (
@@ -54,7 +59,7 @@ class Result:
 
 class BasicGenerator:
     def __init__(self, hostname, base_path, entry,
-        token, skip_fields, value_dict, 
+        token, skip_fields, value_dict,
         real_dependencies, annotations, opt_param_indices):
         # create a logger for this module
         self._logger = logging.getLogger(__name__)
@@ -88,11 +93,12 @@ class BasicGenerator:
             return random.choice([True, False])
         elif isinstance(param_type, types.ObjectType):
             return {}
-        elif isinstance(param_type, types.PrimString):
+        elif isinstance(param_type, types.PrimEnum):
+            return random.choice(param_type.enums)
+        else:
+            print(param_name, type(param_type))
             regex = defined_regex or r"^[a-z0-9]{10,}$"
             return x.xeger(regex)
-        elif isinstance(param_type, types.PrimEnum):
-            return random.choice(param_type.enums)  
 
     def _generate_params(self, params):
         raise NotImplementedError
@@ -102,7 +108,9 @@ class BasicGenerator:
         self._logger.debug(f"generating for endpoint {entry.endpoint}")
 
         try:
-            params = self._generate_params(entry.parameters)
+            params = self._generate_params(
+                entry.parameters,
+                self._opt_param_indices)
             code, response = self._conn.send_and_recv(
                 entry.endpoint,
                 entry.method.upper(),
@@ -120,8 +128,8 @@ class BasicGenerator:
         return self._generate_one()
 
 class SaturationThread(BasicGenerator):
-    def __init__(self, hostname, base_path, entry, 
-        token, skip_fields, value_dict, 
+    def __init__(self, hostname, base_path, entry,
+        token, skip_fields, value_dict,
         real_dependencies, annotations, analyzer, opt_param_indices):
         super().__init__(
             hostname, base_path,
@@ -138,8 +146,7 @@ class SaturationThread(BasicGenerator):
             else:
                 return random.choice(producer.values)
         elif isinstance(producer, EndpointProducer):
-            self._logger.debug(f"Trying the producer {producer.endpoint}"
-                f" with path {producer.path}")
+            self._logger.debug(f"Trying the producer {producer.endpoint} with path {producer.path}")
             resp = Parameter(
                 producer.method,
                 producer.path[-1],
@@ -157,12 +164,12 @@ class SaturationThread(BasicGenerator):
                 return None
         else:
             self._logger.debug(f"Trying the parameter value {producer}")
-            return producer    
+            return producer
 
     def _generate_object(self, param):
         param_type = param.type
 
-        self._logger.debug(f"Generating string values for path {param.path}")
+        self._logger.debug(f"Generating string values for {param.arg_name} with path {param.path}")
 
         if self._analyzer.dsu.find(param) and param.arg_name != defs.DOC_NAME:
             self._logger.debug(
@@ -176,7 +183,7 @@ class SaturationThread(BasicGenerator):
                 f"Trying fill parameter {param.arg_name} with object values of type {param_type.name}")
             param_value_bank = self._analyzer.type_values[param_type.name]
             param_val = random.choice(list(param_value_bank))
-        elif ((self._entry.endpoint, param.arg_name) in self._annotations and 
+        elif ((self._entry.endpoint, param.arg_name) in self._annotations and
             param.arg_name != defs.DOC_NAME):
             self._logger.debug(
                 f"Trying fill parameter {param.arg_name}"
@@ -209,7 +216,7 @@ class SaturationThread(BasicGenerator):
     def _generate_params(self, params, opt_indices):
         param_dict = {}
 
-        req_params, opt_params = self._filter_optional(params)
+        req_params, opt_params = utils.filter_optional(params)
         selected_opt_params = list(map(lambda idx: opt_params[idx], opt_indices))
         for param in req_params + selected_opt_params:
             if (param.arg_name == defs.DOC_TOKEN or
@@ -217,7 +224,7 @@ class SaturationThread(BasicGenerator):
                 continue
 
             param_val = self._generate_object(param)
-            
+
             # if we cannot find a value for an arg, skip it
             if param_val is not None:
                 key = path_to_name(param.path)
@@ -231,7 +238,7 @@ class SaturationThread(BasicGenerator):
 class WitnessGenerator:
     def __init__(self, openapi_entries, hostname, base_path,
         entries, analyzer, token, val_dict, ann_path, exp_dir,
-        depth_limit=3, path_to_defs="#/components/schemas", 
+        path_to_defs=consts.REF_PREFIX,
         skip_fields=[], plot_freq = 1):
         self._logger = logging.getLogger(__name__)
         # parse the spec into dict
@@ -239,7 +246,7 @@ class WitnessGenerator:
         self._hostname = hostname
         self._base_path = base_path
         self._entries = entries
-        
+
         # resolve dependencies from the spec
         resolver = DependencyResolver(openapi_entries)
         self._analyzer = analyzer
@@ -255,12 +262,10 @@ class WitnessGenerator:
         # value patterns injected by users
         self._token = token
         self._value_dict = val_dict
-        self._depth_limit = depth_limit
         self._exp_dir = exp_dir
 
         # start a new connection for generating
-        self._logger.debug(f"Get hostname: {self._hostname}"
-            f" and basePath: {self._base_path}")
+        self._logger.debug(f"Get hostname: {self._hostname} and basePath: {self._base_path}")
 
         self._path_to_defs = path_to_defs
         self._skip_fields = skip_fields
@@ -270,18 +275,23 @@ class WitnessGenerator:
         self._plot_freq = plot_freq
         # self._annotations = annotations
 
-    def _add_new_result(self, result: Result):
+    def _add_new_result(self, entries, result: Result):
         params = []
-        entry = result.entry
+        entry = self._doc_entries[result.entry.endpoint][result.entry.method]
         for name, val in result.request_params.items():
             # find the corresponding param type
+            match_param = None
             for param in entry.parameters:
                 if param.arg_name == name:
+                    match_param = param
                     break
+
+            if match_param is None:
+                raise Exception(name, val, "does not have a matching param from params", [p.arg_name for p in entry.parameters])
 
             request = Parameter(
                 entry.method, name, entry.endpoint, [name],
-                True, None, param.type, val)
+                match_param.is_required, None, match_param.type, val)
             params.append(request)
             requests, values = request.flatten(
                 self._path_to_defs,
@@ -298,22 +308,11 @@ class WitnessGenerator:
             response = Parameter(
                 entry.method, "", entry.endpoint, [],
                 True, 0, entry.response.type, result.response_body)
+        
+        entries.append(
+            TraceEntry(entry.endpoint, entry.method, params, response,)
+        )
 
-        witness_path = os.path.join(self._exp_dir, consts.FILE_TRACE)
-        with open(witness_path, 'rb') as f:
-            entries = pickle.load(f)
-            print(len(entries))
-            entries.append(
-                TraceEntry(
-                    entry.endpoint,
-                    entry.method,
-                    params,
-                    response,
-                ))
-
-        with open(witness_path, 'wb') as f:
-            pickle.dump(entries, f)
-            
         if result.has_error:
             return
 
@@ -324,6 +323,8 @@ class WitnessGenerator:
         self._analyzer.insert_value(values)
         for r in responses:
             self._analyzer.insert(r)
+
+        return entries
 
     def _run_all(self, generate_type, endpoints, iterations, timeout, max_opt_params):
         for i in range(1, iterations+1):
@@ -355,9 +356,11 @@ class WitnessGenerator:
                                 self._value_dict,
                                 self._real_dependencies,
                                 self._annotations,
-                                self._analyzer, self._depth_limit, indices)
+                                self._analyzer,
+                                indices)
                             futures.append(executor.submit(t.run))
                             return
+
                         generate_opt_param_subsets(
                             num_params - 1, num_choose, indices)
                         generate_opt_param_subsets(
@@ -374,9 +377,17 @@ class WitnessGenerator:
                     except TimeoutError:
                         print("We lacked patience and got a TimeoutError")
 
+            witness_path = os.path.join(self._exp_dir, consts.FILE_TRACE)
+            with open(witness_path, 'rb') as f:
+                entries = pickle.load(f)
+                print(len(entries))
+
             for generate_result in results:
                 if generate_result:
-                    self._add_new_result(generate_result)
+                    entries = self._add_new_result(entries, generate_result)
+
+            with open(witness_path, 'wb') as f:
+                pickle.dump(entries, f)
 
             resolver = DependencyResolver(self._doc_entries)
             groups = self._analyzer.analysis_result()
@@ -410,7 +421,7 @@ class WitnessGenerator:
             if r and not r.has_error:
                 cnt += 1
                 self._covered_endpoints.add(r.entry.endpoint)
-        
+
         coverage = cnt / len(results)
         self._logger.info(f"Coverage at iteration {i}: {coverage}")
         return coverage
@@ -430,7 +441,7 @@ class WitnessGenerator:
 
     def to_graph(self, endpoints, filename):
         dot = Digraph(strict=True)
-        
+
         # add inferred dependencies as dashed edges in the graph
         # print(self._inferred_dependencies.get("user"))
         for ep in endpoints:
@@ -458,7 +469,7 @@ class WitnessGenerator:
                                 path_str = '.'.join(param.path)
                                 if not rep or len(rep) > len(path_str):
                                     rep = path_str
-                        
+
                         # if not rep:
                         #     rep = '.'.join(producer.path)
 
@@ -471,13 +482,13 @@ class WitnessGenerator:
                             )
                             dot.edge(rep, ep, style="dashed")
                             dot.edge(
-                                make_entry_name(producer.endpoint, producer.method), 
+                                make_entry_name(producer.endpoint, producer.method),
                                 rep, style="dashed"
                             )
 
         self._analyzer.to_graph(
             dot,
-            endpoints=endpoints, 
+            endpoints=endpoints,
             allow_only_input=False,
             filename=filename,
         )

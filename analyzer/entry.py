@@ -84,10 +84,11 @@ class Parameter:
                 array_level = self.array_level + 1
 
             try:
+                item_type = self.type.get_item()
                 p = Parameter(
                     self.method, defs.INDEX_ANY, self.func_name,
                     self.path + [defs.INDEX_ANY], self.is_required,
-                    array_level, self.type.item, self.value[i])
+                    array_level, item_type, self.value[i])
             except:
                 raise Exception(self.method, self.func_name, self.path, self.is_required, self.value)
 

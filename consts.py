@@ -33,6 +33,7 @@ KEY_UNINTERESTING = "uninteresting_endpoints"
 KEY_VALUE_DICT = "value_dict"
 KEY_WITNESS = "witness"
 KEY_MAX_OPT = "max_opt_params"
+KEY_SOL_NUM = "solution_number"
 
 SOLVER_PN = "petri net"
 SOLVER_HYPER = "hypergraph"

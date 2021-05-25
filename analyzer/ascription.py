@@ -28,7 +28,7 @@ class Ascription:
         
             for resp_return in responses:
                 e = TraceEntry(
-                    f"{resp_name}, {'.'.join(resp_return.path)})",
+                    f"projection({resp_name}, {'.'.join(resp_return.path)})",
                     "", [resp_param], resp_return
                 )
                 results.append(e)
@@ -43,13 +43,17 @@ class Ascription:
             # decompose ad-hoc objects if necessary
             params = p.flatten_ad_hoc(self._skip_fields)
             parameters += [self._analyzer.set_type(param) for param in params]
-        entry.parameters = parameters
-
-        entry.response, results = self.ascribe_response(
+        
+        response, results = self.ascribe_response(
             entry.endpoint,
             entry.method, 
             entry.response
         )
-        results.append(entry)
+        results.append(TraceEntry(
+            entry.endpoint,
+            entry.method,
+            parameters,
+            response
+        ))
         
         return results

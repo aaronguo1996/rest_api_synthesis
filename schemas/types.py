@@ -47,20 +47,20 @@ class BaseType:
             return None, -1
 
 class PrimInt(BaseType):
-    def __init__(self):
-        super().__init__(defs.TYPE_INT, None)
+    def __init__(self, name=defs.TYPE_INT):
+        super().__init__(name, None)
 
 class PrimBool(BaseType):
-    def __init__(self):
-        super().__init__(defs.TYPE_BOOL, None)
+    def __init__(self, name=defs.TYPE_BOOL):
+        super().__init__(name, None)
 
 class PrimNum(BaseType):
-    def __init__(self):
-        super().__init__(defs.TYPE_NUM, None)
+    def __init__(self, name=defs.TYPE_NUM):
+        super().__init__(name, None)
 
 class PrimString(BaseType):
-    def __init__(self, pattern=None):
-        super().__init__(defs.TYPE_STRING, None)
+    def __init__(self, name=defs.TYPE_STRING, pattern=None):
+        super().__init__(name, None)
         self._pattern = pattern
 
     def is_type_of(self, obj):
@@ -74,8 +74,8 @@ class PrimString(BaseType):
         return None, -1
 
 class PrimEnum(BaseType):
-    def __init__(self, enums):
-        super().__init__(defs.TYPE_STRING, None)
+    def __init__(self, name=defs.TYPE_STRING, enums=[]):
+        super().__init__(name, None)
         self.enums = enums
 
     def is_type_of(self, obj):
@@ -207,6 +207,9 @@ class ArrayType(BaseType):
     def get_schema_type(self, k):
         return None
 
+    def get_item(self):
+        return self.item
+
 class UnionType(BaseType):
     def __init__(self, name, items, parent=None):
         super().__init__(name, parent)
@@ -244,6 +247,15 @@ class UnionType(BaseType):
 
         return None, False
 
+    def get_item(self):
+        for t in self.items:
+            if isinstance(t, UnionType) or isinstance(t, ArrayType):
+                item_type = t.get_item()
+                if item_type is not None:
+                    return item_type
+
+        raise Exception("No item type found")
+
 def construct_prim_type(schema):
     typ = schema.get(defs.DOC_TYPE)
     ref = schema.get(defs.DOC_REF)
@@ -257,10 +269,10 @@ def construct_prim_type(schema):
     elif typ == defs.TYPE_STRING:
         if defs.DOC_ENUM in schema:
             enums = schema.get(defs.DOC_ENUM)
-            return PrimEnum(enums)
+            return PrimEnum(enums=enums)
 
         pattern = schema.get(defs.DOC_PATTERN)
-        return PrimString(pattern)
+        return PrimString(pattern=pattern)
     elif typ == defs.TYPE_NUM:
         return PrimNum()
     elif typ == defs.TYPE_OBJECT:

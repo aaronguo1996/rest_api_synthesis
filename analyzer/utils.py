@@ -4,22 +4,25 @@ from openapi import defs
 import consts
 
 def get_representative(group):
-    rep = ""
-    rep_type = None
+    candidates = set()
     for param in group:
-        if param.type is None or param.type.name is None:
+        if param.type is None:
             continue
 
-        path_str = str(param.type)
-        
-        if not rep or len(rep) >= len(path_str):
-            if len(rep) == len(path_str) and path_str >= rep:
-                continue
+        if (param.type.name is not None and
+            param.type.name != defs.TYPE_STRING and
+            param.type.name != defs.TYPE_INT and
+            param.type.name != defs.TYPE_NUM and
+            param.type.name != defs.TYPE_OBJECT):
+            candidates.add(param.type.name)
 
-            rep = path_str
-            rep_type = param.type
+        candidates = candidates.union(param.type.aliases)
 
-    return rep, rep_type
+    if candidates:
+        rep = min(candidates, key=lambda x: (len(x), x))
+        return rep
+    else:
+        return None
 
 def name_to_path(name):
     fields = []
