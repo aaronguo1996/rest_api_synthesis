@@ -10,7 +10,6 @@ from openapi.utils import blacklist
 from program.generator import ProgramGenerator
 from program.program import ProgramGraph, all_topological_sorts
 from schemas.schema_type import SchemaType
-from stats.graph_stats import GraphStats
 from stats.time_stats import TimeStats, STATS_GRAPH
 from synthesizer.hypergraph_encoder import HyperGraphEncoder
 from synthesizer.petrinet_encoder import PetriNetEncoder

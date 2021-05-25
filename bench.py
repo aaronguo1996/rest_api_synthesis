@@ -201,14 +201,15 @@ class Bencher:
 
             os.makedirs(bm_dir, exist_ok=True)
 
-            init_synthesizer(doc, configuration, log_analyzer, bm_dir)
+            synthesizer = init_synthesizer(doc, configuration, log_analyzer, bm_dir)
             inputs = {k: SchemaType(v, None) for k, v in bench["input_args"].items()}
             output = [SchemaType(bench["output"], None)]
 
             if not cached or not self.cache:
                 spawn_encoders(
+                    synthesizer,
                     inputs, output,
-                    configuration["synthesis"]["solver_number"]
+                    1 # configuration["synthesis"]["solver_number"]
                 )
 
             # process solutions
@@ -224,7 +225,7 @@ class Bencher:
             # initialize table 1, part 3
             # here, we report statistics on the petri net if they haven't been yet.
             if "places" not in self.table1[key]:
-                num_place, num_trans = get_petri_net_data()
+                num_place, num_trans = get_petri_net_data(synthesizer)
                 self.table1[key]["places"] = num_place
                 self.table1[key]["transitions"] = num_trans
 
@@ -244,7 +245,7 @@ class Bencher:
             # the solution is contained as a list of lines in the solution key.
             if BK_SOLUTION in bench:
                 tgt_sols = ["\n".join(sol) for sol in bench[BK_SOLUTION]]
-                res_no_re = get_solution_strs(solutions)
+                res_no_re = get_solution_strs(synthesizer, solutions)
 
                 found = False
                 for rank, res_sol in enumerate(res_no_re):
@@ -270,6 +271,7 @@ class Bencher:
                     results = []
                     for p in solutions:
                         cost = run_filter(
+                            synthesizer,
                             log_analyzer, dyn_analysis,
                             inputs, p, list_output,
                             repeat=self.repeat
@@ -283,7 +285,7 @@ class Bencher:
 
                     for rank, res_sol in enumerate(res):
                         for tgt_sol in tgt_sols:
-                            if compare_program_strings(tgt_sol, get_solution_strs([res_sol[0]])[0]):
+                            if compare_program_strings(tgt_sol, get_solution_strs(synthesizer, [res_sol[0]])[0]):
                                 return rank, res_sol[0]
                     return None, None
 

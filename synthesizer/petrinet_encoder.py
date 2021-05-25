@@ -42,6 +42,7 @@ class PetriNetEncoder:
 
     @TimeStats(key=STATS_ENCODE)
     def increment(self):
+        start = time.time()
         self._path_len += 1
         self._add_variables(self._path_len)
         self._fire_transitions(self._path_len - 1)
@@ -49,6 +50,7 @@ class PetriNetEncoder:
         # print("current len", self._path_len, flush=True)
         # reset the temporary constraint when path length changes
         self._constraints["temporary"] = []
+        print("time to add vars and fire transitions:", time.time() - start)
 
     def _run_approximation(self, inputs):
         # print("before approximation:", len(self._net.transition()))
@@ -143,27 +145,32 @@ class PetriNetEncoder:
                     path_idx = re.search(f"\(\(t{t} (\d+)\)\)", r).group(1)
                     path.append(int(path_idx))
 
+            print("found prog")
+
             return sat_result, path
         except subprocess.CalledProcessError as grepexc:                                                                                                   
             print("error code", grepexc.returncode, grepexc.output)
+            print("---")
             return "unsat", None
 
     @TimeStats(key=STATS_SEARCH)
     def solve(self, mode="cmd"):
+        print("adding new prog, len:", self._path_len)
         start = time.time()
         if mode == "cmd":
             result, path = self.check_constraints_cmd()
         else:
             result, path = self.check_constraints_binding()
 
-        # print("Check time:", time.time() - start, flush=True)
+        print("Check time:", time.time() - start, flush=True)
         start = time.time()
         if self._path_len > 0 and result == "sat":
             results = []
             for tr in path:
                 self._prev_result.append(tr)
                 results.append(self._variable_to_trans[tr])
-            # print("Model time:", time.time() - start, flush=True)
+            print("Model time:", time.time() - start, flush=True)
+            print()
             return results
         else:
             self._targets = []
@@ -172,6 +179,8 @@ class PetriNetEncoder:
         self._solver.reset()
         return results
 
+    # Blocks the solver from finding the previously found solution again, so that
+    # we find new solutions
     def block_prev(self, indices):
         for permutation in indices:
             transitions = [self._prev_result[i] for i in permutation]
@@ -272,6 +281,10 @@ class PetriNetEncoder:
                     nxt = self._place_to_variable.get((place.name, t+1))
 
                     if re.search(r"filter\(.*, .*\)", trans.name):                    
+                        # tokens at end > 0 -> nxt = cur
+                        # nxt <= cur
+
+                        # if end > 0 (i.e. if fired?): nxt == cur
                         post.append(z3.Implies(Int(nxt) > 0, Int(nxt) == Int(cur)))
                         post.append(Int(nxt) - Int(cur) <= 0)
                         
@@ -296,7 +309,13 @@ class PetriNetEncoder:
             for place, (required, opt_in, opt_out) in tokens.items():
                 cur = self._place_to_variable.get((place, t))
                 nxt = self._place_to_variable.get((place, t+1))
+                # maximum token bound: cur - required + out_out
+                # i.e. max token bound: cur - (required - opt_out)
+                # we can't use less than required - optional outs.
                 post.append(Int(nxt) <= Int(cur) - required + opt_out)
+                # minimum token bound: cur - required - opt_in
+                # i.e. min token bound: cur - (required + opt_in)
+                # we can't use more than "required + opt_in" tokens.
                 post.append(Int(nxt) >= Int(cur) - required - opt_in)
 
             self._constraints["permanent"].append(
