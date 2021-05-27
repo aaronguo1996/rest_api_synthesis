@@ -22,7 +22,7 @@ class ILPetriEncoder:
         # ILP stuff
         self._env = gp.Env()
         self._env.setParam('LogToConsole', 0)
-        self._env.setParam('PoolSearchMode', 1)
+        self._env.setParam('PoolSearchMode', 2)
         self._env.setParam('PoolSolutions', SOLS_PER_SOLVE)
         self._model = gp.Model(env=self._env)
 
@@ -64,7 +64,7 @@ class ILPetriEncoder:
         return self.solve()
 
     def solve(self):
-        # previous run failed; assume everything's been and incremented rerun the solver
+        # previous run failed; assume everything's been incremented and rerun the solver
         if self._soln_ix is None:
             # run the solver
             self._soln_ix = 0
@@ -93,6 +93,9 @@ class ILPetriEncoder:
             self._block.append(self._model.addConstr(gp.quicksum(self._fires.sum(x, '*') for x in s) <= len(s) - 1, name='block'))
             return s
         else:
+            # debug
+            # self.computeIIS()
+            # self.write("model.ilp")
             self._soln_ix = None
             return None
 
@@ -253,11 +256,6 @@ class ILPetriEncoder:
                 else:
                     bounds[p] = (bounds[p][0] + lower, bounds[p][1] + upper)
 
-        # todo
-        # some transitions can just spontaneously create things from nothing - they
-        # take only optional arguments
-        # which means they will always fire
-        # add bounds for deltas
         for p in places:
             p = p.name
             lower, upper = bounds.get(p, (0, 0))
@@ -266,6 +264,17 @@ class ILPetriEncoder:
             # min token bound
             self._model.addConstr(self._tokens[(p, ck + 1)] >= self._tokens[(p, ck)] + lower, name='min_next_tok')
 
+
+        # debug
+        # ['/conversations.create_POST', 'projection(/conversations.create_POST_response, channel)_', 'projection(objs_conversation, creator)_', '/users.profile.get_GET', 'projection(/users.profile.get_GET_response, profile)_', 'projection(objs_user_profile, email)_']
+        # if self._path_len >= 6:
+        #     self._model.addConstr(self._fires['/conversations.create_POST', 0] == 1, name='debug')
+        #     self._model.addConstr(self._fires['projection(/conversations.create_POST_response, channel)_', 1] == 1, name='debug')
+        #     self._model.addConstr(self._fires['projection(objs_conversation, creator)_', 2] == 1, name='debug')
+        #     self._model.addConstr(self._fires['/users.profile.get_GET', 3] == 1, name='debug')
+        #     self._model.addConstr(self._fires['projection(/users.profile.get_GET_response, profile)_', 4] == 1, name='debug')
+        #     self._model.addConstr(self._fires['projection(objs_user_profile, email)_', 5] == 1, name='debug')
+            
         # Only one transition fires at each time
         self._model.addConstr(self._fires.sum('*', ck) == 1, name='one_fires[{ck}]')
 

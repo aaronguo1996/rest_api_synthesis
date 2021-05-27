@@ -21,7 +21,7 @@ def run_encoder(synthesizer, inputs, outputs, path_len):
         
     solver_type = synthesizer._config["synthesis"]["solver_type"]
     if solver_type == "petri net":
-        encoder = PetriNetEncoder({})
+        encoder = ILPetriEncoder({})
     elif solver_type == "hypergraph":
         encoder = HyperGraphEncoder({})
     else:
