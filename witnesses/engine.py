@@ -421,7 +421,6 @@ class WitnessGenerator:
                             self._analyzer, self._depth_limit, [])
                         num_params = t.num_optional_params()
 
-                        print(f"metohd {method} {ep}")
                         def generate_opt_param_subsets(num_params, num_choose, indices):
                             if num_params == 0 or num_choose == 0:
                                 t = generate_type(
