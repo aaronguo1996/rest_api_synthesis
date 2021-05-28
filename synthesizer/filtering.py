@@ -63,6 +63,7 @@ def run_filter(log_analyzer, dynamic_analyzer, inputs, program, multiple, repeat
 
             scores.append(score)
 
+    print("scores: ", scores)
     # if all_singleton:
     #     print("this program returns a singleton")
     # else:
