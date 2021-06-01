@@ -20,4 +20,4 @@ def get_petri_net_data():
     return numbers[0], numbers[1]
 
 def get_solution_strs(solutions):
-    return [r.pretty(synthesizer._entries, 0) for r in solutions]
+    return [r.pretty(0) for r in solutions]

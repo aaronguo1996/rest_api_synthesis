@@ -441,6 +441,22 @@
         ]
     },
     {
+        "consumer": "product",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/products",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/products",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
         "consumer": "id",
         "endpoint": "/v1/recipients/{id}",
         "producer": [

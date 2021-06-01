@@ -13,6 +13,7 @@ def get_representative(group):
             param.type.name != defs.TYPE_STRING and
             param.type.name != defs.TYPE_INT and
             param.type.name != defs.TYPE_NUM and
+            param.type.name != defs.TYPE_BOOL and
             param.type.name != defs.TYPE_OBJECT):
             candidates.add(param.type.name)
 
@@ -31,7 +32,7 @@ def name_to_path(name):
         if c == '[':
             if field and not fields:
                 fields.append(field)
-            
+
             field = ""
         elif c == ']':
             if re.search(r"^\d+$", field) or field == "":
@@ -49,6 +50,9 @@ def name_to_path(name):
     return fields
 
 def path_to_name(path):
+    if not path:
+        return ""
+        
     name = path[0]
     for field in path[1:]:
         if field == defs.INDEX_ANY:
@@ -61,10 +65,16 @@ def path_to_name(path):
 def same_type_name(param1, param2):
     return (
         param1.type is not None and
-        param1.type.name is not None and
         param2.type is not None and
-        param2.type.name is not None and
-        param1.type.name == param2.type.name
+        ((
+            param1.type.name is not None and
+            param2.type.name is not None and
+            param1.type.name == param2.type.name
+        ) or
+        param1.type.name in param2.type.aliases or
+        param2.type.name in param1.type.aliases or
+        len(param1.type.aliases.intersection(param2.type.aliases)) != 0
+        )
     )
 
 def ignore_arg_name(skip_fields, arg_name):

@@ -84,7 +84,7 @@ class BasicGenerator:
         if isinstance(param_type, types.ArrayType):
             return []
         elif isinstance(param_type, types.PrimInt):
-            int_range = defined_regex or range(0,5)
+            int_range = defined_regex or range(0, 1000)
             return random.choice(int_range)
         elif isinstance(param_type, types.PrimNum):
             float_range = defined_regex or (0, 1)
@@ -204,7 +204,7 @@ class SaturationThread(BasicGenerator):
         else:
             param_val = None
 
-        if not param_val and param.is_required:
+        if not param_val:
             self._logger.debug(
                 f"No dependency found for {(self._entry.endpoint, param.arg_name)}. "
                 f"Trying random values.")
@@ -309,21 +309,18 @@ class WitnessGenerator:
                 entry.method, "", entry.endpoint, [],
                 True, 0, entry.response.type, result.response_body)
         
+        if not result.has_error:
+            responses, values = response.flatten(
+                self._path_to_defs,
+                self._skip_fields
+            )
+            self._analyzer.insert_value(values)
+            for r in responses:
+                self._analyzer.insert(r)
+
         entries.append(
             TraceEntry(entry.endpoint, entry.method, params, response,)
         )
-
-        if result.has_error:
-            return
-
-        responses, values = response.flatten(
-            self._path_to_defs,
-            self._skip_fields
-        )
-        self._analyzer.insert_value(values)
-        for r in responses:
-            self._analyzer.insert(r)
-
         return entries
 
     def _run_all(self, generate_type, endpoints, iterations, timeout, max_opt_params):

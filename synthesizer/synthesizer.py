@@ -4,16 +4,11 @@ import pickle
 import time
 import os
 
-from analyzer.entry import TraceEntry, Parameter
-from openapi import defs
-from openapi.utils import blacklist
 from program.generator import ProgramGenerator
 from program.program import ProgramGraph, all_topological_sorts
-from stats.graph_stats import GraphStats
 from stats.time_stats import TimeStats, STATS_GRAPH
 from synthesizer.hypergraph_encoder import HyperGraphEncoder
 from synthesizer.petrinet_encoder import PetriNetEncoder
-from synthesizer.utils import make_entry_name
 import consts
 
 STATE_FULL = -1
@@ -51,7 +46,7 @@ class Synthesizer:
             f.write(f"time breakdown:\n{TimeStats._timing}\n")
             f.write(str(p))
             f.write("\n")
-            f.write(p.pretty(self._entries, 0))
+            f.write(p.pretty(0))
             f.write("\n")
 
     def _serialize_solutions(self, idx, progs):
@@ -104,6 +99,8 @@ class Synthesizer:
             programs += self._program_generator.generate_program(
                 r, inputs, outputs[0]
             )
+
+        print(len(programs), flush=True)
 
         all_perms = []
         for p in programs:
@@ -168,11 +165,13 @@ class Synthesizer:
         solutions = set()
         input_map = defaultdict(int)
         for _, typ in inputs.items():
-            input_map[typ.name] += 1
+            typ_name = str(typ.ignore_array())
+            input_map[typ_name] += 1
 
         output_map = defaultdict(int)
         for typ in outputs:
-            output_map[typ.name] += 1
+            typ_name = str(typ.ignore_array())
+            output_map[typ_name] += 1
 
         start = time.time()
         self._encoder.init(input_map, output_map)
@@ -188,6 +187,7 @@ class Synthesizer:
                     time.time() - start
                 )
                 print("get programs", len(programs), flush=True)
+                # print(programs[:3])
                 solutions = solutions.union(set(programs))
                 print("get solutions", len(solutions), flush=True)
                 if len(solutions) >= n:
@@ -221,23 +221,32 @@ class Synthesizer:
     def _add_transitions(self):
         unique_entries = self._group_transitions(self._entries)
         lst = [
-            # "/v1/subscriptions_POST",
-            # "/v1/prices_GET",
-            # "projection(/v1/prices_GET_response, data.[?])_",
-            # "projection(price, id)_",
+            "/v1/subscriptions_POST",
+            "/v1/prices_GET",
+            # "projection({'data': [price], 'has_more': boolean, 'object': string, 'url': string}, data)_",
+            "projection(price, id)_",
             "/v1/products_POST",
             "/v1/prices_POST",
             "/v1/invoiceitems_POST",
-            # "/conversations.open_POST",
-            # "/users.lookupByEmail_GET",
-            # "/chat.postMessage_POST",
+            'projection(product, active)_',
+            "/v1/invoices_GET",
+            "projection(price, unit_amount)_",
+            "/v1/refunds_POST",
+            "/v1/subscriptions/{subscription_exposed_id}_GET",
+            "/v1/subscriptions/{subscription_exposed_id}_POST",
+            'projection(subscription, latest_invoice)_',
+            "/v1/invoices/{invoice}_GET",
+            "projection(card, last4)_",
+            "projection(payment_source, last4)_",
+            "/v1/customers/{customer}/sources_GET",
+            'filter(status_transitions, status_transitions.returned)_',
         ]
 
         for name in lst:
-            e = self._entries.get(name)
+            e = unique_entries.get(name)
             print('-----')
             print(name)
-            print([(p.arg_name, p.type.name, p.is_required) for p in e.parameters])
+            print([(p.arg_name, p.type, p.is_required) for p in e.parameters])
             print(e.response.type, flush=True)
 
         for name, e in self._entries.items():
@@ -249,11 +258,11 @@ class Synthesizer:
         # group projections with the same input and output
         results = {}
         for proj, e in transitions.items():
-            param_typs = [p.type.name for p in e.parameters]
+            param_typs = [str(p.type.ignore_array()) for p in e.parameters]
             if isinstance(e.response.type, list):
-                response_typ = [t.name for t in e.response.type]
+                response_typ = [str(t.ignore_array()) for t in e.response.type]
             else:
-                response_typ = [e.response.type.name]
+                response_typ = [str(e.response.type.ignore_array())]
             key = (tuple(param_typs), tuple(response_typ))
             if key not in self._groups:
                 results[proj] = e

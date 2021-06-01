@@ -12,11 +12,13 @@ import globs
 def run_encoder(inputs, outputs, path_len):
     input_map = defaultdict(int)
     for _, typ in inputs.items():
-        input_map[typ.name] += 1
+        typ_name = str(typ.ignore_array())
+        input_map[typ_name] += 1
 
     output_map = defaultdict(int)
     for typ in outputs:
-        output_map[typ.name] += 1
+        typ_name = str(typ.ignore_array())
+        output_map[typ_name] += 1
         
     config = globs.synthesizer._config
     solver_type = config[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_TYPE]

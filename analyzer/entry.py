@@ -155,6 +155,58 @@ class Parameter:
 
         return results
 
+    def project_ad_hoc(self, analyzer):
+        projections = []
+        if isinstance(self.type, types.ObjectType):
+            fields = self.type.object_fields
+            for field, field_typ in fields.items():
+                proj_name = f"projection({self.type}, {field})"
+                field_path = self.path + [field]
+                p = Parameter(
+                    "",         # method
+                    field,      # arg name
+                    proj_name,  # func name
+                    field_path, # path
+                    True,       # is required
+                    0,          # array level
+                    field_typ,
+                    None,
+                )
+                proj_field = TraceEntry(
+                    proj_name,
+                    "",
+                    [analyzer.set_type(self)],
+                    analyzer.set_type(p)
+                )
+                projections.append(proj_field)
+                projections += p.project_ad_hoc(analyzer)
+        elif isinstance(self.type, types.ArrayType):
+            p = Parameter(
+                "",
+                self.arg_name, 
+                self.func_name,
+                self.path,
+                True,
+                self.array_level + 1,
+                self.type.item,
+                None,
+            )
+            projections += p.project_ad_hoc(analyzer)
+        elif isinstance(self.type, types.UnionType):
+            for t in self.type.items:
+                p = Parameter(
+                    "",
+                    self.arg_name,
+                    self.func_name,
+                    self.path,
+                    True,
+                    self.array_level,
+                    t,
+                    None,
+                )
+                projections += p.project_ad_hoc(analyzer)
+
+        return projections
 
     def __eq__(self, other): 
         if not isinstance(other, Parameter):
@@ -286,8 +338,8 @@ class TraceEntry:
                 .get(defs.HEADER_FORM) \
                 .get(defs.DOC_SCHEMA)
 
-        response_name = make_response_name(endpoint, method)
-        response_typ = types.construct_type(response_name, response_schema)
+        # response_name = make_response_name(endpoint, method)
+        response_typ = types.construct_type(None, response_schema)
         entry_response = Parameter(
             method, "", endpoint, [], True, 
             int(response_schema.get(defs.DOC_TYPE) == defs.TYPE_ARRAY), 
@@ -295,3 +347,5 @@ class TraceEntry:
         )
 
         return TraceEntry(endpoint, method, entry_params, entry_response)
+
+    

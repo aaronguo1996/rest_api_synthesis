@@ -1,12 +1,14 @@
 from openapi import defs
 from analyzer.entry import Parameter, TraceEntry
 from openapi.utils import blacklist
-from schemas.schema_type import SchemaType
+from schemas import types
 from synthesizer.utils import make_entry_name
+import jsonref
+import json
 
 class Constructor:
     def __init__(self, doc, analyzer):
-        self._doc = doc
+        self._doc = jsonref.loads(json.dumps(doc))
         self._analyzer = analyzer
 
     def _create_projections(self):
@@ -61,16 +63,15 @@ class Constructor:
 
                 endpoint = f"projection({in_name}, {name})"
                 proj_in = Parameter(
-                    "", "obj", endpoint, [],
-                    True, None, SchemaType(in_name, None), None
+                    "", "obj", endpoint, ["obj"],
+                    True, None, types.SchemaObject(in_name), None
                 )
                 is_array = prop.get(defs.DOC_TYPE) == "array"
                 proj_out = Parameter(
                     "", "field", endpoint,
-                    [], True, int(is_array),
-                    SchemaType(f"{obj_name}.{name}", None), None
+                    ["field"], True, int(is_array),
+                    types.PrimString(f"{obj_name}.{name}"), None
                 )
-                # FIXME: this is probably wrong in other cases
                 proj_in = self._analyzer.find_same_type(proj_in)
                 proj_out = self._analyzer.find_same_type(proj_out)
                 entry = TraceEntry(endpoint, "", [proj_in], proj_out)
@@ -144,36 +145,36 @@ class Constructor:
                                 param = Parameter(
                                     "", "obj", 
                                     f"filter({in_name}, {in_name}.{to_field_typ})", 
-                                    [], False, None, 
-                                    SchemaType(f"{obj_name}_{j}", None), None
+                                    ["obj"], False, None, 
+                                    types.SchemaObject(f"{obj_name}_{j}"), None
                                 ) 
                                 opt_ins.append(param)
 
                         out_type = [
-                            SchemaType(f"{obj_name}_{j}", None)
+                            types.SchemaObject(f"{obj_name}_{j}")
                             for j in range(len(parts))
                         ]
 
                     if in_name is None:
                         in_name = obj_name
-                        out_type = SchemaType(obj_name, None)
+                        out_type = types.SchemaObject(obj_name)
 
                     endpoint = f"filter({in_name}, {in_name}.{to_field_typ})"
                     filter_in = [
                         Parameter(
-                            "", "obj", endpoint, [], 
+                            "", "obj", endpoint, ["obj"], 
                             True, None, 
-                            SchemaType(in_name, None), None
+                            types.SchemaObject(in_name), None
                         ),
                         Parameter(
-                            "", "field", endpoint, [],
+                            "", "field", endpoint, ["field"],
                             True, None,
-                            SchemaType(f"{field_name}.{name}", None), None
+                            types.PrimString(f"{field_name}.{name}"), None
                         )
                     ] + opt_ins
                     filter_out = Parameter(
                         "", "obj", endpoint,
-                        [], True, 1, out_type, None
+                        ["obj"], True, 1, out_type, None
                     )
                     filter_in = [self._analyzer.find_same_type(fin)
                         for fin in filter_in]

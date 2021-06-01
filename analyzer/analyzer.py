@@ -258,7 +258,7 @@ class LogAnalyzer:
                 rep = group[0].arg_name
 
             # for debug
-            if rep == "charge.customer":
+            if rep == "plan.id":
                 group_params = []
                 for param in group:
                     if param.type is not None:
@@ -276,46 +276,6 @@ class LogAnalyzer:
 
                 print("==================")
 
-            dot.node(rep, label=rep, shape="oval")
-
-            for param in group:
-                trans = make_entry_name(param.func_name, param.method)
-                dot.node(trans, label=trans, shape='rectangle')
-                if param.array_level is not None:
-                    # add an edge between the method and its return type
-                    if '[' not in rep and not re.search("image_.*", rep):
-                        if param.type:
-                            if param.type.name is None:
-                                continue
-
-                            p = param.type
-                            if p.name == param.type.name:
-                                edges.add((trans, rep))
-                            else:
-                                projection = f"projection ({param.type.name})"
-                                dot.node(projection, label=projection, shape='rectangle')
-                                edges.add((p.name, projection))
-                                edges.add((projection, rep))
-                                edges.add((trans, p.name))
-                        else:
-                            edges.add((trans, rep))
-                else:
-                    if trans == "/v1/subscriptions_POST":
-                        print(rep, "connected with", trans, "by parameter", param.arg_name, param.value)
-                    # add an edge between parameter name and the method
-                    if '[' not in rep and not re.search("image_.*", rep):
-                        edges.add((rep, trans))
-
-        for v1, v2 in edges:
-            # print(v1, v2)
-            f1 = '_'.join(v1.split('_')[:-1])
-            f2 = '_'.join(v2.split('_')[:-1])
-            if ((v1[0] == '/' and f1 not in endpoints) or 
-                (v2[0] == '/' and f2 not in endpoints)):
-                continue
-
-            dot.edge(v1, v2, style="solid")
-
     def to_json(self):
         groups = self.analysis_result()
         nodes, edges = [], []
@@ -327,7 +287,6 @@ class LogAnalyzer:
                 continue
 
             nodes.append({
-                "key": rep,
                 "name": rep,
                 "isVisible": True,
                 "children": [],
@@ -445,11 +404,12 @@ class LogAnalyzer:
             if p == param or same_type_name(p, param):
                 group = self.dsu.get_group(p)
                 rep = get_representative(group)
+
                 if rep is not None:
                     param.type.name = rep
-                # print("find type for param", rep, rep_type.name, rep_type.schema)
+
                 break
-        
+
         return param
 
     def set_type(self, param):
@@ -460,9 +420,9 @@ class LogAnalyzer:
         Args:
             param: the request/response parameter to be splitted
         """
-        if (param.type and param.type.name is not None and
-            re.search(r'^/.*_response$', param.type.name)):
-            return param
+        # if (param.type and param.type.name is not None and
+        #     re.search(r'^/.*_response$', param.type.name)):
+        #     return param
         
         params = self.dsu._parents.keys()
         for p in params:
@@ -473,6 +433,13 @@ class LogAnalyzer:
                     param.type.name = rep
                 break
         
+        if (param.type.name == defs.TYPE_BOOL or
+            param.type.name == defs.TYPE_INT or
+            param.type.name == defs.TYPE_STRING or
+            param.type.name == defs.TYPE_NUM or
+            param.type.name == defs.TYPE_OBJECT):
+            param.type.name = str(param) # defs.TYPE_UNK
+
         return param
 
     def reset_context(self):

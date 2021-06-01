@@ -40,6 +40,7 @@ TYPE_INT = "integer"
 TYPE_NUM = "number"
 TYPE_OBJECT = "object"
 TYPE_BOOL = "boolean"
+TYPE_UNK = "unknown"
 
 # definitions of parameter type in OpenAPI
 PARAM_QUERY = "query"

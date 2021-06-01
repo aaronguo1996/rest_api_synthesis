@@ -113,8 +113,8 @@ def create_entries(doc, config, ascription):
             for entry in typed_entries:
                 # store results
                 entry_name = make_entry_name(entry.endpoint, entry.method)
-                if endpoint == "/v1/prices":
-                    print(entry.method)
+                if endpoint == "/v1/prices" or endpoint == "/v1/charges":
+                    print(entry_name)
                     print("*******", [(p.arg_name, p.path, p.is_required, p.type) for p in entry.parameters])
                     p = entry.response
                     print("*******", (p.arg_name, p.path, p.is_required, p.type))
@@ -176,6 +176,9 @@ def generate_witnesses(
         endpoints, configuration[consts.KEY_WITNESS][consts.KEY_ITERATIONS],
         configuration[consts.KEY_WITNESS][consts.KEY_TIMEOUT],
         configuration[consts.KEY_WITNESS][consts.KEY_MAX_OPT])
+
+    # ascribe types with the new analysis results
+    entries = create_entries(doc_entries, configuration, ascription)
 
     print("Writing typed entries to file...")
     constructor = Constructor(doc, log_analyzer)
@@ -279,16 +282,12 @@ def main():
         elif args.parallel:
             init_synthesizer(doc, configuration, entries, exp_dir)
             inputs = {
-                # "customer_id": SchemaType("customer.id", None),
-                "product_name": SchemaType("product.name", None),
-                "cur": SchemaType("fee.currency", None),
-                "amt": SchemaType("unit_amount_/v1/prices_POST_unit_amount", None),
+                # "price": types.SchemaObject("price", None)
+                "customer_id": types.PrimString("customer.id"),
+                # "price_id": types.PrimString("plan.id")
+                # "product_id": types.PrimString("product.id"),
             }
-            outputs = [SchemaType("plan.id", None)]
-            # inputs = {
-            #     "email": SchemaType("objs_user_profile.email", None),
-            # }
-            # outputs = [SchemaType("objs_message", None)]
+            outputs = [types.SchemaObject("subscription")]
             spawn_encoders(
                 inputs, outputs,
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
@@ -300,15 +299,20 @@ def main():
                 [],
                 {
                     "customer_id": types.PrimString("customer.id"),
-                    "product_id": types.PrimString("product.id", None),
+                    "payment": types.PrimString("source.id"),
+                    # "price": types.SchemaObject("price", None)
+                    # "subscription": types.PrimString("subscription.id"),
+                    # "price_id": types.PrimString("plan.id")
+                    # "product_ids": types.ArrayType(None, types.PrimString("product.id")),
                 },
                 [
-                    types.SchemaObject("subscription", None),
+                    # types.ArrayType(None, types.SchemaObject("bank_account.last4")),
+                    types.ArrayType(None, types.SchemaObject("subscription"))
                 ],
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOL_NUM]
             )
 
-            for prog in [r.pretty(synthesizer._entries, 0) for r in solutions]:
+            for prog in [r.pretty(0) for r in solutions]:
                 print(prog)
 
         else:

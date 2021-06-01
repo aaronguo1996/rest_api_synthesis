@@ -8,7 +8,7 @@ def group_types(types):
     return type_dict
 
 def group_params(params):
-    types = [str(p.type) for p in params]
+    types = [str(p.type.ignore_array()) for p in params]
     return group_types(types)
 
 def make_entry_name(endpoint, method):

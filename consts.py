@@ -41,3 +41,6 @@ SOLVER_HYPER = "hypergraph"
 FILE_TRACE = "traces.pkl"
 FILE_ENTRIES = "entries.pkl"
 FILE_GRAPH = "graph.pkl"
+
+SPACE = '    '
+MAX_COST = 9999

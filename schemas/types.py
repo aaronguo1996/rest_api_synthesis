@@ -17,7 +17,7 @@ class BaseType:
         return self.name
 
     def __repr__(self):
-        return self.name
+        return self.__str__()
 
     @staticmethod
     def to_python_type(typ):
@@ -45,6 +45,9 @@ class BaseType:
             return self, 1
         else:
             return None, -1
+
+    def ignore_array(self):
+        return self
 
 class PrimInt(BaseType):
     def __init__(self, name=defs.TYPE_INT):
@@ -104,6 +107,7 @@ class SchemaObject(BaseType):
 
         return schema.get_object_field(field)
 
+    
 class ObjectType(BaseType):
     """Ad-hoc objects
 
@@ -210,10 +214,16 @@ class ArrayType(BaseType):
     def get_item(self):
         return self.item
 
+    def ignore_array(self):
+        return self.item.ignore_array()
+
 class UnionType(BaseType):
     def __init__(self, name, items, parent=None):
         super().__init__(name, parent)
         self.items = items
+
+    def __str__(self):
+        return ', '.join([str(item) for item in self.items])
 
     @staticmethod
     def is_union_type(expected_type):
@@ -255,6 +265,13 @@ class UnionType(BaseType):
                     return item_type
 
         raise Exception("No item type found")
+
+    def ignore_array(self):
+        items = []
+        for t in self.items:
+            items.append(t.ignore_array())
+
+        return UnionType(self.name, items)
 
 def construct_prim_type(schema):
     typ = schema.get(defs.DOC_TYPE)
