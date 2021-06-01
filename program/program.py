@@ -807,14 +807,17 @@ class Program:
         return self.__str__()
 
     def to_expression(self, subst={}):
+        exprs = []
         for expr in self._expressions:
             # eagerly substitute the previous variables into the new expression
             # print(expr)
             expr = expr.apply_subst(subst)
-            if isinstance(expr, AssignExpr) and not expr._is_bind:
+            if isinstance(expr, AssignExpr):
                 subst[expr.var] = expr.expr
+            else:
+                exprs.append(expr)
 
-        return expr
+        return exprs
 
     def apply_subst(self, subst={}):
         exprs = []

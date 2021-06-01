@@ -100,10 +100,11 @@ class Synthesizer:
                 r, inputs, outputs[0]
             )
 
-        print(len(programs), flush=True)
+        # print(len(programs), flush=True)
 
         all_perms = []
         for p in programs:
+            # print(p.to_expression({}))
             # write solutions to file
             self._write_solution(i, time, p)
 
@@ -221,25 +222,25 @@ class Synthesizer:
     def _add_transitions(self):
         unique_entries = self._group_transitions(self._entries)
         lst = [
-            "/v1/subscriptions_POST",
-            "/v1/prices_GET",
-            # "projection({'data': [price], 'has_more': boolean, 'object': string, 'url': string}, data)_",
-            "projection(price, id)_",
-            "/v1/products_POST",
-            "/v1/prices_POST",
-            "/v1/invoiceitems_POST",
-            'projection(product, active)_',
-            "/v1/invoices_GET",
-            "projection(price, unit_amount)_",
-            "/v1/refunds_POST",
-            "/v1/subscriptions/{subscription_exposed_id}_GET",
-            "/v1/subscriptions/{subscription_exposed_id}_POST",
-            'projection(subscription, latest_invoice)_',
-            "/v1/invoices/{invoice}_GET",
-            "projection(card, last4)_",
-            "projection(payment_source, last4)_",
-            "/v1/customers/{customer}/sources_GET",
-            'filter(status_transitions, status_transitions.returned)_',
+            # "/v1/subscriptions_POST",
+            # "/v1/prices_GET",
+            # # "projection({'data': [price], 'has_more': boolean, 'object': string, 'url': string}, data)_",
+            # "projection(price, id)_",
+            # "/v1/products_POST",
+            # "/v1/prices_POST",
+            # "/v1/invoiceitems_POST",
+            # 'projection(product, active)_',
+            # "/v1/invoices_GET",
+            # "projection(price, unit_amount)_",
+            # "/v1/refunds_POST",
+            # "/v1/subscriptions/{subscription_exposed_id}_GET",
+            # "/v1/subscriptions/{subscription_exposed_id}_POST",
+            # 'projection(subscription, latest_invoice)_',
+            # "/v1/invoices/{invoice}_GET",
+            # "projection(card, last4)_",
+            # "projection(payment_source, last4)_",
+            # "/v1/customers/{customer}/sources_GET",
+            # 'filter(status_transitions, status_transitions.returned)_',
         ]
 
         for name in lst:
