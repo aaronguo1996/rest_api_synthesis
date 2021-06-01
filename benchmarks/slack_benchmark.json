@@ -10,14 +10,14 @@
       },
       "output": "[objs_user_profile.email]",
       "solutions": [[
-        "\\channel_name => {",
+        "\\channel_name -> {",
           "let x0 = /conversations.list_GET()",
-          "let x1 <- x0.channels",
+          "x1 <- x0.channels",
           "if x1.name = channel_name",
           "let x2 = /conversations.members_GET(channel=x1.id)",
           "x3 <- x2.members",
-          "let x4 = /users.info_GET(user=x3)",
-          "return x4.user.profile.email",
+          "let x4 = /users.profile.get_GET(user=x3)",
+          "return x4.profile.email",
         "}"
       ]],
       "max_length": 20
@@ -31,9 +31,9 @@
       },
       "output": "objs_message",
       "solutions": [[
-        "\\email => {",
+        "\\email -> {",
           "let x0 = /users.lookupByEmail_GET(email=email)",
-          "let x1 = /conversations.open_GET(users=x0.user.id)",
+          "let x1 = /conversations.open_POST(users=x0.user.id)",
           "let x2 = /chat.postMessage_POST(channel=x1.channel.id)",
           "return x2.message",
           "}"
@@ -45,11 +45,11 @@
       "desc": "Get all unread message for a user",
       "landmarks": [],
       "input_args": {
-        "user_id": "defs_bot_id"
+        "user_id": "defs_user_id"
       },
       "output": "[objs_message]",
       "solutions": [[
-        "\\user_id => {",
+        "\\user_id -> {",
           "let x0 = /users.conversations_GET(user=user_id)",
           "x1 <- x0.channels",
           "let x2 = /conversations.info_GET(channel=x1.id)",

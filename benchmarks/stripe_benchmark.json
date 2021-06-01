@@ -143,10 +143,10 @@
       "output": "refund",
       "solutions": [[
         "\\subscription_id -> {",
-          "let x0 = /v1/subscriptions/{subscription_exposed_id}_POST(subscription_exposed_id=subscription_id)",
+          "let x0 = /v1/subscriptions/{subscription_exposed_id}_GET(subscription_exposed_id=subscription_id)",
           "let x1 = /v1/invoices_GET(customer=x0.customer)",
           "x2 <- x1.data",
-          "let x3 = /v1/refunds/{refund}_GET(refund=x2.charge)",
+          "let x3 = /v1/refunds/{refund}_POST(refund=x2.charge)",
           "return x3",
           "}"
       ]]

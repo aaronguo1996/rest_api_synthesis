@@ -269,6 +269,8 @@ class Bencher:
 
                     results = []
                     for p in solutions:
+                        # for tgt_sol in tgt_sols:
+                            # if compare_program_strings(tgt_sol, get_solution_strs([p])[0]):
                         cost = run_filter(
                             log_analyzer, dyn_analysis,
                             inputs, p, list_output,

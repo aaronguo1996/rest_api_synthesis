@@ -268,3 +268,4 @@ class DynamicAnalysis:
             return random.choices(same_endpoint_calls, k=count)
         else:
             return None
+
