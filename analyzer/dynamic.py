@@ -1,4 +1,5 @@
 import random
+from enum import IntEnum
 
 from analyzer.entry import ErrorResponse
 from analyzer.multiplicity import MUL_ZERO_MORE
@@ -7,6 +8,11 @@ from synthesizer.utils import make_entry_name
 CMP_ENDPOINT_NAME = 0
 CMP_ENDPOINT_AND_ARG_NAME = 1
 CMP_ENDPOINT_AND_ARG_VALUE = 2
+
+class BiasType(IntEnum):
+    NONE = 0
+    SIMPLE = 1
+    LOOK_AHEAD = 2
 
 class Goal:
     def __init__(self, multiplicity, values, fields=[]):
@@ -27,11 +33,12 @@ class DynamicAnalysis:
     """search for trace either by a parameter value or the endpoint name
     """
 
-    def __init__(self, entries, skip_fields, abstraction_level=0):
+    def __init__(self, entries, skip_fields, abstraction_level=0, bias_type=BiasType.NONE):
         self._entries = entries
         self._skip_fields = skip_fields
         self._environment = {}
         self._abstraction_level = abstraction_level
+        self._bias_type = bias_type
 
     def reset_env(self):
         self._environment = {}
@@ -40,12 +47,12 @@ class DynamicAnalysis:
         results = []
         for entry in self._entries:
             params = entry.parameters
-            param_values = [p.value for p in params 
-                if (p.value and 
-                not isinstance(p.value, int) and 
+            param_values = [p.value for p in params
+                if (p.value and
+                not isinstance(p.value, int) and
                 not isinstance(p.value, bool))
             ]
-            
+
             if param.value in param_values:
                 results.append(entry.endpoint)
 
@@ -118,6 +125,23 @@ class DynamicAnalysis:
     def lookup_var(self, x):
         return self._environment.get(x)
 
+    def _get_obj_weight(self, obj):
+        """
+        weighs simply by calculating number of fields in object/list recursively
+        """
+        if isinstance(obj, list):
+            total = 1
+            for child in obj:
+                total += self._get_obj_weight(child)
+            return total
+        elif isinstance(obj, dict):
+            total = 1
+            for _, child in obj.items():
+                total += self._get_obj_weight(child)
+            return total
+        else:
+            return 1
+
     def _sample_entry(self, entries, backup=[]):
         entry_vals = []
         for e in entries:
@@ -136,8 +160,13 @@ class DynamicAnalysis:
                 else:
                     entry_vals.append(e.response.value)
 
+        weights = None
+        if self._bias_type == BiasType.SIMPLE:
+            weights = [self._get_obj_weight(obj) for obj in entry_vals]
+
+        print("entries:", entry_vals, weights)
         if entry_vals:
-            return random.choice(entry_vals)
+            return random.choices(entry_vals, weights=weights)[0]
         else:
             print("not successful entry found")
             return None
@@ -268,4 +297,3 @@ class DynamicAnalysis:
             return random.choices(same_endpoint_calls, k=count)
         else:
             return None
-

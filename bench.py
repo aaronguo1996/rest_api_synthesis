@@ -33,11 +33,17 @@ from schemas.schema_type import SchemaType
 from synthesizer.filtering import run_filter
 from synthesizer.parallel import spawn_encoders
 from synthesizer.utils import DEFAULT_LENGTH_LIMIT
-import config_keys as keys
+import consts
 
 BK_CONFIG = "config"
 BK_SOLUTION = "solutions"
 BK_BENCHES = "benchmarks"
+
+bias_type_args = {
+    "none": dynamic.BiasType.NONE,
+    "simple": dynamic.BiasType.SIMPLE,
+    "look-ahead": dynamic.BiasType.LOOK_AHEAD
+}
 
 class SuppressPrint:
     def __init__(self, verbose):
@@ -56,7 +62,7 @@ def avg(lst):
     return sum(lst) / len(lst)
 
 class Bencher:
-    def __init__(self, repeat, bench, cache, filter_num):
+    def __init__(self, repeat, bench, cache, filter_num, filter_sol_only, re_bias_type):
         self.benches = {}
 
         # map from api to entry
@@ -68,6 +74,8 @@ class Bencher:
         self.bench = bench
         self.cache = cache
         self.filter_num = filter_num
+        self.filter_sol_only = filter_sol_only
+        self.re_bias_type = re_bias_type
 
     def tkey(self, bench_key):
         return self.benches[bench_key][BK_CONFIG]["exp_name"].split("_")[0]
@@ -129,8 +137,8 @@ class Bencher:
         configuration = self.benches[bench_key][BK_CONFIG]
 
         # clear the log file if exists
-        output_file = configuration.get(keys.KEY_OUTPUT)
-        enable_debug = configuration.get(keys.KEY_DEBUG)
+        output_file = configuration.get(consts.KEY_OUTPUT)
+        enable_debug = configuration.get(consts.KEY_DEBUG)
         if enable_debug and exists(output_file):
             os.remove(output_file)
 
@@ -138,11 +146,11 @@ class Bencher:
             filename=output_file, level=logging.DEBUG)
 
         print("  • Reading OpenAPI document...")
-        doc_file = configuration.get(keys.KEY_DOC_FILE)
+        doc_file = configuration.get(consts.KEY_DOC_FILE)
         doc = read_doc(doc_file)
         SchemaType.doc_obj = doc
 
-        endpoints = configuration.get(keys.KEY_ENDPOINTS)
+        endpoints = configuration.get(consts.KEY_ENDPOINTS)
         if not endpoints:
             endpoints = doc.get(defs.DOC_PATHS).keys()
 
@@ -259,28 +267,29 @@ class Bencher:
                         break
 
                 sol_prog = None
-                # reslsfjsa = []
                 # We need to rank our solutions by running filtering first.
                 def get_solution_rank():
                     dyn_analysis = dynamic.DynamicAnalysis(
                         entries,
-                        configuration.get(keys.KEY_SKIP_FIELDS),
-                        abstraction_level=dynamic.CMP_ENDPOINT_AND_ARG_VALUE
+                        configuration.get(consts.KEY_SKIP_FIELDS),
+                        abstraction_level=dynamic.CMP_ENDPOINT_AND_ARG_VALUE,
+                        bias_type=self.re_bias_type
                     )
 
                     results = []
                     for p in solutions:
-                        # for tgt_sol in tgt_sols:
-                            # if compare_program_strings(tgt_sol, get_solution_strs([p])[0]):
-                        cost = run_filter(
-                            synthesizer,
-                            log_analyzer, dyn_analysis,
-                            inputs, p, list_output,
-                            repeat=self.repeat
-                        )
-                        results.append((p, cost))
+                        is_target_sol = False
+                        for tgt_sol in tgt_sols:
+                            is_target_sol = is_target_sol or compare_program_strings(tgt_sol, get_solution_strs([p])[0])
 
-                    # reslsfjsa.append(results)
+                        if is_target_sol or not self.filter_sol_only:
+                            cost = run_filter(
+                                log_analyzer, dyn_analysis,
+                                inputs, p, list_output,
+                                repeat=self.repeat
+                            )
+                            results.append((p, cost))
+
                     res = sorted(results, key=lambda x: x[-1])
                     for r in res:
                         print(r[1], get_solution_strs([r[0]])[0])
@@ -294,7 +303,6 @@ class Bencher:
                 ranks = [get_solution_rank() for _ in range(self.filter_num)]
                 sol_prog = ranks[0][1]
                 ranks = [rank for rank, _ in ranks]
-                # print([[a[1] for a in r] for r in reslsfjsa])
                 print(ranks)
                 if ranks[0] is not None:
                     print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
@@ -387,16 +395,21 @@ def build_cmd_parser():
         help="Path to benchmark file or directory (by default runs all in benchmarks)")
     parser.add_argument("--names", nargs="+",
         help="Benchmark name list")
+    parser.add_argument("--bias-type", default='simple', choices=list(bias_type_args.keys()) ,dest='bias_type',
+        help="Bias type for retrospective execution")
     parser.add_argument("--cache", action='store_true', dest='cache',
         help="Whether to use cached results")
     parser.set_defaults(cache=False)
+    parser.add_argument("--sol-only", action='store_true', dest='filter_sol_only',
+        help="Whether to run retrospective execution on the solution only")
+    parser.set_defaults(filter_sol_only=False)
     return parser
 
 def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
 
-    b = Bencher(args.repeat, args.bench, args.cache, args.filternum)
+    b = Bencher(args.repeat, args.bench, args.cache, args.filternum, args.filter_sol_only, bias_type_args[args.bias_type])
     b.run_benches(names=args.names)
     b.print_table1(args.output)
     b.print_table2(args.output)
