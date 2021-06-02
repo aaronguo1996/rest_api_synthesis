@@ -3,9 +3,9 @@ import os
 
 from synthesizer.synthesizer import Synthesizer
 
-def init_synthesizer(doc, configuration, analyzer, exp_dir):
+def init_synthesizer(doc, configuration, entries, exp_dir):
     global synthesizer
-    synthesizer = Synthesizer(doc, configuration, analyzer, exp_dir)
+    synthesizer = Synthesizer(doc, configuration, entries, exp_dir)
     synthesizer.init()
 
 def get_petri_net_data():
@@ -20,4 +20,4 @@ def get_petri_net_data():
     return numbers[0], numbers[1]
 
 def get_solution_strs(solutions):
-    return [r.pretty(synthesizer._entries, 0) for r in solutions]
+    return [r.pretty(0) for r in solutions]

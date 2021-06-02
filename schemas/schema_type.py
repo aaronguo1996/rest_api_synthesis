@@ -70,7 +70,11 @@ class SchemaType:
 
     @staticmethod
     def is_union_type(expected_type):
-        return expected_type.get("oneOf") or expected_type.get("anyOf")
+        return (
+            expected_type.get(defs.DOC_ONEOF) or
+            expected_type.get(defs.DOC_ANYOF) or
+            expected_type.get(defs.DOC_ALLOF)
+        )
 
     def of_union_type(self, obj, expected_type):
         union_type = self.is_union_type(expected_type)
@@ -167,13 +171,12 @@ class SchemaType:
                 if isinstance(obj, str):
                     return self.of_regex_type(obj, self.schema)
                 else:
-
                     typ = self.schema.get("type")
-                    if typ:
+                    if typ is not None:
                         py_typ = SchemaType.to_python_type(typ)
-                        if py_typ is dict:
-                            return self, 1 #value_size(obj)
-                        elif isinstance(obj, py_typ):
+                        # if py_typ is dict and isinstance(obj, dict):
+                        #     return self, 1 #value_size(obj)
+                        if isinstance(obj, py_typ):
                             return self, 1
                         else:
                             # print("checking fails for obj", obj, "with type",)

@@ -29,16 +29,16 @@ class PetriNetEncoder:
         # self.create_petrinet()
 
     @TimeStats(key=STATS_ENCODE)
-    def init(self, inputs):
+    def init(self, inputs, outputs):
         self._solver.reset()
         self._path_len = 0
         self._prev_result = []
 
         # variables and constraints
+        self._run_approximation(inputs, outputs)
         self._add_variables(self._path_len)
         self._set_initial(inputs)
         self._add_copy_transitions()
-        self._run_approximation(inputs)
 
     @TimeStats(key=STATS_ENCODE)
     def increment(self):
@@ -50,8 +50,8 @@ class PetriNetEncoder:
         # reset the temporary constraint when path length changes
         self._constraints["temporary"] = []
 
-    def _run_approximation(self, inputs):
-        # print("before approximation:", len(self._net.transition()))
+    def _run_approximation(self, inputs, output):
+        print("before approximation:", len(self._net.transition()))
         # on top of the input types, 
         # we also need to add output types of transitions with no required args
         self._reachables = set()
@@ -65,13 +65,22 @@ class PetriNetEncoder:
                     break
 
             if no_required:
-                null_places.append(e.response.type.name)
+                null_places.append(str(e.response.type))
                 self._reachables.add(trans)
 
         reachables = self._approx.approx_reachability(
-            input_places + null_places, set(), set()
+            input_places + null_places, output
         )
         self._reachables = self._reachables.union(reachables)
+
+        for trans in self._net.transition():
+            if trans.name not in self._reachables:
+                self._net.remove_transition(trans.name)
+            else:
+                trans_idx = len(self._trans_to_variable)
+                self._trans_to_variable[trans.name] = trans_idx
+                self._variable_to_trans.append(trans.name)
+
         # print("/users.lookupByEmail_GET" in self._reachables)
         # print("projection(/users.lookupByEmail_GET_response, user)_" in self._reachables)
         # print("projection(objs_user, id)_" in self._reachables)
@@ -80,7 +89,21 @@ class PetriNetEncoder:
         # print("projection(objs_conversation, id)_" in self._reachables)
         # print("/chat.postMessage_POST" in self._reachables)
         # print("projection(/chat.postMessage_POST_response, message)_" in self._reachables)
-        # print("after approximation:", len(self._reachables))
+        projection_cnt = 0
+        filter_cnt = 0
+        clone_cnt = 0
+        for t in self._reachables:
+            if "projection" in t:
+                projection_cnt += 1
+            elif "filter" in t:
+                filter_cnt += 1
+            elif "clone" in t:
+                clone_cnt += 1
+
+        print("after approximation:", len(self._reachables))
+        print("projection number", projection_cnt)
+        print("filter number", filter_cnt)
+        print("clone number", clone_cnt)
 
     def check_constraints_binding(self):
         # constraints
@@ -156,7 +179,7 @@ class PetriNetEncoder:
         else:
             result, path = self.check_constraints_binding()
 
-        # print("Check time:", time.time() - start, flush=True)
+        print("Check time:", time.time() - start, flush=True)
         start = time.time()
         if self._path_len > 0 and result == "sat":
             results = []
@@ -186,7 +209,7 @@ class PetriNetEncoder:
     def get_length_of(self, path_len, inputs, outputs):
         start = time.time()
         
-        self.init(inputs)
+        self.init(inputs, outputs)
         for _ in range(path_len):
             self.increment()
         self.set_final(outputs)
@@ -245,7 +268,18 @@ class PetriNetEncoder:
             # maps from place name to a triple (required cnts, optional in, optional out)
             tokens = {}
             inputs = trans.input()
+
+            if entry is not None:
+                param_map = {}
+                for param in entry.parameters:
+                    param_str = str(param.type.ignore_array())
+                    if param_str not in param_map:
+                        param_map[param_str] = []
+
+                    param_map[param_str].append(param)
+
             for place, _ in inputs:
+                place_name = place.name
                 # count required and optional arguments
                 required = 0
                 optional = 0
@@ -253,23 +287,26 @@ class PetriNetEncoder:
                 if entry is None:
                     required = 1
                 else:
-                    for param in entry.parameters:
-                        required += int(str(param.type) == place.name and param.is_required)
-                        optional += int(str(param.type) == place.name and not param.is_required)
+                    for param in param_map[place_name]:
+                        if param.is_required:
+                            required += 1
+                        else:
+                            optional += 1
 
-                cur = self._place_to_variable.get((place.name, t))
+                cur = self._place_to_variable.get((place_name, t))
                 pre.append(Int(cur) >= required)
-                tokens[place.name] = required, optional, 0 # in_req, in_opt, out_opt
+                tokens[place_name] = required, optional, 0 # in_req, in_opt, out_opt
 
             outputs = trans.output()
             output_changes = None
             for place, _ in outputs:
-                req_in, opt_in, _ = tokens.get(place.name, (0, 0, 0))
+                place_name = place.name
+                req_in, opt_in, _ = tokens.get(place_name, (0, 0, 0))
                 # output number is always 1 for each type
                 if len(outputs) > 1: # optional outputs
-                    tokens[place.name] = (req_in, opt_in, 1)
-                    cur = self._place_to_variable.get((place.name, t))
-                    nxt = self._place_to_variable.get((place.name, t+1))
+                    tokens[place_name] = (req_in, opt_in, 1)
+                    cur = self._place_to_variable.get((place_name, t))
+                    nxt = self._place_to_variable.get((place_name, t+1))
 
                     if re.search(r"filter\(.*, .*\)", trans.name):                    
                         post.append(z3.Implies(Int(nxt) > 0, Int(nxt) == Int(cur)))
@@ -286,9 +323,9 @@ class PetriNetEncoder:
                             output_changes += Int(nxt) - Int(cur)
                 else: # required outputs
                     if entry is None:
-                        tokens[place.name] = (req_in - 2, opt_in, 0)
+                        tokens[place_name] = (req_in - 2, opt_in, 0)
                     else:
-                        tokens[place.name] = (req_in - 1, opt_in, 0)
+                        tokens[place_name] = (req_in - 1, opt_in, 0)
 
             if output_changes is not None:
                 post.append(output_changes > 0)
@@ -358,12 +395,7 @@ class PetriNetEncoder:
 
     def _add_transition(self, entry):
         trans_name = make_entry_name(entry.endpoint, entry.method)
-        # print(trans_name)
         self._entries[trans_name] = entry
-        trans_idx = len(self._trans_to_variable)
-        self._trans_to_variable[trans_name] = trans_idx
-        self._variable_to_trans.append(trans_name)
-
         self._net.add_transition(Transition(trans_name))
 
         params = group_params(entry.parameters)
@@ -372,15 +404,15 @@ class PetriNetEncoder:
                 self._net.add_place(Place(param))    
             self._net.add_input(param, trans_name, Value(token))
 
-        resp_typ = entry.response.type
+        resp_typ = entry.response.type.ignore_array()
         if isinstance(resp_typ, list):
             for t in resp_typ:
-                param = t.name
+                param = str(t)
                 if not self._net.has_place(param):
                     self._net.add_place(Place(param))
                 self._net.add_output(param, trans_name, Value(1))
         else:
-            param = entry.response.type.name
+            param = str(resp_typ)
             if not self._net.has_place(param):
                 self._net.add_place(Place(param))
             self._net.add_output(param, trans_name, Value(1))

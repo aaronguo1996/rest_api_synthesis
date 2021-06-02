@@ -84909,7 +84909,8 @@
                   }
                 },
                 "required": [
-                  "customer"
+                  "customer",
+                  "items"
                 ],
                 "type": "object"
               }
