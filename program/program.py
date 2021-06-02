@@ -8,7 +8,6 @@ import consts
 from analyzer.utils import name_to_path
 from schemas import types
 
-
 class Expression:
     def __init__(self, typ, signature):
         self.type = typ
@@ -475,7 +474,7 @@ class FilterExpr(Expression):
     def execute(self, analyzer):
         obj, score1 = self._obj.execute(analyzer)
         val, score2 = self._val.execute(analyzer)
-        
+
         if obj is None or val is None:
             if obj is None:
                 print("[Filter] obj cannot be evaluated")
@@ -501,7 +500,7 @@ class FilterExpr(Expression):
                 tmp = None
                 print("[Filter] cannot find field", p, "in", tmp)
                 break
-            
+
         if tmp == val:
             # result.append(o)
 
