@@ -1,4 +1,3 @@
-from collections import defaultdict
 import os
 
 from synthesizer.synthesizer import Synthesizer
@@ -7,8 +6,9 @@ def init_synthesizer(doc, configuration, entries, exp_dir):
     global synthesizer
     synthesizer = Synthesizer(doc, configuration, entries, exp_dir)
     synthesizer.init()
+    return synthesizer
 
-def get_petri_net_data():
+def get_petri_net_data(synthesizer):
     encoder_path = os.path.join(synthesizer._exp_dir, "../encoder.txt")
     with open(encoder_path, "r") as f:
         numbers = []

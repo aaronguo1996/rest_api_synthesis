@@ -5,11 +5,12 @@ import pebble
 import time
 
 from synthesizer.hypergraph_encoder import HyperGraphEncoder
+from synthesizer.ilp_encoder import ILPetriEncoder
 from synthesizer.petrinet_encoder import PetriNetEncoder
 import consts
 import globs
 
-def run_encoder(inputs, outputs, path_len):
+def run_encoder(synthesizer, inputs, outputs, path_len):
     input_map = defaultdict(int)
     for _, typ in inputs.items():
         typ_name = str(typ.ignore_array())
@@ -29,12 +30,12 @@ def run_encoder(inputs, outputs, path_len):
     else:
         raise Exception("Unknown solver type in config")
 
-    for e in globs.synthesizer._unique_entries.values():
+    for e in synthesizer._unique_entries.values():
         encoder._add_transition(e)
 
     # write encoder stats to file
     if path_len == 1:
-        encoder_path = os.path.join(globs.synthesizer._exp_dir, "../encoder.txt")
+        encoder_path = os.path.join(synthesizer._exp_dir, "../encoder.txt")
         with open(encoder_path, "w") as f:
             f.write(str(len(encoder._net.place())))
             f.write("\n")
@@ -44,10 +45,11 @@ def run_encoder(inputs, outputs, path_len):
     start = time.time()
     path = encoder.get_length_of(path_len, input_map, output_map)
     while path is not None:
-        print("Finding a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
+        # print("Finding a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
 
         end = time.time()
-        programs, perms = globs.synthesizer._generate_solutions(
+        print(path)
+        programs, perms = synthesizer._generate_solutions(
             path_len, inputs, outputs, path, end - start
         )
         solutions = solutions.union(set(programs))
@@ -58,7 +60,7 @@ def run_encoder(inputs, outputs, path_len):
     print("Finished encoder running for path length", path_len, 
         "after time", time.time() - start, flush=True)
 
-def spawn_encoders(inputs, outputs, solver_num, timeout=500):
+def spawn_encoders(synthesizer, inputs, outputs, solver_num, timeout=500):
     with pebble.ProcessPool(max_workers=solver_num) as pool:
         futures = []
         for i in range(consts.DEFAULT_LENGTH_LIMIT + 1):

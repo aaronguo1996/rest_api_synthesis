@@ -11,8 +11,6 @@ from synthesizer.hypergraph_encoder import HyperGraphEncoder
 from synthesizer.petrinet_encoder import PetriNetEncoder
 import consts
 
-STATE_FULL = -1
-STATE_NORMAL = 0
 
 class Synthesizer:
     def __init__(self, doc, config, entries, exp_dir):
