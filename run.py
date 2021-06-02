@@ -123,7 +123,7 @@ def create_entries(doc, config, ascription):
     return entries
 
 def generate_witnesses(
-    configuration, doc, doc_entries, hostname, base_path, 
+    configuration, doc, doc_entries, hostname, base_path,
     exp_dir, entries, endpoints):
     enable_debug = configuration.get(consts.KEY_DEBUG)
 
@@ -132,13 +132,13 @@ def generate_witnesses(
     prefilter = configuration.get(consts.KEY_SYNTHESIS) \
                             .get(consts.KEY_SYN_PREFILTER)
     skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
-    f = doc_entries["/v1/subscriptions"]["POST"]
-    for param in f.parameters:
-        if param.arg_name == "items":
-            print(param.type)
-            # print(param.type.item)
-            print(param.type.item.get_object_field("plan"))
-            print(param.type.item.get_object_field("price"))
+    # f = doc_entries["/v1/subscriptions"]["POST"]
+    # for param in f.parameters:
+        # if param.arg_name == "items":
+            # print(param.type)
+            # # print(param.type.item)
+            # print(param.type.item.get_object_field("plan"))
+            # print(param.type.item.get_object_field("price"))
 
     log_analyzer.analyze(
         doc_entries,
@@ -268,7 +268,7 @@ def main():
             results = []
             for p in solutions:
                 score = run_filter(
-                    log_analyzer, dyn_analysis, 
+                    log_analyzer, dyn_analysis,
                     {"channel_name": "objs_message.name"}, p, True
                 )
                 results.append((p, score))
@@ -298,8 +298,8 @@ def main():
             solutions = synthesizer.run_n(
                 [],
                 {
-                    "customer_id": types.PrimString("customer.id"),
-                    "payment": types.PrimString("source.id"),
+                    # "customer_id": types.PrimString("customer.id"),
+                    # "payment": types.PrimString("source.id"),
                     # "price": types.SchemaObject("price", None)
                     # "subscription": types.PrimString("subscription.id"),
                     # "price_id": types.PrimString("plan.id")
@@ -307,7 +307,7 @@ def main():
                 },
                 [
                     # types.ArrayType(None, types.SchemaObject("bank_account.last4")),
-                    types.ArrayType(None, types.SchemaObject("subscription"))
+                    # types.ArrayType(None, types.SchemaObject("subscription"))
                 ],
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOL_NUM]
             )

@@ -828,7 +828,7 @@ class Program:
 
     def collect_exprs(self):
         expr = self.to_expression({})
-        return expr.collect_exprs()
+        return [e.collect_exprs() for e in expr]
 
     def get_vars(self):
         all_vars = set()

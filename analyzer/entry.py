@@ -305,15 +305,17 @@ class TraceEntry:
                 requires = schema.get(defs.DOC_REQUIRED, [])
                 properties = schema.get(defs.DOC_PROPERTIES)
 
-                for name, typ_def in properties.items():
-                    if name == defs.DOC_TOKEN:
-                        continue
+                # Not always defined for square
+                if properties is not None:
+                    for name, typ_def in properties.items():
+                        if name == defs.DOC_TOKEN:
+                            continue
 
-                    param = Parameter.from_openapi(
-                        endpoint, method, name, typ_def,
-                        name in requires, None,
-                    )
-                    entry_params.append(param)
+                        param = Parameter.from_openapi(
+                            endpoint, method, name, typ_def,
+                            name in requires, None,
+                        )
+                        entry_params.append(param)
         
         return entry_params
 

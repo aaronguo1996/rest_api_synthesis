@@ -7,10 +7,8 @@ import globs
 
 def run_filter(log_analyzer, dynamic_analyzer, inputs, program, multiple, repeat=5):
     print(program)
-    counter = defaultdict(int)
-    program = program.to_multiline(globs.synthesizer._entries, counter)
-    program.simplify()
-    print(program)
+    # program.simplify()
+    # print(program)
 
     results = []
 
@@ -19,6 +17,7 @@ def run_filter(log_analyzer, dynamic_analyzer, inputs, program, multiple, repeat
         # initialize environment with input values
         dynamic_analyzer.reset_env()
         for arg_name, arg_type in inputs.items():
+            arg_type = arg_type.name
             vals = log_analyzer.get_values_by_type(arg_type)
             vals = list({v:v for v in vals}.keys())
             if not vals:

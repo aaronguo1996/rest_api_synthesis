@@ -390,7 +390,7 @@ class LogAnalyzer:
         params = self.dsu._parents.keys()
         values = []
         for param in params:
-            if param.type and param.type.name == typ.name:
+            if param.type and param.type.name == typ:
                 group = self.dsu.get_group(param)
                 for p in group:
                     if p.value is not None:
