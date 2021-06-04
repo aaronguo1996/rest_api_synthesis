@@ -9,6 +9,7 @@ from program.program import ProgramGraph, all_topological_sorts
 from stats.time_stats import TimeStats, STATS_GRAPH
 from synthesizer.hypergraph_encoder import HyperGraphEncoder
 from synthesizer.petrinet_encoder import PetriNetEncoder
+from synthesizer.ilp_encoder import ILPetriEncoder
 import consts
 
 
@@ -135,10 +136,13 @@ class Synthesizer:
         return programs, perm_indices
 
     def _create_encoder(self):
-        if self._config["synthesis"]["solver_type"] == "petri net":
+        solver = self._config[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_TYPE]
+        if solver == consts.SOLVER_PN_SMT:
             self._encoder = PetriNetEncoder({})
-        elif self._config["synthesis"]["solver_type"] == "hypergraph":
+        elif solver == consts.SOLVER_HYPER:
             self._encoder = HyperGraphEncoder({})
+        elif solver == consts.SOLVER_PN_ILP:
+            self._encoder = ILPetriEncoder({})
         else:
             raise Exception("Unknown solver type in config")
 
@@ -220,24 +224,24 @@ class Synthesizer:
     def _add_transitions(self):
         unique_entries = self._group_transitions(self._entries)
         lst = [
-            # "/v1/subscriptions_POST",
-            # "/v1/prices_GET",
-            # # "projection({'data': [price], 'has_more': boolean, 'object': string, 'url': string}, data)_",
-            # "projection(price, id)_",
-            # "/v1/products_POST",
-            # "/v1/prices_POST",
-            # "/v1/invoiceitems_POST",
-            # 'projection(product, active)_',
-            # "/v1/invoices_GET",
-            # "projection(price, unit_amount)_",
-            # "/v1/refunds_POST",
-            # "/v1/subscriptions/{subscription_exposed_id}_GET",
-            # "/v1/subscriptions/{subscription_exposed_id}_POST",
-            # 'projection(subscription, latest_invoice)_',
-            # "/v1/invoices/{invoice}_GET",
-            # "projection(card, last4)_",
-            # "projection(payment_source, last4)_",
-            # "/v1/customers/{customer}/sources_GET",
+            "/v1/subscriptions_POST",
+            "/v1/prices_GET",
+            # "projection({'data': [price], 'has_more': boolean, 'object': string, 'url': string}, data)_",
+            "projection(price, id)_",
+            "/v1/products_POST",
+            "/v1/prices_POST",
+            "/v1/invoiceitems_POST",
+            'projection(product, active)_',
+            "/v1/invoices_GET",
+            "projection(price, unit_amount)_",
+            "/v1/refunds_POST",
+            "/v1/subscriptions/{subscription_exposed_id}_GET",
+            "/v1/subscriptions/{subscription_exposed_id}_POST",
+            'projection(subscription, latest_invoice)_',
+            "/v1/invoices/{invoice}_GET",
+            "projection(card, last4)_",
+            "projection(payment_source, last4)_",
+            "/v1/customers/{customer}/sources_GET",
             # 'filter(status_transitions, status_transitions.returned)_',
         ]
 

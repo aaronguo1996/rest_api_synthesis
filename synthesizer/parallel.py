@@ -23,8 +23,10 @@ def run_encoder(synthesizer, inputs, outputs, path_len):
         
     config = globs.synthesizer._config
     solver_type = config[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_TYPE]
-    if solver_type == consts.SOLVER_PN:
+    if solver_type == consts.SOLVER_PN_SMT:
         encoder = PetriNetEncoder({})
+    elif solver_type == consts.SOLVER_PN_ILP:
+        encoder = ILPetriEncoder({})
     elif solver_type == consts.SOLVER_HYPER:
         encoder = HyperGraphEncoder({})
     else:
@@ -66,7 +68,7 @@ def spawn_encoders(synthesizer, inputs, outputs, solver_num, timeout=500):
         for i in range(consts.DEFAULT_LENGTH_LIMIT + 1):
             future = pool.schedule(
                 run_encoder, 
-                args=(inputs, outputs, i),
+                args=(synthesizer, inputs, outputs, i),
                 timeout=timeout)
             futures.append(future)
         

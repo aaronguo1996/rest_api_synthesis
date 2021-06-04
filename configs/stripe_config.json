@@ -32,9 +32,9 @@
     "synthesis": {
         "expand_group": true,
         "block_perms": true,
-        "solver_type": "petri net",
+        "solver_type": "petri net ILP",
         "solver_number": 4,
-        "solution_number": 25,
+        "solution_number": 5,
         "enable_prefilter": false
     },
     "endpoints": [

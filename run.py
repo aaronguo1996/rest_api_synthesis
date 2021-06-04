@@ -280,7 +280,7 @@ def main():
                 print(p.pretty())
 
         elif args.parallel:
-            init_synthesizer(doc, configuration, entries, exp_dir)
+            synthesizer = init_synthesizer(doc, configuration, entries, exp_dir)
             inputs = {
                 # "price": types.SchemaObject("price", None)
                 "customer_id": types.PrimString("customer.id"),
@@ -289,7 +289,7 @@ def main():
             }
             outputs = [types.SchemaObject("subscription")]
             spawn_encoders(
-                inputs, outputs,
+                synthesizer, inputs, outputs,
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
             )
         elif args.synthesis:
@@ -299,11 +299,11 @@ def main():
                 [],
                 {
                     "customer_id": types.PrimString("customer.id"),
-                    "payment": types.PrimString("source.id"),
+                    # "payment": types.PrimString("source.id"),
                     # "price": types.SchemaObject("price", None)
                     # "subscription": types.PrimString("subscription.id"),
                     # "price_id": types.PrimString("plan.id")
-                    # "product_ids": types.ArrayType(None, types.PrimString("product.id")),
+                    "product_ids": types.ArrayType(None, types.PrimString("product.id")),
                 },
                 [
                     # types.ArrayType(None, types.SchemaObject("bank_account.last4")),

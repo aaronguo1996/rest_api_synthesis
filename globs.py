@@ -3,7 +3,6 @@ import os
 from synthesizer.synthesizer import Synthesizer
 
 def init_synthesizer(doc, configuration, entries, exp_dir):
-    global synthesizer
     synthesizer = Synthesizer(doc, configuration, entries, exp_dir)
     synthesizer.init()
     return synthesizer

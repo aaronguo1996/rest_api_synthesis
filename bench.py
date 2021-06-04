@@ -280,10 +280,15 @@ class Bencher:
                     for p in solutions:
                         is_target_sol = False
                         for tgt_sol in tgt_sols:
-                            is_target_sol = is_target_sol or compare_program_strings(tgt_sol, get_solution_strs([p])[0])
+                            eq_target = compare_program_strings(
+                                tgt_sol, 
+                                get_solution_strs([p])[0]
+                            )
+                            is_target_sol = is_target_sol or eq_target
 
                         if is_target_sol or not self.filter_sol_only:
                             cost = run_filter(
+                                synthesizer,
                                 log_analyzer, dyn_analysis,
                                 inputs, p, list_output,
                                 repeat=self.repeat
@@ -296,7 +301,9 @@ class Bencher:
 
                     for rank, res_sol in enumerate(res):
                         for tgt_sol in tgt_sols:
-                            if compare_program_strings(tgt_sol, get_solution_strs([res_sol[0]])[0]):
+                            if compare_program_strings(
+                                tgt_sol, 
+                                get_solution_strs([res_sol[0]])[0]):
                                 return rank + 1, res_sol[0]
                     return None, None
 

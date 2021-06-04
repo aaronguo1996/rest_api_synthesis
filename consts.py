@@ -35,8 +35,9 @@ KEY_WITNESS = "witness"
 KEY_MAX_OPT = "max_opt_params"
 KEY_SOL_NUM = "solution_number"
 
-SOLVER_PN = "petri net"
+SOLVER_PN_SMT = "petri net SMT"
 SOLVER_HYPER = "hypergraph"
+SOLVER_PN_ILP = "petri net ILP"
 
 FILE_TRACE = "traces.pkl"
 FILE_ENTRIES = "entries.pkl"
