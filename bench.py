@@ -11,381 +11,16 @@
 #####
 
 import argparse
-from glob import glob
-import os
-from os.path import abspath, exists, join
-import json
-import logging
-import random
-import shutil
-import sys
-import pickle
-import re
 
+from benchmarks.benchmark import BenchConfig, Benchmark, BenchmarkSuite, Bencher
+from schemas import types
 from analyzer import dynamic
-from globs import get_solution_strs, init_synthesizer, get_petri_net_data
-from openapi import defs
-from openapi.utils import read_doc
-from program.program import ProjectionExpr, AppExpr
-from program.program_equality import compare_program_strings
-from run import prep_exp_dir, parse_entries
-from schemas.schema_type import SchemaType
-from synthesizer.filtering import run_filter
-from synthesizer.parallel import spawn_encoders
-from synthesizer.utils import DEFAULT_LENGTH_LIMIT
-import consts
-
-BK_CONFIG = "config"
-BK_SOLUTION = "solutions"
-BK_BENCHES = "benchmarks"
 
 bias_type_args = {
     "none": dynamic.BiasType.NONE,
     "simple": dynamic.BiasType.SIMPLE,
     "look-ahead": dynamic.BiasType.LOOK_AHEAD
 }
-
-class SuppressPrint:
-    def __init__(self, verbose):
-        self.verbose = verbose
-
-    def __enter__(self):
-        if not self.verbose:
-            self._original_stdout = sys.stdout
-            sys.stdout = open(os.devnull, 'w')
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        sys.stdout.close()
-        sys.stdout = self._original_stdout
-
-def avg(lst):
-    return sum(lst) / len(lst)
-
-class Bencher:
-    def __init__(self, repeat, bench, cache, filter_num, filter_sol_only, re_bias_type):
-        self.benches = {}
-
-        # map from api to entry
-        self.table1 = {}
-        # map from api to list of benches for each api
-        self.table2 = {}
-
-        self.repeat = repeat
-        self.bench = bench
-        self.cache = cache
-        self.filter_num = filter_num
-        self.filter_sol_only = filter_sol_only
-        self.re_bias_type = re_bias_type
-
-    def tkey(self, bench_key):
-        return self.benches[bench_key][BK_CONFIG]["exp_name"].split("_")[0]
-
-    def run_benches(self, folder="benchmarks", names=None):
-        self.read_benches(folder)
-
-        for bench_key in self.benches.keys():
-            self.run_bench(bench_key, names)
-
-            print()
-
-    def read_benches(self, folder="benchmarks"):
-        "Reads a list JSON bench files from a folder, populating table1"
-
-        if self.bench is None:
-            self.bench = "benchmarks"
-
-        if os.path.isdir(self.bench):
-            files = [f for f in glob(f"{folder}/*.json")]
-        else:
-            files = [self.bench]
-
-        print("reading benches")
-
-        for inf in files:
-            with open(inf) as f:
-                js = json.load(f)
-                config_path = js.get(BK_CONFIG)
-                if not config_path:
-                    print(f"✗ {inf}: no config")
-                    continue
-
-                with open(config_path) as cf:
-                    js[BK_CONFIG] = json.load(cf)
-
-                print(f"✓ {inf}: read")
-
-            # set self.benches
-            self.benches[inf] = js
-
-            # populate table 1, part 1
-            # for the name, we use the first part of the experiment name when split by _s.
-            key = self.tkey(inf)
-            self.table1[key] = {}
-
-            # to get number of annotations, open the annotations file
-            with open(js[BK_CONFIG]["witness"]["annotation_path"]) as af:
-                a = json.load(af)
-                self.table1[key]["annotations"] = len(a)
-
-        print()
-
-    def run_bench(self, bench_key, names):
-        # this assumes bench_key is in self.benches
-        print(bench_key)
-        print(f"• setup")
-
-        configuration = self.benches[bench_key][BK_CONFIG]
-
-        # clear the log file if exists
-        output_file = configuration.get(consts.KEY_OUTPUT)
-        enable_debug = configuration.get(consts.KEY_DEBUG)
-        if enable_debug and exists(output_file):
-            os.remove(output_file)
-
-        logging.basicConfig(
-            filename=output_file, level=logging.DEBUG)
-
-        print("  • Reading OpenAPI document...")
-        doc_file = configuration.get(consts.KEY_DOC_FILE)
-        doc = read_doc(doc_file)
-        SchemaType.doc_obj = doc
-
-        endpoints = configuration.get(consts.KEY_ENDPOINTS)
-        if not endpoints:
-            endpoints = doc.get(defs.DOC_PATHS).keys()
-
-        exp_dir = prep_exp_dir(configuration)
-
-        print("  • Loading witnesses...")
-        entries = parse_entries(doc, configuration, exp_dir)
-
-        # initialize table 1, part 2
-        key = self.tkey(bench_key)
-        self.table1[key]["avg_num_args"] = avg([len(x.parameters) for x in entries])
-
-        obj_sizes = []
-        schemas = doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS)
-        for _, sch in schemas.items():
-            typ = sch.get(defs.DOC_TYPE)
-            if typ == "object":
-                if defs.DOC_PROPERTIES in sch:
-                    properties = sch.get(defs.DOC_PROPERTIES)
-                    obj_sizes.append(len(properties))
-                    continue
-
-            obj_sizes.append(1)
-
-        self.table1[key]["obj_size"] = avg(obj_sizes)
-        self.table1[key]["endpoints"] = len(endpoints)
-        covered = {x.endpoint for x in entries if str(x.endpoint) in endpoints}
-        self.table1[key]["endpoints_covered"] = len(covered)
-
-        log_analyzer = None
-        with open(os.path.join(exp_dir, "graph.pkl"), "rb") as f:
-            log_analyzer = pickle.load(f)
-
-        # initialize table 2, part 0
-        self.table2[key] = []
-
-        blen = len(self.benches[bench_key][BK_BENCHES])
-
-        print(f"• run {blen} benches")
-
-        for i, bench in enumerate(self.benches[bench_key][BK_BENCHES]):
-            print(f"  • [{i + 1}/{blen}]")
-
-            if names is not None and bench["name"] not in names:
-                continue
-
-            list_output = (re.match("\[.*\]", bench["output"]) != None)
-            if list_output:
-                bench["output"] = bench["output"][1:-1]
-
-            bm_dir = os.path.join(exp_dir, bench["name"])
-            # create a directory for the current benchmark
-            cached = os.path.exists(bm_dir) and len(os.listdir(bm_dir)) != 0
-            if cached and not self.cache:
-                shutil.rmtree(bm_dir)
-
-            os.makedirs(bm_dir, exist_ok=True)
-
-            synthesizer = init_synthesizer(doc, configuration, log_analyzer, bm_dir)
-            inputs = {k: SchemaType(v, None) for k, v in bench["input_args"].items()}
-            output = [SchemaType(bench["output"], None)]
-
-            if not cached or not self.cache:
-                spawn_encoders(
-                    synthesizer,
-                    inputs, output,
-                    1 # configuration["synthesis"]["solver_number"]
-                )
-
-            # process solutions
-            solutions = set()
-            for j in range(DEFAULT_LENGTH_LIMIT + 1):
-                sol_file = os.path.join(bm_dir, f"solutions_{j}.pkl")
-                if os.path.exists(sol_file):
-                    with open(sol_file, 'rb') as f:
-                        programs = pickle.load(f)
-
-                    solutions = solutions.union(programs)
-
-            # initialize table 1, part 3
-            # here, we report statistics on the petri net if they haven't been yet.
-            if "places" not in self.table1[key]:
-                num_place, num_trans = get_petri_net_data(synthesizer)
-                self.table1[key]["places"] = num_place
-                self.table1[key]["transitions"] = num_trans
-
-            # initialize table 2, part 1
-            arr = {
-                "name": bench["name"],
-                "desc": bench["desc"],
-                "ast_size": "-",
-                "endpoint_calls": "-",
-                "projects": "-",
-                "rank": "-",
-                "rank_no_re": "-",
-                "median_rank": "-",
-                "mean_rank": "-",
-            }
-
-            # the solution is contained as a list of lines in the solution key.
-            if BK_SOLUTION in bench:
-                tgt_sols = ["\n".join(sol) for sol in bench[BK_SOLUTION]]
-                res_no_re = get_solution_strs(synthesizer, solutions)
-
-                found = False
-                for rank, res_sol in enumerate(res_no_re):
-                    for tgt_sol in tgt_sols:
-                        if compare_program_strings(tgt_sol, res_sol):
-                            found = True
-                            arr["rank_no_re"] = rank
-
-                            break
-                    if found:
-                        break
-
-                sol_prog = None
-                # We need to rank our solutions by running filtering first.
-                def get_solution_rank():
-                    dyn_analysis = dynamic.DynamicAnalysis(
-                        entries,
-                        configuration.get(consts.KEY_SKIP_FIELDS),
-                        abstraction_level=dynamic.CMP_ENDPOINT_AND_ARG_VALUE,
-                        bias_type=self.re_bias_type
-                    )
-
-                    results = []
-                    for p in solutions:
-                        is_target_sol = False
-                        for tgt_sol in tgt_sols:
-                            eq_target = compare_program_strings(
-                                tgt_sol, 
-                                get_solution_strs([p])[0]
-                            )
-                            is_target_sol = is_target_sol or eq_target
-
-                        if is_target_sol or not self.filter_sol_only:
-                            cost = run_filter(
-                                synthesizer,
-                                log_analyzer, dyn_analysis,
-                                inputs, p, list_output,
-                                repeat=self.repeat
-                            )
-                            results.append((p, cost))
-
-                    res = sorted(results, key=lambda x: x[-1])
-                    for r in res:
-                        print(r[1], get_solution_strs([r[0]])[0])
-
-                    for rank, res_sol in enumerate(res):
-                        for tgt_sol in tgt_sols:
-                            if compare_program_strings(
-                                tgt_sol, 
-                                get_solution_strs([res_sol[0]])[0]):
-                                return rank + 1, res_sol[0]
-                    return None, None
-
-                ranks = [get_solution_rank() for _ in range(self.filter_num)]
-                sol_prog = ranks[0][1]
-                ranks = [rank for rank, _ in ranks]
-                print(ranks)
-                if ranks[0] is not None:
-                    print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
-                    arr["mean_rank"] = sum(ranks) / len(ranks)
-                    arr["rank"] = arr["mean_rank"]
-                    arr["median_rank"] = sorted(ranks)[len(ranks)//2]
-                else:
-                    print(f"  • [{i + 1}/{blen}] FAIL")
-
-                print(arr["rank_no_re"], arr["rank"])
-                if sol_prog is not None:
-                    ns = sol_prog.collect_exprs()
-                    arr["ast_size"] = len(ns)
-                    arr["projects"] = len(list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
-                    arr["endpoint_calls"] = len(list(filter(lambda x: isinstance(x, AppExpr), ns)))
-            else:
-                print(f"  • [{i + 1}/{blen}] NO SOL")
-
-            self.table2[key].append(arr)
-
-    def print_table1(self, output=None):
-        res = ("% auto-generated: ./bench.py, table 1\n"
-            "\\resizebox{\\textwidth}{!}{\\begin{tabular}{lrrrrrrr}"
-            "\\toprule"
-            "& \\multicolumn{3}{c}{API size} & \\multicolumn{2}{c}{Sub-API size} & \\multicolumn{2}{c}{TNN size} \\\\"
-            "\\cmidrule(lr){2-4} \\cmidrule(lr){5-6} \\cmidrule(lr){7-8}"
-            "API & \\# endpoints & Avg. endpoint args & Avg. object size & \\# endpoints covered & \\# annotations & \\# places & \\# transitions \\\\"
-            "\\midrule")
-        res += "\n"
-
-        for api, rest in self.table1.items():
-            avg_num_args = round(rest['avg_num_args'], 2)
-            obj_size = round(rest['obj_size'], 2)
-            res += f"  {api.capitalize()} & {rest['endpoints']} & {avg_num_args} & {obj_size} & {rest['endpoints_covered']} & {rest['annotations']} & {rest['places']} & {rest['transitions']}"
-            res += r" \\"
-            res += "\n"
-
-        res += ("\\bottomrule"
-                "\\end{tabular}}")
-
-        # print(res)
-
-        if output:
-            with open(join(output, "table1.tex"), "w") as of:
-                of.write(res)
-                print(f"written to {join(output, 'table1.tex')}")
-
-    def print_table2(self, output=None):
-        res = ("% auto-generated: ./bench.py, table 2\n"
-               "\\resizebox{\\textwidth}{!}{"
-               "\\begin{tabular}{llp{5cm}rrrrr}"
-               "\\toprule"
-               "& \\multicolumn{2}{c}{Benchmark info} & \\multicolumn{3}{c}{Solution stats} & \\multicolumn{2}{c}{Solution rank} \\\\"
-               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-6} \\cmidrule(lr){7-8}"
-               "API & Name & Description & AST Size & \\# endpoint calls & \\# projections & Without RE & With RE \\\\"
-               "\\midrule")
-        res += "\n"
-
-        for i, (api, bench_results) in enumerate(self.table2.items()):
-            res += api.capitalize() + " "
-            for r in bench_results:
-                res += f"& {r['name']} & {r['desc']} & {r['ast_size']} & {r['endpoint_calls']} & {r['projects']} & {r['rank_no_re']} & {r['rank']} "
-                res += r" \\"
-                res += "\n"
-            if i < len(self.table2.items()) - 1:
-                res += "\\hline\n"
-
-        res += ("\\bottomrule"
-                "\\end{tabular}}")
-
-        # print(res)
-
-        if output:
-            with open(join(output, "table2.tex"), "w") as of:
-                of.write(res)
-                print(f"written to {join(output, 'table2.tex')}")
 
 def build_cmd_parser():
     '''
@@ -396,30 +31,557 @@ def build_cmd_parser():
         help="Path to output latex table to")
     parser.add_argument("--repeat", type=int, nargs='?', default=5,
         help="Number of times to repeat filtering")
-    parser.add_argument("--filternum", type=int, nargs='?', default=3,
+    parser.add_argument("--filter-num", type=int, nargs='?', default=3,
         help="Number of times to run filtering")
+    parser.add_argument("--bias-type", default='simple', 
+        choices=list(bias_type_args.keys()) ,dest='bias_type',
+        help="Bias type for retrospective execution")
     parser.add_argument("--bench", nargs='?',
         help="Path to benchmark file or directory (by default runs all in benchmarks)")
     parser.add_argument("--names", nargs="+",
         help="Benchmark name list")
-    parser.add_argument("--bias-type", default='simple', choices=list(bias_type_args.keys()) ,dest='bias_type',
-        help="Bias type for retrospective execution")
     parser.add_argument("--cache", action='store_true', dest='cache',
         help="Whether to use cached results")
     parser.set_defaults(cache=False)
     parser.add_argument("--sol-only", action='store_true', dest='filter_sol_only',
         help="Whether to run retrospective execution on the solution only")
+    parser.add_argument("--synthesis-only", action='store_true',
+        help="Whether to run ranking")
     parser.set_defaults(filter_sol_only=False)
     return parser
+
+
+################################################################################
+##                                  SLACK                                     ##
+################################################################################
+
+slack_benchmarks = [
+    Benchmark(
+        "1.1",
+        "Retrieve all member emails from channel name",
+        {
+            "channel_name": types.PrimString("objs_conversation.name")
+        },
+        types.ArrayType(None, types.PrimString("objs_user_profile.email")),
+        [[
+            "\\channel_name -> {",
+            "let x0 = /conversations.list_GET()",
+            "x1 <- x0.channels",
+            "if x1.name = channel_name",
+            "let x2 = /conversations.members_GET(channel=x1.id)",
+            "x3 <- x2.members",
+            "let x4 = /users.profile.get_GET(user=x3)",
+            "return x4.profile.email",
+            "}"
+        ]],
+    ),
+    Benchmark(
+        "1.2",
+        "Send a message to some user given the email address",
+        {
+            "email": types.PrimString("objs_user_profile.email")
+        },
+        types.SchemaObject("objs_message"),
+        [[
+            "\\email -> {",
+            "let x0 = /users.lookupByEmail_GET(email=email)",
+            "let x1 = /conversations.open_POST(users=x0.user.id)",
+            "let x2 = /chat.postMessage_POST(channel=x1.channel.id)",
+            "return x2.message",
+            "}"
+        ]],
+    ),
+    Benchmark(
+        "1.3",
+        "Get all unread message for a user",
+        {
+            "user_id": types.PrimString("defs_user_id")
+        },
+        types.ArrayType(None, types.ArrayType(None, types.SchemaObject("objs_message"))),
+        [[
+            "\\user_id -> {",
+            "let x0 = /users.conversations_GET(user=user_id)",
+            "x1 <- x0.channels",
+            "let x2 = /conversations.info_GET(channel=x1.id)",
+            "let x3 = x2.last_read",
+            "let x5 = /conversations.history_GET(channel=x2.id, oldest=x3)",
+            "return x5",
+            "}"
+        ]],
+    ),
+]
+
+slack_suite = BenchmarkSuite(
+    "configs/slack_config.json",
+    "Slack",
+    slack_benchmarks
+)
+
+
+################################################################################
+##                                  STRIPE                                    ##
+################################################################################
+
+stripe_benchmarks = [
+    Benchmark(
+        "2.1",
+        "Make a subscription to a product for a customer",
+        {
+            "customer": types.PrimString("customer.id"),
+            "product": types.PrimString("product.id"),
+        },
+        types.SchemaObject("subscription"),
+        [[
+            "\\customer_id product_id -> {",
+            "let x1 = /v1/prices_GET(product=product_id)",
+            "x2 <- x1.data",
+            "let x3 = /v1/subscriptions_POST(customer=customer_id, items[0].price=x2.id)",
+            "return x3",
+            "}"
+        ]]
+    ),
+    Benchmark(
+        "2.2",
+        "Charge a saved card given customer id",
+        {
+            "customer_id": types.PrimString("customer.id"),
+            "cur": types.PrimString("fee.currency"),
+            "amt": types.PrimInt("price.unit_amount"),
+        },
+        types.SchemaObject("payment_intent"),
+        [[
+            "\\customer_id cur amt -> {",
+            "let x1 = /v1/payment_methods_GET(customer=customer_id, type=card)",
+            "let x2 = /v1/payment_intents_POST(customer=customer_id, payment_method=x1.id, currency=cur, amount=amt)",
+            "let x3 = /v1/payment_intents/{pi}/confirm_POST(pi=x2.id, setup_future_usage=off_session)",
+            "return x3",
+            "}"
+        ]]
+    ),
+    Benchmark(
+        "2.3",
+        "Subscribe to multiple items",
+        {
+            "customer_id": types.PrimString("customer.id"),
+            "product_id": types.ArrayType(None, types.PrimString("product.id")),
+        },
+        types.ArrayType(None, types.SchemaObject("subscription")),
+        [[
+            "\\customer_id product_ids -> {",
+            "x0 <- product_ids"
+            "let x1 = /v1/prices_GET(product=x0)",
+            "x2 <- x1.data",
+            "let x3 = /v1/subscriptions_POST(customer=customer_id, items[0].price=x2.id)",
+            "return x3",
+            "}"
+        ]]
+    ),
+    Benchmark(
+        "2.4",
+        "Create a product and invoice a customer",
+        {
+            "product_name": types.PrimString("product.name"),
+            "customer_id": types.PrimString("customer.id"),
+            "currency": types.PrimString("fee.currency"),
+            "unit_amount": types.PrimInt("price.unit_amount"),
+        },
+        types.SchemaObject("invoiceitem"),
+        [[
+            "\\product_name customer_id currency unit_amount -> {",
+            "let x0 = /v1/products_POST(name=product_name)",
+            "let x1 = /v1/prices_POST(currency=currency, product=x0.id, unit_amount=unit_amount)",
+            "let x2 = /v1/invoiceitems_POST(customer=customer_id, price=x1.id)",
+            "return x2",
+            "}"
+        ]]
+    ),
+    Benchmark(
+        "2.5",
+        "sending invoice",
+        {
+            "customer_id": types.PrimString("customer.id"),
+            "price_id": types.PrimString("plan.id"),
+        },
+        types.SchemaObject("invoice"),
+        [[
+            "\\customer_id price_id -> {",
+            "let x1 = /v1/invoiceitems_POST(customer=customer_id, price=price_id);",
+            "let x2 = /v1/invoices_POST(customer=x1.customer);",
+            "let x3 = /v1/invoices/{invoice}/send_POST(invoice=x2.id);",
+            "return x3;",
+            "}"
+        ]]
+    ),
+    Benchmark(
+        "2.6",
+        "Retrieve customer by email",
+        {
+            "email": types.PrimString("customer.email"),
+        },
+        types.SchemaObject("customer"),
+        [[
+            "\\customer_email -> {",
+            "let x0 = /v1/customers_GET()",
+            "x1 <- x0.data",
+            "if x1.email = customer_email",
+            "return x1",
+            "}"
+        ]]
+    ),
+    Benchmark(
+        "2.7",
+        "Get a list of receipts for a customer",
+        {
+            "customer_id": types.PrimString("customer.id"),
+        },
+        types.ArrayType(None, types.SchemaObject("charge")),
+        [[
+            "\\customer_id -> {",
+            "let x1 = /v1/invoices_GET(customer=customer_id)",
+            "x2 <- x1.data",
+            "let x3 = /v1/charges/{charge}_GET(charge=x2.charge)",
+            "return x3",
+            "}"
+        ]]
+    ),
+    Benchmark(
+        "2.8",
+        "Get refund for given subscription",
+        {
+            "subscription": types.PrimString("subscription.id"),
+        },
+        types.SchemaObject("refund"),
+        [[
+            "\\subscription_id -> {",
+            "let x0 = /v1/subscriptions/{subscription_exposed_id}_GET(subscription_exposed_id=subscription_id)",
+            "let x1 = /v1/invoices_GET(customer=x0.customer)",
+            "x2 <- x1.data",
+            "let x3 = /v1/refunds/{refund}_POST(refund=x2.charge)",
+            "return x3",
+            "}"
+        ]]
+    ),
+    Benchmark(
+        "2.9",
+        "Get email of all customers",
+        {
+        },
+        types.ArrayType(None, types.PrimString("customer.email")),
+        [[
+            "\\ -> {",
+            "let x0 = /v1/customers_GET()",
+            "x1 <- x0.data",
+            "return x1.email",
+            "}"
+        ]]
+    ),
+    Benchmark(
+        "2.10",
+        "Get email of subscribers to some product",
+        {
+            "product_id": types.PrimString("product.id"),
+        },
+        types.ArrayType(None, types.PrimString("customer.email")),
+        [[
+            "\\product_id -> {",
+            "let x1 = /v1/subscriptions_GET()",
+            "x2 <- x1",
+            "if x2.items.product = product_id",
+            "let x3 = /v1/customers/{customer}_GET(customer=x2.customer_id)",
+            "return x3",
+            "}"
+        ]]
+    ),
+    Benchmark(
+        "2.11",
+        "Get last 4 digit of card for a customer",
+        {
+            "customer_id": types.PrimString("customer.id"),
+        },
+        types.PrimString("bank_account.last4"),
+        [[
+            "\\customer_id -> {",
+            "let x0 = /v1/customers/{customer}/sources_GET(customer=customer_id)",
+            "x1 <- x0.data",
+            "return x1.last4",
+            "}"
+        ]]
+    ),
+    Benchmark(
+        "2.12",
+        "Delete a card for a customer",
+        {
+            "payment_method": types.SchemaObject("payment_method"),
+        },
+        types.SchemaObject("deleted_payment_source"),
+        [[
+            "\\customer_id -> {",
+            "let x1 = /v1/customers/{customer}_GET(customer=customer_id)",
+            "let x2 = customer.default_source",
+            "let x3 = /v1/customers/{customer}/sources/{source}_DELETE(customer=customer_id, source=x2)",
+            "return x3",
+            "}"
+        ]]
+    ),
+    Benchmark(
+        "2.13",
+        "Update payment methods of a customer for all subscriptions",
+        {
+            "payment_method": types.SchemaObject("payment_method"),
+            "customer_id": types.PrimString("customer.id"),
+        },
+        types.ArrayType(None, types.SchemaObject("subscription")),
+        [[
+            "(payment, customer_id) -> {",
+            "x1 <- /v1/subscriptions_GET(customer=customer_id)",
+            "let x2 = /v1/subscriptions/{subscription}_POST(subscription=x1.id, default_payment_method=payment)",
+            "return x2",
+            "}"
+        ]]
+    ),
+]
+
+stripe_suite = BenchmarkSuite(
+    "configs/stripe_config.json",
+    "Stripe",
+    stripe_benchmarks
+)
+
+################################################################################
+##                                  SQUARE                                    ##
+################################################################################
+
+square_benchmarks = [
+    Benchmark(
+        "3.1",
+        "List invoices that match location id",
+        {
+            "location_id": types.PrimString("Location.id"),
+        },
+        types.ArrayType(None, types.SchemaObject("Invoice")),
+        [[
+            "\\location_id -> {",
+                "let x0 = /v2/invoices_GET(location_id=location_id)",
+                "x1 <- x0.invoices",
+                "if x1.location_id = location_id",
+                "return x1",
+            "}"
+        ]],
+    ),
+    Benchmark(
+        "3.2",
+        "Find subscription from location, customer, and plan id",
+        {
+            "customer_id": types.PrimString("Customer.id"),
+            "location_id": types.PrimString("Location.id"),
+            "subscription_plan_id": types.PrimString("CatalogObject.id"),
+        },
+        types.ArrayType(None, types.SchemaObject("Subscription")),
+        [[
+            "\\customer_id location_id subscription_plan_id -> {",
+                "let x0 = /v2/subscriptions/search_POST()",
+                "x1 <- x0.subscriptions",
+                "if x1.customer_id = customer_id",
+                "if x1.plan_id = subscription_plan_id",
+                "if x1.location_id = location_id",
+                "return x1",
+            "}"
+        ], [
+            "\\customer_id location_id subscription_plan_id -> {",
+            "let x0 = /v2/subscriptions/search_POST()",
+            "x1 <- x0.subscriptions",
+            "if x1.location_id = location_id",
+            "if x1.plan_id = subscription_plan_id",
+            "if x1.customer_id = customer_id",
+            "return x1",
+            "}"
+        ]],
+    ),
+    Benchmark(
+        "3.3",
+        "Get all items tax applies to",
+        {
+            "tax_id": types.PrimString("CatalogObject.id"),
+        },
+        types.ArrayType(None, types.SchemaObject("CatalogObject")),
+        [[
+            "\\tax_id -> {",
+            "let x0 = /v2/catalog/batch-retrieve_POST()",
+            "x1 <- x0",
+            "if x1.tax_id = tax_id",
+            "}"
+        ]],
+    ),
+    Benchmark(
+        "3.4",
+        "List discounts in catalog",
+        {
+        },
+        types.ArrayType(None, types.PrimString("CatalogDiscount.name")),
+        [[
+            "\\ -> {",
+            "let x0 = /v2/catalog/batch-retrieve_POST()",
+            "x1 <- x0",
+            "return x1.discount_type",
+            "}"
+        ]],
+    ),
+    Benchmark(
+        "3.5",
+        "Delete catalog items with [names]",
+        {
+            "item_type": types.PrimString("CatalogObject.type"),
+            "names": types.ArrayType(None, types.PrimString("CatalogDiscount.name"))
+        },
+        types.ArrayType(None, types.PrimString("CatalogObject.Id")),
+        [[
+            "\\item_type, names -> {",
+                "let x0 = names.map(name => {",
+                    "let x1 = /v2/catalog/search-catalog-items_POST({",
+                        "object_types: [item_type],",
+                        "query: {",
+                            "exact_query: {",
+                                "attribute_name: \"name\",",
+                                "attribute_value: name",
+                                "}",
+                                "}",
+                                "})",
+                                "x2 <- x1",
+                                "./v2/catalog/batch-delete({",
+                                    "object_ids: x2.id",
+                                    "})",
+                                    "return x1",
+                                    "})",
+                                    "return x0",
+                                    "}"
+        ]],
+    ),
+    Benchmark(
+        "3.6",
+        "Delete all catalog items",
+        {
+        },
+        types.ArrayType(None, types.PrimString("CatalogObject.Id")),
+        [[
+            "\\ -> {",
+            "let x0 = /v2/catalog/batch-retrieve_POST()",
+            "x1 <- x0",
+            "/v2/catalog/batch-delete_POST(object_ids = x1)",
+            "}"
+        ]],
+    ),
+    Benchmark(
+        "3.7",
+        "Add order details to order",
+        {
+            "location_id": types.PrimString("Location.id"),
+            "order_ids": types.PrimString("OrderLineItem.uid"),
+            "updates": types.SchemaObject("OrderLineItem"),
+        },
+        types.ArrayType(None, types.SchemaObject("OrderLineItem")),
+        [[
+            "\\location_id, order_id, updates -> {",
+                "let x0 = /v2/orders/batch-retrieve_POST(location_id = location_id, order_ids: order_id)",
+                "x1 <- x0",
+                "let x2 = /v2/orders_POST(order_id = x1, order = update)",
+                "return x2",
+            "}"
+        ]],
+    ),
+    Benchmark(
+        "3.8",
+        "Get payment notes",
+        {
+        },
+        types.ArrayType(None, types.PrimString("Tender.note")),
+        [[
+            "\\ -> {",
+            "let x0 = /v2/payments_GET()",
+            "x1 <- x0.payments",
+            "return x1.note",
+            "}"
+        ]],
+    ),
+    Benchmark(
+        "3.9",
+        "Get customer and items associated with your transactions",
+        {
+            "location_id": types.PrimString("Location.id"),
+        },
+        types.ArrayType(None, types.PrimString("Order.id")),
+        [[
+            "\\location_id -> {",
+            "let x0 = /v2/locations/{location_id}/transactions_GET(location_id=location_id)",
+            "x1 <- x0.transactions",
+            "return x1.order_id",
+            "}"
+        ]],
+    ),
+    Benchmark(
+        "3.10",
+        "Get product details (names of orders) from transaction id",
+        {
+            "location_id": types.PrimString("Location.id"),
+            "transaction_id": types.PrimString("Transaction.id"),
+        },
+        types.ArrayType(None, types.PrimString("DeviceCode.name")),
+        [[
+            "\\location_id transaction_id -> {",
+            "let x0 = /v2/orders/batch-retrieve_POST(locationId = location_id, orderIds = [transaction_id])",
+            "x1 <- x0",
+            "x2 <- x1.line_items",
+            "return item.name",
+            "}"
+        ]],
+    ),
+    Benchmark(
+        "3.11",
+        "Search customers by name",
+        {
+            "name": types.PrimString("Customer.given_name"),
+        },
+        types.SchemaObject("Customer"),
+        [[
+            "\\name -> {",
+            "let x0 = /v2/customers_GET()",
+            "x1 <- x0.customers",
+            "if x1.given_name = name",
+            "return x1",
+            "}"
+        ]],
+    )
+]
+
+square_suite = BenchmarkSuite(
+    "configs/square_config.json",
+    "Square",
+    square_benchmarks
+)
 
 def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
 
-    b = Bencher(args.repeat, args.bench, args.cache, args.filternum, args.filter_sol_only, bias_type_args[args.bias_type])
-    b.run_benches(names=args.names)
-    b.print_table1(args.output)
-    b.print_table2(args.output)
+    config = BenchConfig(
+        args.cache, 
+        args.repeat,
+        args.filter_num,
+        args.filter_sol_only,
+        args.synthesis_only,
+        bias_type_args[args.bias_type])
+    b = Bencher(
+        [
+            slack_suite,
+            stripe_suite,
+            # square_suite,
+        ],
+        config)
+    b.run(
+        args.names,
+        output=args.output, 
+        print_api=True, 
+        print_results=True, 
+        cached_results=False)
 
 if __name__ == '__main__':
     main()

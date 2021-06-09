@@ -1,9 +1,11 @@
 import random
 from enum import IntEnum
+import time
 
 from analyzer.entry import ErrorResponse
 from analyzer.multiplicity import MUL_ZERO_MORE
 from synthesizer.utils import make_entry_name
+from analyzer.utils import path_to_name
 
 CMP_ENDPOINT_NAME = 0
 CMP_ENDPOINT_AND_ARG_NAME = 1
@@ -139,72 +141,47 @@ class DynamicAnalysis:
             for _, child in obj.items():
                 total += self._get_obj_weight(child)
             return total
-        else:
+        elif obj is not None:
             return 1
+        else:
+            return 0
 
     def _sample_entry(self, entries, backup=[]):
         entry_vals = []
         for e in entries:
-            if (isinstance(e.response, ErrorResponse) or 
-                e.response.value is None):
-                continue
-            else:
-                entry_vals.append(e.response.value)
+            entry_vals.append(e.response.value)
 
         if not entry_vals:
             # print("cannot find trace in the given group, using backups")
             for e in backup:
-                if (isinstance(e.response, ErrorResponse) or 
-                    e.response.value is None):
-                    continue
-                else:
-                    entry_vals.append(e.response.value)
+                entry_vals.append(e.response.value)
 
         weights = None
         if self._bias_type == BiasType.SIMPLE:
             weights = [self._get_obj_weight(obj) for obj in entry_vals]
 
-        print("entries:", entry_vals, weights)
+        # print("entries:", entry_vals, weights)
         if entry_vals:
-            return random.choices(entry_vals, weights=weights)[0]
+            return random.choices(entry_vals, weights=weights, k=1)[0]
         else:
-            print("not successful entry found")
+            print("no successful entry found")
             return None
 
     def get_trace(self, fun, args):
         # abstraction level matters here
         # get all entries with the same endpoint call
-        same_endpoint_calls = []
-        for entry in self._entries:
-            if make_entry_name(entry.endpoint, entry.method) == fun:
-                same_endpoint_calls.append(entry)
+        start = time.time()
+        same_endpoint_calls = self._entries.get(fun, {})
 
         if self._abstraction_level == CMP_ENDPOINT_NAME:
-            return self._sample_entry(same_endpoint_calls)
+            calls = []
+            for es in same_endpoint_calls.values():
+                calls += es
+            return self._sample_entry(es)
 
         # get all entries with the same arg names
-        same_args_calls = []
-        for entry in same_endpoint_calls:
-            param_names = [param.arg_name for param in entry.parameters]
-            has_all_args = True
-            for x, _ in args:
-                if x not in param_names:
-                    has_all_args = False
-                    break
-
-            arg_map = {x: v for x,v in args}
-            # print("arg_map", arg_map)
-            for param in entry.parameters:
-                if param.arg_name in self._skip_fields:
-                    continue
-
-                if param.arg_name not in arg_map:
-                    # print("cannot find the parameter from real trace", param.arg_name, "during execution")
-                    has_all_args = False
-                    break
-
-            if has_all_args:
-                same_args_calls.append(entry)
+        arg_names = sorted([x for x, _ in args])
+        same_args_calls = same_endpoint_calls.get(tuple(arg_names))
 
         if self._abstraction_level == CMP_ENDPOINT_AND_ARG_NAME:
             # return self._sample_entry(same_args_calls, same_endpoint_calls)
@@ -213,10 +190,10 @@ class DynamicAnalysis:
         # get all entries with the same arg values
         same_arg_val_calls = []
         for entry in same_args_calls:
-            params = {param.arg_name: param.value for param in entry.parameters}
+            params = {path_to_name(param.path): param.value for param in entry.parameters}
             has_all_values = True
             for x, v in args:
-                if x not in param_names or params[x] != v:
+                if params[x] != v:
                     has_all_values = False
                     break
 
@@ -224,7 +201,7 @@ class DynamicAnalysis:
                 same_arg_val_calls.append(entry)
 
         if self._abstraction_level == CMP_ENDPOINT_AND_ARG_VALUE:
-            print("sampling entries for", fun)
+            # print("sampling entries for", fun)
             # return self._sample_entry(same_arg_val_calls, same_args_calls)
             return self._sample_entry(same_arg_val_calls, backup=same_args_calls)
         else:

@@ -1,41 +1,57 @@
 import random
-from collections import defaultdict
 import xeger
+import pebble
 
-from program.program import ProgramGraph
-import globs
+from analyzer import dynamic
 
-def run_filter(synthesizer, log_analyzer, dynamic_analyzer, inputs, program, multiple, repeat=5):
-    print(program)
-    counter = defaultdict(int)
-    program = program.to_multiline(synthesizer._entries, counter)
-    program.simplify()
+def retrospective_execute(
+    log_analyzer, entries, skip_fields, re_bias_type, 
+    inputs, program):
+    dynamic_analyzer = dynamic.DynamicAnalysis(
+        entries,
+        skip_fields,
+        abstraction_level=dynamic.CMP_ENDPOINT_AND_ARG_VALUE,
+        bias_type=re_bias_type,
+    )
+    dynamic_analyzer.reset_env()
+    
+    # initialize environment with input values
+    for arg_name, arg_type in inputs.items():
+        vals = log_analyzer.get_values_by_type(arg_type)
+        vals = list({v:v for v in vals}.keys())
+        if not vals:
+            # only two cases here
+            if arg_type == "/v1/prices:unit_amount:POST":
+                vals = [random.randint(1,10)]
+            else:
+                x = xeger.Xeger()
+                vals = [x.xeger("^[a-z0-9]{10,}$")]
+                
+        arg_val = random.choice(vals)
+        dynamic_analyzer.push_var(arg_name, arg_val)
+
+    # execute the program with collected traces
+    return program.execute(dynamic_analyzer)
+
+def run_filter(
+    log_analyzer, entries, skip_fields, re_bias_type, 
+    inputs, program, multiple, repeat=5):
     print(program)
 
     results = []
 
-    # try n times
-    for _ in range(repeat):
-        # initialize environment with input values
-        dynamic_analyzer.reset_env()
-        for arg_name, arg_type in inputs.items():
-            vals = log_analyzer.get_values_by_type(arg_type)
-            vals = list({v:v for v in vals}.keys())
-            if not vals:
-                # only two cases here
-                if arg_type == "/v1/prices:unit_amount:POST":
-                    vals = [random.randint(1,10)]
-                else:
-                    x = xeger.Xeger()
-                    vals = [x.xeger("^[a-z0-9]{10,}$")]
-                    
-            arg_val = random.choice(vals)
-            dynamic_analyzer.push_var(arg_name, arg_val)
+    with pebble.ThreadPool() as pool:
+        # try n times
+        for _ in range(repeat):
+            future = pool.schedule(
+                retrospective_execute,
+                args=(log_analyzer, entries, skip_fields, re_bias_type, 
+                    inputs, program))
+            r, score = future.result()
+            print("****Program returns", r)
+            results.append(future)
 
-        # execute the program with collected traces
-        r, score = program.execute(dynamic_analyzer)
-        print("****Program returns", r)
-        results.append((r, score))
+    results = [future.result() for future in results]
 
     # decide multiplicity
     all_none = True
@@ -64,11 +80,6 @@ def run_filter(synthesizer, log_analyzer, dynamic_analyzer, inputs, program, mul
             scores.append(score)
 
     print("scores: ", scores)
-    # if all_singleton:
-    #     print("this program returns a singleton")
-    # else:
-    #     print("this program does not always return a singleton")
-    #     print(results)
 
     # check methods always fail
     if all_none:
@@ -87,16 +98,5 @@ def run_filter(synthesizer, log_analyzer, dynamic_analyzer, inputs, program, mul
     # penalty on all empty results
     if all_empty:
         score_avg = score_avg + 5.0
-
-    # check field matches
-    # log_analyzer.reset_context()
-    # var_to_trans = {}
-    # # pg = ProgramGraph()
-    # # program.to_program_graph(pg, var_to_trans)
-    # match, _ = program.check_fields(log_analyzer, var_to_trans)
-    # print(match)
-    # if not match:
-    #     print("this program contains fields not in the response")
-    #     score_avg = score_avg - 10.0
 
     return score_avg

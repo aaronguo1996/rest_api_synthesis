@@ -1,6 +1,7 @@
 import re
 
 from openapi import defs
+from openapi.utils import blacklist
 import consts
 
 def get_representative(group):
@@ -19,6 +20,7 @@ def get_representative(group):
 
         candidates = candidates.union(param.type.aliases)
 
+    candidates = [n for n in candidates if not blacklist(n)]
     if candidates:
         rep = min(candidates, key=lambda x: (len(x), x))
         return rep

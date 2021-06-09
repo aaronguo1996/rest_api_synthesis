@@ -34,8 +34,11 @@
         "block_perms": true,
         "solver_type": "petri net ILP",
         "solver_number": 4,
-        "solution_number": 5,
+        "solution_number": 100,
         "enable_prefilter": false
+    },
+    "execution": {
+        "bias_type": "none"
     },
     "endpoints": [
     ],
@@ -61,7 +64,10 @@
         "/v1/notes",
         "/v1/events",
         "/v1/search/radar/related_payments",
-        "/v1/accounts/{account}"
+        "/v1/accounts/{account}",
+        "/v1/balance_transactions",
+        "/v1/application_fees",
+        "/v1/disputes"
     ],
     "test_suites": []
 }

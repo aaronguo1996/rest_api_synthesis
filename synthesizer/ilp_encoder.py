@@ -62,7 +62,7 @@ class ILPetriEncoder:
         return res
 
     def get_length_of(self, path_len, inputs, outputs):
-        self.init(inputs)
+        self.init(inputs, outputs)
         while self._path_len < path_len:
             self.increment()
         self.set_final(outputs)
@@ -77,7 +77,9 @@ class ILPetriEncoder:
             self._model.setParam(GRB.Param.SolutionNumber, 0)
             start = time.time()
             self._model.optimize()
-            print("running solver | sols:", self._model.solCount, "| len:", self._path_len, "| solve time:", time.time() - start)
+            print("running solver | sols:", self._model.solCount, 
+                "| len:", self._path_len, 
+                "| solve time:", time.time() - start)
         # uncomment for batch/tiled blocking
         # elif self._soln_ix >= SOLS_PER_SOLVE:
         #     # run the solver
@@ -88,10 +90,14 @@ class ILPetriEncoder:
         #     self._model.optimize()
         #     print("post-block | sols:", self._model.solCount, "| len:", self._path_len, "| solve time:", time.time() - start)
 
-        # if we've found all available solns from prev run, give up :(
-        if self._soln_ix >= self._model.solCount:
+        if self._model.solCount == 0:
             self._soln_ix = None
             return None
+
+        # if we've explored all available solns, try another pool
+        if self._soln_ix >= self._model.solCount:
+            self._soln_ix = None
+            self.solve()
 
         # at this point, we know the solver has been run. if we can't find a
         if self._model.status == GRB.OPTIMAL:
@@ -99,7 +105,8 @@ class ILPetriEncoder:
             self._block.append(self._model.addConstr(
                 gp.quicksum(self._fires.sum(x, '*') for x in s) <= len(s) - 1, 
                 name='block'))
-            return s
+            transitions = [self._trans_names[t] for t in s]
+            return transitions
         else:
             # debug
             # self.computeIIS()
@@ -123,7 +130,7 @@ class ILPetriEncoder:
         for i in range(self._path_len):
             for t in range(len(self._trans_names)):
                 if self._fires[(t, i)].xn >= 0.0001:
-                    res.append(self._trans_names[t])
+                    res.append(t)
                     continue
         # print("get sol in:", time.time() - start)
         return res
@@ -153,7 +160,7 @@ class ILPetriEncoder:
                     break
 
             if no_required:
-                null_places.append(str(e.response.type))
+                null_places.append(str(e.response.type.ignore_array()))
                 self._reachables.add(trans)
 
         reachables = self._approx.approx_reachability(
@@ -165,6 +172,8 @@ class ILPetriEncoder:
             if trans.name not in self._reachables:
                 self._net.remove_transition(trans.name)
             else:
+                if "projection({'ok': defs_ok_true, 'profile': objs_user_profile}, profile)_" == trans.name:
+                    print("!!! Find the desired one!!!")
                 self._trans_names.append(trans.name)
 
         for place in self._net.place():
@@ -244,8 +253,8 @@ class ILPetriEncoder:
             for p, _ in outputs:
                 p_idx = self._place_names.index(p.name)
                 req_in, opt_in, _ = tokens.get(p.name, (0, 0, 0))
-                # output number is always 1 for each type
                 if len(outputs) > 1: # optional outputs
+                    print("!!!goes into this weird constraint")
                     tokens[p.name] = (req_in, opt_in, 1)
 
                     if re.search(r"filter\(.*, .*\)", t.name):
@@ -268,9 +277,9 @@ class ILPetriEncoder:
                             output_changes += self._tokens[(p_idx, ck + 1)] - \
                                 self._tokens[(p_idx, ck + 1)]
                 else: # required outputs
-                    if entry is None:
+                    if entry is None: # clone transitions
                         tokens[p.name] = (req_in - 2, opt_in, 0)
-                    else:
+                    else: # normal transitions
                         tokens[p.name] = (req_in - 1, opt_in, 0)
 
             if output_changes is not None:
@@ -312,8 +321,10 @@ class ILPetriEncoder:
             self._fires.sum('*', ck) == 1,
             name='one_fires[{ck}]')
 
-    def _add_transition(self, entry):
-        trans_name = make_entry_name(entry.endpoint, entry.method)
+    def add_transition(self, trans_name, entry):
+        # trans_name = make_entry_name(entry.endpoint, entry.method)
+        # if trans_name != make_entry_name(entry.endpoint, entry.method):
+        #     raise Exception("name mismatch", trans_name, make_entry_name(entry.endpoint, entry.method))
         # print(trans_name)
         self._entries[trans_name] = entry
         self._net.add_transition(Transition(trans_name))

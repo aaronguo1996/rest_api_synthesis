@@ -1,2 +1,18 @@
 [
+    {
+        "consumer": "location_id",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v2/locations",
+                "method": "get",
+                "path": "locations/[?]/id"
+            },
+            {
+                "endpoint": "/v2/locations",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    }
 ]

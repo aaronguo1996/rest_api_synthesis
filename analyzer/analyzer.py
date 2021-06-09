@@ -1,7 +1,7 @@
 import re
 import logging
 
-from analyzer.entry import ErrorResponse
+from analyzer.entry import ErrorResponse, Parameter
 from analyzer.utils import get_representative, same_type_name
 from openapi import defs
 from synthesizer.utils import make_entry_name
@@ -46,6 +46,8 @@ class DSU:
             return
 
         xr, yr = self.find(x), self.find(y)
+        self._values[xr].add(x.value)
+        self._values[yr].add(y.value)
 
         if self._sizes[xr] < self._sizes[yr]:
             self._parents[yr] = xr
@@ -163,8 +165,8 @@ class LogAnalyzer:
                 p.value = int(p.value)
             elif isinstance(p.type, types.PrimBool):
                 p.value = bool(p.value)
-            elif isinstance(p.type, types.PrimNum):
-                p.value = float(p.value)
+            # elif isinstance(p.type, types.PrimNum):
+            #     p.value = float(p.value)
 
         for param in params:
             flatten_params, values = param.flatten(path_to_defs, skip_fields)
@@ -190,7 +192,8 @@ class LogAnalyzer:
         for entry in entries:
             # do not add error responses to DSU
             if (isinstance(entry.response, ErrorResponse) or
-                entry.endpoint not in paths):
+                entry.endpoint not in paths or
+                entry.endpoint in blacklist):
                 continue
 
             self._analyze_params(
@@ -221,8 +224,9 @@ class LogAnalyzer:
         
         # integers and booleans for merge 
         # but add them as separate nodes, they are meaningless
-        if ((isinstance(param.value, int) and param.value > 2) or
-            isinstance(param.value, bool)):
+        if ((isinstance(param.value, int)) or
+            isinstance(param.value, bool) or
+            "balance_transaction.source" in str(param.type)):
             self.dsu.union(param, param)
             return
 
@@ -230,6 +234,11 @@ class LogAnalyzer:
             self.value_to_param[param.value] = param
 
         root = self.value_to_param[param.value]
+
+        v = param.value
+        # if isinstance(v, str) and ("re_" == v[:3] or "ch_" == v[:3]):            
+        #     print("Adding", param.value, param.func_name, param.path, param.type)
+        #     print(get_representative(self.dsu.get_group(root)))
 
         self.dsu.union(root, param)
 
@@ -258,7 +267,7 @@ class LogAnalyzer:
                 rep = group[0].arg_name
 
             # for debug
-            if rep == "plan.id":
+            if rep == "defs_channel":
                 group_params = []
                 for param in group:
                     if param.type is not None:
@@ -388,24 +397,47 @@ class LogAnalyzer:
 
     def get_values_by_type(self, typ):
         params = self.dsu._parents.keys()
-        values = []
+        values = set()
         for param in params:
             if param.type and param.type.name == typ.name:
-                group = self.dsu.get_group(param)
-                for p in group:
-                    if p.value is not None:
-                        values.append(p.value)
+                values = values.union(self.dsu.get_value_bank(param))
 
-        return values
+        return list(values)
 
     def find_same_type(self, param):
+        if isinstance(param.type, types.UnionType):
+            items = param.type.items
+        else:
+            items = [param.type]
+
+        # if str(param.type) == "invoice.charge, charge":
+        #     print("Trying to find type for parameter", param)
+
         params = self.dsu._parents.keys()
         for p in params:
-            if p == param or same_type_name(p, param):
+            has_same_name = False
+            for item in items:
+                tmp_param = Parameter(
+                    param.method,
+                    param.arg_name,
+                    param.func_name,
+                    param.path,
+                    param.is_required,
+                    param.array_level,
+                    item, param.value)
+                if same_type_name(p, tmp_param):
+                    has_same_name = True
+
+            if p == param or has_same_name:
+                # if str(param.type) == "invoice.charge, charge":
+                #     print("find parameter", p)
+
                 group = self.dsu.get_group(p)
                 rep = get_representative(group)
 
                 if rep is not None:
+                    # if str(param.type) == "invoice.charge, charge":
+                    #     print("Setting type", rep)
                     param.type.name = rep
 
                 break
