@@ -3,6 +3,7 @@ import itertools
 import pickle
 import time
 import os
+import shutil
 
 from program.generator import ProgramGenerator
 from program.program import ProgramGraph, all_topological_sorts
@@ -47,8 +48,11 @@ class Synthesizer:
             f.write(p.pretty(0))
             f.write("\n")
 
+    # make this operation all-or-nothing
     def _serialize_solutions(self, idx, progs):
         solution_path = os.path.join(self._exp_dir, f"solutions_{idx}.pkl")
+        bk_solution_path = os.path.join(self._exp_dir, f"solutions_{idx}_bk.pkl")
+
         if os.path.exists(solution_path):
             with open(solution_path, "rb") as f:
                 solutions = pickle.load(f)
@@ -56,8 +60,10 @@ class Synthesizer:
             solutions = []
 
         solutions += progs
-        with open(solution_path, "wb") as f:
+        with open(bk_solution_path, "wb") as f:
             pickle.dump(solutions, f)
+
+        shutil.copyfile(bk_solution_path, solution_path)
 
     def _expand_groups(self, result):
         groups = []

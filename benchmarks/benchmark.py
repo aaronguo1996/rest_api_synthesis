@@ -81,8 +81,12 @@ class Benchmark:
         for j in range(consts.DEFAULT_LENGTH_LIMIT + 1):
             sol_file = os.path.join(bm_dir, f"solutions_{j}.pkl")
             if os.path.exists(sol_file):
-                with open(sol_file, 'rb') as f:
-                    programs = pickle.load(f)
+                try:
+                    with open(sol_file, 'rb') as f:
+                        programs = pickle.load(f)
+                except Exception as e:
+                    print(j)
+                    raise Exception(e)
 
                 solutions = solutions.union(programs)
 
