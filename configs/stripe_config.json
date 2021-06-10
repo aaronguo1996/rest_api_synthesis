@@ -3,7 +3,7 @@
     "log_file": "data/logs/dashboard.stripe.com.20210514.har",
     "doc_file": "data/openapi/stripe_spec3_sdk_full.json",
     "enable_debug": true,
-    "debug_output": "debug.log",
+    "debug_output": "stripe_debug.log",
     "hostname": "https://dashboard.stripe.com",
     "path_to_definitions": "#/components/schemas",
     "analysis": {
@@ -25,7 +25,7 @@
         "annotation_path": "configs/stripe_annotation.json",
         "timeout_total": 600,
         "timeout_per_request": 60,
-        "iterations": 0,
+        "iterations": 1,
         "plot_every": 10,
         "max_opt_params": 2
     },
@@ -37,10 +37,8 @@
         "solution_number": 100,
         "enable_prefilter": false
     },
-    "execution": {
-        "bias_type": "none"
-    },
     "endpoints": [
+        "/v1/subscriptions"
     ],
     "ignore_field_names": [
         "text",

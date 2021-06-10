@@ -95,7 +95,7 @@ class Constructor:
                 )
                 proj_in = self._analyzer.find_same_type(proj_in)
                 proj_out = self._analyzer.find_same_type(proj_out)
-                entry = TraceEntry(endpoint, "", [proj_in], proj_out)
+                entry = TraceEntry(endpoint, "", None, [proj_in], proj_out)
                 result_key = make_entry_name(endpoint, "")
                 results[result_key] = entry
 
@@ -222,7 +222,7 @@ class Constructor:
                     if parts is None:
                         filter_out = self._analyzer.find_same_type(filter_out)
                         
-                    entry = TraceEntry(endpoint, "", filter_in, filter_out)
+                    entry = TraceEntry(endpoint, "", None, filter_in, filter_out)
                     result_key = make_entry_name(endpoint, "")
                     results[result_key] = entry
         elif obj_name != field_name:
@@ -247,7 +247,7 @@ class Constructor:
                 for fin in filter_in]
             filter_out = self._analyzer.find_same_type(filter_out)
                 
-            entry = TraceEntry(endpoint, "", filter_in, filter_out)
+            entry = TraceEntry(endpoint, "", None, filter_in, filter_out)
             result_key = make_entry_name(endpoint, "")
             results[result_key] = entry
             

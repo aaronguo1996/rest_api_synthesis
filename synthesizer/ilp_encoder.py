@@ -172,8 +172,6 @@ class ILPetriEncoder:
             if trans.name not in self._reachables:
                 self._net.remove_transition(trans.name)
             else:
-                if "projection({'ok': defs_ok_true, 'profile': objs_user_profile}, profile)_" == trans.name:
-                    print("!!! Find the desired one!!!")
                 self._trans_names.append(trans.name)
 
         for place in self._net.place():
@@ -254,7 +252,6 @@ class ILPetriEncoder:
                 p_idx = self._place_names.index(p.name)
                 req_in, opt_in, _ = tokens.get(p.name, (0, 0, 0))
                 if len(outputs) > 1: # optional outputs
-                    print("!!!goes into this weird constraint")
                     tokens[p.name] = (req_in, opt_in, 1)
 
                     if re.search(r"filter\(.*, .*\)", t.name):

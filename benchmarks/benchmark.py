@@ -73,17 +73,18 @@ class Benchmark:
             parallel.spawn_encoders(
                 synthesizer,
                 self.inputs, [self.output],
-                configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
+                # configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
+                1
             )
-        else:
-            solutions = set()
-            for j in range(consts.DEFAULT_LENGTH_LIMIT + 1):
-                sol_file = os.path.join(bm_dir, f"solutions_{j}.pkl")
-                if os.path.exists(sol_file):
-                    with open(sol_file, 'rb') as f:
-                        programs = pickle.load(f)
+            
+        solutions = set()
+        for j in range(consts.DEFAULT_LENGTH_LIMIT + 1):
+            sol_file = os.path.join(bm_dir, f"solutions_{j}.pkl")
+            if os.path.exists(sol_file):
+                with open(sol_file, 'rb') as f:
+                    programs = pickle.load(f)
 
-                    solutions = solutions.union(programs)
+                solutions = solutions.union(programs)
 
         num_place, num_trans = get_petri_net_data(bm_dir)
 

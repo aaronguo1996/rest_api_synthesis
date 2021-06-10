@@ -177,7 +177,7 @@ class LogParser:
 
         response = self._resolve_response(entry, method, endpoint, entry_def)
 
-        return TraceEntry(endpoint, method, parameters, response)
+        return TraceEntry(endpoint, method, None, parameters, response)
 
     def _resolve_entries(self, entries, skips, skip_fields):
         '''

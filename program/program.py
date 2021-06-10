@@ -1101,7 +1101,7 @@ class Program:
 def insert_lists(counter, var, arg_typ):
     binds = []
     var_typ = var.type
-
+    
     # if two types match with each other
     if (var_typ is not None and
         arg_typ is not None and
@@ -1109,19 +1109,19 @@ def insert_lists(counter, var, arg_typ):
         # print("No binding, real var type", var.type, ", expect arg type", arg_typ)
         return binds, var.var
 
+    # print("[insert_lists] lifting", var_typ, "into type", arg_typ)
     if isinstance(arg_typ, types.ArrayType):
         let_x = counter.get("x", 0)
         counter["x"] += 1
         bind_typ = types.ArrayType(None, var_typ)
         bind = AssignExpr(f"x{let_x}", ListExpr(var, bind_typ), False)
         subvar = VarExpr(f"x{let_x}", bind_typ)
-        inner_binds, x = insert_binds(counter, subvar, arg_typ)
+        inner_binds, x = insert_lists(counter, subvar, arg_typ)
         return ([bind] + inner_binds), x
     else:
         raise Exception("cannot lift a non-array type", var_typ, type(var_typ), arg_typ, type(arg_typ))
 
 def insert_binds(counter, var, arg_typ):
-    # print("lifting", var, "into type", arg_typ)
     var_typ = var.type
     
     # if two types match with each other
@@ -1131,6 +1131,7 @@ def insert_binds(counter, var, arg_typ):
         # print("No binding, real var type", var.type, ", expect arg type", arg_typ)
         return [], var.var
 
+    # print("[insert_binds] lifting", var_typ, "into type", arg_typ)
     if isinstance(var_typ, types.ArrayType):
         # print("Binding", var, "with type", var.type)
         let_x = counter.get("x", 0)

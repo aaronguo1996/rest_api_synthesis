@@ -79,7 +79,7 @@ def create_entries(doc, config, ascription):
             for entry in typed_entries:
                 # store results
                 entry_name = make_entry_name(entry.endpoint, entry.method)
-                if endpoint == "/v2/invoices":
+                if endpoint == "/v2/orders/batch-retrieve":
                     print(entry_name)
                     print("*******", [(p.arg_name, p.path, p.is_required, p.type) for p in entry.parameters])
                     p = entry.response
@@ -263,12 +263,15 @@ def main():
                     # "customer": types.PrimString("customer.id"),
                     # "price_id": types.PrimString("plan.id")
                     # "product_ids": types.ArrayType(None, types.PrimString("product.id")),
-                    "user_id": types.PrimString("defs_user_id")
+                    # "user_id": types.PrimString("defs_user_id")
+                    "location_id": types.PrimString("Location.id"),
+                    "transaction_id": types.PrimString("Order.id"),
+                    "fulfillments": types.ArrayType(None, types.SchemaObject("OrderFulfillment")),
                 },
                 [
                     # types.SchemaObject("objs_message"),
                     # types.ArrayType(None, types.SchemaObject("bank_account.last4")),
-                    types.ArrayType(None, types.SchemaObject("objs_message"))
+                    types.ArrayType(None, types.PrimString("Order"))
                 ],
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOL_NUM]
             )

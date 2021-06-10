@@ -14,5 +14,53 @@
                 "path": "id"
             }
         ]
+    },
+    {
+        "consumer": "location_ids",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v2/locations",
+                "method": "get",
+                "path": "locations/[?]/id"
+            },
+            {
+                "endpoint": "/v2/locations",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "order_id",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v2/orders/search",
+                "method": "post",
+                "path": "orders/[?]/id"
+            },
+            {
+                "endpoint": "/v2/orders/search",
+                "method": "post",
+                "path": "order_entries/[?]/order_id"
+            }
+        ]
+    },
+    {
+        "consumer": "order_ids",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v2/orders/search",
+                "method": "post",
+                "path": "orders/[?]/id"
+            },
+            {
+                "endpoint": "/v2/orders/search",
+                "method": "post",
+                "path": "order_entries/[?]/order_id"
+            }
+        ]
     }
 ]

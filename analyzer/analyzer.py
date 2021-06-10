@@ -193,7 +193,8 @@ class LogAnalyzer:
             # do not add error responses to DSU
             if (isinstance(entry.response, ErrorResponse) or
                 entry.endpoint not in paths or
-                entry.endpoint in blacklist):
+                entry.endpoint in blacklist or
+                not entry.response.value):
                 continue
 
             self._analyze_params(
@@ -235,7 +236,7 @@ class LogAnalyzer:
 
         root = self.value_to_param[param.value]
 
-        v = param.value
+        # v = param.value
         # if isinstance(v, str) and ("re_" == v[:3] or "ch_" == v[:3]):            
         #     print("Adding", param.value, param.func_name, param.path, param.type)
         #     print(get_representative(self.dsu.get_group(root)))

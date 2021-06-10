@@ -265,8 +265,9 @@ class Synthesizer:
             # "filter(objs_conversation, objs_conversation.name)_",
             # 'filter(objs_conversation, objs_conversation.latest.bot_profile.name)_',
             # "projection({'ok': defs_ok_true, 'profile': objs_user_profile}, profile)_",
-            "/conversations.history_GET",
-            "projection(objs_conversation, last_read)_",
+            # "/conversations.history_GET",
+            # "projection(objs_conversation, last_read)_",
+            # "/users.conversations_GET",
 
             # "projection(ListInvoicesResponse, invoices)_",
             # "projection(Invoice, id)_",
@@ -275,6 +276,15 @@ class Synthesizer:
             # "projection(Invoice, location_id)_",
             # "projection(Transaction, order_id)_",
             # "/v2/locations/{location_id}/transactions_GET",
+            # "/v2/payments_GET",
+            # "projection(ListPaymentsResponse, payments)_",
+            # "projection(Payment, note)_",
+            # "/v2/orders/{order_id}_PUT",
+            # "/v2/orders/batch-retrieve_POST",
+            # "projection(BatchRetrieveOrdersResponse, orders)_",
+            # "projection(Order, line_items)_",
+            # "projection(OrderLineItem, name)_",
+            # "projection(Order, fulfillments)_",
         ]
 
         for name in lst:

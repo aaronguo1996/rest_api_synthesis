@@ -417,12 +417,12 @@ square_benchmarks = [
         "List discounts in catalog",
         {
         },
-        types.ArrayType(None, types.PrimString("CatalogDiscount.name")),
+        types.ArrayType(None, types.PrimString("CatalogDiscount")),
         [[
             "\\ -> {",
             "let x0 = /v2/catalog/batch-retrieve_POST()",
             "x1 <- x0",
-            "return x1.discount_type",
+            "return x1.discount_data",
             "}"
         ]],
     ),
@@ -475,15 +475,15 @@ square_benchmarks = [
         "Add order details to order",
         {
             "location_id": types.PrimString("Location.id"),
-            "order_ids": types.PrimString("OrderLineItem.uid"),
-            "updates": types.SchemaObject("OrderLineItem"),
+            "order_ids": types.ArrayType(None, types.PrimString("Order.id")),
+            "updates": types.SchemaObject("OrderFulfillment"),
         },
-        types.ArrayType(None, types.SchemaObject("OrderLineItem")),
+        types.ArrayType(None, types.SchemaObject("Order")),
         [[
-            "\\location_id, order_id, updates -> {",
-                "let x0 = /v2/orders/batch-retrieve_POST(location_id = location_id, order_ids: order_id)",
+            "\\location_id, order_ids, updates -> {",
+                "let x0 = /v2/orders/batch-retrieve_POST(location_id=location_id, order_ids=order_ids)",
                 "x1 <- x0",
-                "let x2 = /v2/orders_POST(order_id = x1, order = update)",
+                "let x2 = /v2/orders_POST(order_id=x1, order[fulfillments]=updates)",
                 "return x2",
             "}"
         ]],
@@ -493,7 +493,7 @@ square_benchmarks = [
         "Get payment notes",
         {
         },
-        types.ArrayType(None, types.PrimString("Tender.note")),
+        types.ArrayType(None, types.PrimString("Payment.note")),
         [[
             "\\ -> {",
             "let x0 = /v2/payments_GET()",
@@ -522,9 +522,9 @@ square_benchmarks = [
         "Get product details (names of orders) from transaction id",
         {
             "location_id": types.PrimString("Location.id"),
-            "transaction_id": types.PrimString("Transaction.id"),
+            "transaction_id": types.PrimString("Order.id"),
         },
-        types.ArrayType(None, types.PrimString("DeviceCode.name")),
+        types.ArrayType(None, types.PrimString("Invoice.title")),
         [[
             "\\location_id transaction_id -> {",
             "let x0 = /v2/orders/batch-retrieve_POST(locationId = location_id, orderIds = [transaction_id])",
@@ -573,7 +573,7 @@ def main():
         [
             slack_suite,
             stripe_suite,
-            # square_suite,
+            square_suite,
         ],
         config)
     b.run(

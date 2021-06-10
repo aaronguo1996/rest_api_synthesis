@@ -118,6 +118,13 @@ class SchemaObject(BaseType):
             raise Exception("Unknown object definition", self.name)
 
         return schema.get_fields()
+
+    def get_requires(self):
+        schema = BaseType.object_lib.get(self.name)
+        if schema is None:
+            raise Exception("Unknown object definition", self.name)
+
+        return schema.get_requires()
     
 class ObjectType(BaseType):
     """Ad-hoc objects
@@ -187,13 +194,16 @@ class ObjectType(BaseType):
     def get_fields(self):
         return self.object_fields
 
+    def get_requires(self):
+        return self.required_fields
+
 class ArrayType(BaseType):
     def __init__(self, name, item_typ, parent=None):
         super().__init__(name, parent)
         self.item = item_typ
 
     def __str__(self):
-        return f"[{self.item.name}]"
+        return f"[{self.item}]"
 
     @staticmethod
     def is_array_type(expected_type):

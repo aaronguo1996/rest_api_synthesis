@@ -5,6 +5,7 @@ import random
 from openapi import defs
 from schemas import types
 from analyzer.utils import ignore_arg_name
+import consts
 
 class ErrorResponse:
     def __init__(self, msg):
@@ -91,7 +92,7 @@ class Parameter:
                     self.path + [defs.INDEX_ANY], self.is_required,
                     array_level, item_type, self.value[i])
             except:
-                raise Exception(self.method, self.func_name, self.path, self.is_required, self.value)
+                raise Exception(self.method, self.func_name, self.path, self.is_required, self.value, self.type)
 
             it_results, it_values = p.flatten(path_to_defs, skip_fields)
             results += it_results
@@ -125,11 +126,10 @@ class Parameter:
                 self.arg_name is None) or
                 isinstance(self.type, types.ObjectType)):
                 fields = self.type.get_fields()
+                required_fields = self.type.get_requires()
                 for field, field_typ in fields.items():
                     value = None if self.value is None else self.value[field]
-                    is_required = (
-                        self.is_required and 
-                        field in self.type.required_fields)
+                    is_required = self.is_required and field in required_fields
                     p = Parameter(
                         self.method, field, self.func_name,
                         self.path + [field], is_required,
@@ -231,6 +231,7 @@ class Parameter:
                 proj_field = TraceEntry(
                     proj_name,
                     "",
+                    None,
                     [analyzer.set_type(self)],
                     analyzer.set_type(p)
                 )
@@ -300,16 +301,18 @@ class Parameter:
         type_def, is_required, array_level):
         # pass definition here and construct a type for it
         typ = types.construct_type(None, type_def)
+        path = [] if arg_name is None else [arg_name]
         return Parameter(
             method, arg_name, endpoint,
-            [arg_name], is_required, array_level, typ, None)
+            path, is_required, array_level, typ, None)
 
 class TraceEntry:
-    def __init__(self, endpoint, method, parameters, response):
+    def __init__(self, endpoint, method, content_type, parameters, response):
         self.endpoint = endpoint
         self.method = method
         self.parameters = parameters
         self.response = response
+        self.content_type = content_type
 
     def __str__(self):
         param_strs = map(str, self.parameters)
@@ -329,11 +332,12 @@ class TraceEntry:
             self.response == other.response)
 
     @staticmethod
-    def from_openapi_params(endpoint, method, entry_def):
+    def from_openapi_params(doc, endpoint, method, entry_def):
         entry_params = []
         
         # read parameters
         parameters = entry_def.get(defs.DOC_PARAMS, {})
+        content_type = defs.HEADER_FORM
         for p in parameters:
             name = p.get(defs.DOC_NAME)
             if name == defs.DOC_TOKEN:
@@ -352,16 +356,22 @@ class TraceEntry:
                 request_body = request_params \
                     .get(defs.DOC_CONTENT) \
                     .get(defs.HEADER_FORM)
+                content_type = defs.HEADER_FORM
                 if request_body is None:
                     request_body = request_params \
                         .get(defs.DOC_CONTENT) \
                         .get(defs.HEADER_JSON)
-                
+                    content_type = defs.HEADER_JSON
+
                 if request_body is not None:
                     schema = request_body.get(defs.DOC_SCHEMA)
+                    ref_properties = schema.get(defs.DOC_REF)
+                    if ref_properties is not None:
+                        typ_name = ref_properties[len(consts.REF_PREFIX):]
+                        schema = types.get_ref_type(doc, typ_name)
+
                     requires = schema.get(defs.DOC_REQUIRED, [])
                     properties = schema.get(defs.DOC_PROPERTIES)
-                    ref_properties = schema.get(defs.DOC_REF)
 
                     if properties is not None:
                         for name, typ_def in properties.items():
@@ -373,10 +383,6 @@ class TraceEntry:
                                 name in requires, None,
                             )
                             entry_params.append(param)
-                    elif ref_properties is not None:
-                        param = Parameter.from_openapi(
-                            endpoint, method, None, schema, True, None
-                        )
                     else:
                         raise Exception(
                             "Unhandled parameter case in", endpoint, method
@@ -386,14 +392,14 @@ class TraceEntry:
             print(endpoint, method)
             raise Exception
         
-        return entry_params
+        return entry_params, content_type
 
     @staticmethod
-    def from_openapi(endpoint, method, entry_def):
+    def from_openapi(doc, endpoint, method, entry_def):
         """read definition from openapi and generate several entries
         """
-        entry_params = TraceEntry.from_openapi_params(
-            endpoint, method, entry_def)
+        entry_params, content_type = TraceEntry.from_openapi_params(
+            doc, endpoint, method, entry_def)
 
         # read responses
         responses = entry_def.get(defs.DOC_RESPONSES)
@@ -417,7 +423,9 @@ class TraceEntry:
             response_typ, None
         )
 
-        return TraceEntry(endpoint, method, entry_params, entry_response)
+        return TraceEntry(
+            endpoint, method, content_type, 
+            entry_params, entry_response)
 
     def same_signature(self, other):
         if not isinstance(other, TraceEntry):
