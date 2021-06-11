@@ -55,7 +55,7 @@ class Benchmark:
         self.description = desc
         self.inputs = inputs
         self.output = output
-        self.solutions = ["\n".join(sol) for sol in solutions]
+        self.solutions = solutions
         self.latex_entry = BenchmarkResult(name, desc)
 
     def run(self, exp_dir, entries, configuration, runtime_config):
@@ -73,8 +73,7 @@ class Benchmark:
             parallel.spawn_encoders(
                 synthesizer,
                 self.inputs, [self.output],
-                # configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
-                1
+                configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
             )
             
         solutions = set()
@@ -100,12 +99,10 @@ class Benchmark:
         results = []
         with pebble.ThreadPool() as pool:
             for i, p in enumerate(solutions):
-                print(f"{i}/{len(solutions)}", flush=True)
+                # print(f"{i}/{len(solutions)}", flush=True)
                 is_target_sol = False
                 for tgt_sol in self.solutions:
-                    eq_target = utils.compare_program_strings(
-                        tgt_sol,
-                        utils.get_solution_strs([p])[0])
+                    eq_target = tgt_sol == p
                     is_target_sol = is_target_sol or eq_target
 
                 if is_target_sol or not runtime_config.filter_sol_only:
@@ -123,25 +120,23 @@ class Benchmark:
 
         results = [(p, future.result()) for p, future in results]
         res = sorted(results, key=lambda x: x[-1])
-        for r in res:
-            print(r[1], utils.get_solution_strs([r[0]])[0])
+        # for r in res:
+        #     print(r[1], r[0])
 
-        for rank, res_sol in enumerate(res):
+        for rank, (res_sol, _) in enumerate(res):
             for tgt_sol in self.solutions:
-                if utils.compare_program_strings(
-                    tgt_sol, 
-                    utils.get_solution_strs([res_sol[0]])[0]):
-                    return rank + 1, res_sol[0]
+                if tgt_sol == res_sol:
+                    return rank + 1, res_sol
+
         return None, None
 
     def get_rank(
         self, entries, configuration, runtime_config, 
         log_analyzer, solutions):
-        res_no_re = utils.get_solution_strs(solutions)
         found = False
-        for rank, res_sol in enumerate(res_no_re):
+        for rank, res_sol in enumerate(solutions):
             for tgt_sol in self.solutions:
-                if utils.compare_program_strings(tgt_sol, res_sol):
+                if tgt_sol == res_sol:
                     found = True
                     self.latex_entry.rank_no_re = rank
                     break
@@ -173,6 +168,8 @@ class Benchmark:
                 list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
             self.latex_entry.endpoint_calls = len(
                 list(filter(lambda x: isinstance(x, AppExpr), ns)))
+
+        return self.latex_entry
 
 class BenchmarkSuite:
     def __init__(self, config_file, api, benchmarks):
@@ -246,7 +243,7 @@ class BenchmarkSuite:
             self.api, avg_num_args, obj_size, 
             ep_num, ep_covered, annotations)
 
-    def run(self, runtime_config, names):
+    def run(self, runtime_config, names, cached_results=False):
         latex_entries = []
         places = None
         transitions = None
@@ -254,29 +251,47 @@ class BenchmarkSuite:
             self._entries,
             self._configuration.get(consts.KEY_SKIP_FIELDS)
         )
-        for benchmark in self.benchmarks:
-            if names is not None and benchmark.name not in names:
-                continue
 
-            print("Running benchmark", benchmark.name)
-            places, transitions, solutions = benchmark.run(
-                self._exp_dir, 
-                self._typed_entries, 
-                self._configuration,
-                runtime_config
-            )
+        cache_path = os.path.join(self._exp_dir, "bench_results.pkl")
+        if cached_results:
+            with open(cache_path, "rb") as f:
+                d = pickle.load(f)
 
-            if not runtime_config.synthesis_only:
-                ranks, sol_prog = benchmark.get_rank(
-                    entries,
+            places = d["places"]
+            transitions = d["transitions"]
+            latex_entries = d["results"]
+        else:
+            for benchmark in self.benchmarks:
+                if names is not None and benchmark.name not in names:
+                    continue
+
+                print("Running benchmark", benchmark.name)
+                places, transitions, solutions = benchmark.run(
+                    self._exp_dir, 
+                    self._typed_entries, 
                     self._configuration,
-                    runtime_config,
-                    self._log_analyzer,
-                    solutions,
+                    runtime_config
                 )
 
-                latex_entry = benchmark.to_latex_entry(ranks, sol_prog)
-                latex_entries.append(latex_entry)
+                if not runtime_config.synthesis_only:
+                    ranks, sol_prog = benchmark.get_rank(
+                        entries,
+                        self._configuration,
+                        runtime_config,
+                        self._log_analyzer,
+                        solutions,
+                    )
+
+                    latex_entry = benchmark.to_latex_entry(ranks, sol_prog)
+                    latex_entries.append(latex_entry)
+
+
+            with open(cache_path, "wb") as f:
+                pickle.dump({
+                    "places": places,
+                    "transitions": transitions,
+                    "results": latex_entries,
+                }, f)
 
         return latex_entries, places, transitions
 
@@ -290,26 +305,12 @@ class Bencher:
         trans_counts = []
         benchmark_results = []
         
-        if cached_results:
-            with open("data/bench_results.pkl", "rb") as f:
-                d = pickle.load(f)
-                place_counts = d["places"]
-                trans_counts = d["transitions"]
-                benchmark_results = d["results"]
-        else:
-            for suite in self._suites:
-                benchmark_entries, places, transitions = suite.run(
-                    self._config, names)
-                place_counts.append(places)
-                trans_counts.append(transitions)
-                benchmark_results.append(benchmark_entries)
-
-            with open("data/bench_results.pkl", "wb") as f:
-                pickle.dump({
-                    "places": place_counts,
-                    "transitions": trans_counts,
-                    "results": benchmark_results,
-                }, f)
+        for suite in self._suites:
+            benchmark_entries, places, transitions = suite.run(
+                self._config, names, cached_results)
+            place_counts.append(places)
+            trans_counts.append(transitions)
+            benchmark_results.append(benchmark_entries)
 
         if print_api:
             self.print_api_info(place_counts, trans_counts, output)
@@ -356,17 +357,17 @@ class Bencher:
     def print_benchmark_results(self, results, output=None):
         res = ("% auto-generated: ./bench.py, table 2\n"
                "\\resizebox{\\textwidth}{!}{"
-               "\\begin{tabular}{llp{5cm}rrrrr}"
+               "\\begin{tabular}{l|lp{7.5cm}|rrr|rr}"
                "\\toprule"
-               "& \\multicolumn{2}{c}{Benchmark info} & \\multicolumn{3}{c}{Solution stats} & \\multicolumn{2}{c}{Solution rank} \\\\"
+               "& \\multicolumn{2}{c|}{Benchmark info} & \\multicolumn{3}{c|}{Solution stats} & \\multicolumn{2}{c}{Solution rank} \\\\"
                "\\cmidrule(lr){2-3} \\cmidrule(lr){4-6} \\cmidrule(lr){7-8}"
-               "API & Name & Description & AST Size & \\# endpoint calls & \\# projections & Without RE & With RE \\\\"
+               "API & Name & Description & Size & $n_{ep}$ & $n_{proj}$ & w/o RE & w/ RE \\\\"
                "\\midrule")
         res += "\n"
 
         for i, suite in enumerate(self._suites):
             bench_results = results[i]
-            res += suite.api.capitalize() + " "
+            res += f"\\multirow{{{len(suite.benchmarks)}}}{{*}}{{{suite.api.capitalize()}}} "
             for r in bench_results:
                 if r is None:
                     continue
@@ -374,11 +375,11 @@ class Bencher:
                 res += (
                     f"& {r.name} "
                     f"& {r.desc} "
-                    f"& {r.ast_size} "
-                    f"& {r.endpoint_calls} "
-                    f"& {r.projects} "
-                    f"& {r.rank_no_re} "
-                    f"& {r.mean_rank} ")
+                    f"& {utils.pretty_none(r.ast_size)} "
+                    f"& {utils.pretty_none(r.endpoint_calls)} "
+                    f"& {utils.pretty_none(r.projects)} "
+                    f"& {utils.pretty_none(r.rank_no_re)} "
+                    f"& {utils.pretty_none(r.mean_rank)} ")
                 res += r" \\"
                 res += "\n"
             if i < len(self._suites) - 1:

@@ -63,7 +63,7 @@ class Synthesizer:
         with open(bk_solution_path, "wb") as f:
             pickle.dump(solutions, f)
 
-        shutil.copyfile(bk_solution_path, solution_path)
+        os.rename(bk_solution_path, solution_path)
 
     def _expand_groups(self, result):
         groups = []
@@ -242,6 +242,9 @@ class Synthesizer:
             # "projection(price, id)_",
             # "/v1/products_POST",
             # "/v1/prices_POST",
+            # "projection(subscription, items)_",
+            # "projection(subscription_item, price)_",
+            # "/v1/customers/{customer}/sources/{id}_DELETE"
             # "/v1/invoiceitems_POST",
             # 'projection(product, active)_',
             # "/v1/invoices_GET",
@@ -255,6 +258,7 @@ class Synthesizer:
             # "/v1/invoices/{invoice}_GET",
             # "projection(card, last4)_",
             # "projection(payment_source, last4)_",
+            # "projection(payment_method, type)_",
             # "/v1/invoices/{invoice}/send_POST"
             # "/v1/customers/{customer}/sources_GET",
             # 'filter(status_transitions, status_transitions.returned)_',

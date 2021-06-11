@@ -264,14 +264,16 @@ def main():
                     # "price_id": types.PrimString("plan.id")
                     # "product_ids": types.ArrayType(None, types.PrimString("product.id")),
                     # "user_id": types.PrimString("defs_user_id")
-                    "location_id": types.PrimString("Location.id"),
-                    "transaction_id": types.PrimString("Order.id"),
-                    "fulfillments": types.ArrayType(None, types.SchemaObject("OrderFulfillment")),
+                    # "location_id": types.PrimString("Location.id"),
+                    # "transaction_id": types.PrimString("Order.id"),
+                    # "fulfillments": types.ArrayType(None, types.SchemaObject("OrderFulfillment")),
+                    "subscription": types.PrimString("subscription.id"),
                 },
                 [
                     # types.SchemaObject("objs_message"),
                     # types.ArrayType(None, types.SchemaObject("bank_account.last4")),
-                    types.ArrayType(None, types.PrimString("Order"))
+                    # types.ArrayType(None, types.PrimString("Order"))
+                    types.SchemaObject("refund")
                 ],
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOL_NUM]
             )

@@ -21,7 +21,7 @@ def retrospective_execute(
         vals = list({v:v for v in vals}.keys())
         if not vals:
             # only two cases here
-            if arg_type == "/v1/prices:unit_amount:POST":
+            if arg_type == "unit_amount_/v1/prices_POST_unit_amount":
                 vals = [random.randint(1,10)]
             else:
                 x = xeger.Xeger()

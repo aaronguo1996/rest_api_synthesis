@@ -15,6 +15,8 @@ import argparse
 from benchmarks.benchmark import BenchConfig, Benchmark, BenchmarkSuite, Bencher
 from schemas import types
 from analyzer import dynamic
+from program.program import (Program, ProjectionExpr, FilterExpr, 
+                            AssignExpr, VarExpr, AppExpr)
 
 bias_type_args = {
     "none": dynamic.BiasType.NONE,
@@ -63,17 +65,20 @@ slack_benchmarks = [
             "channel_name": types.PrimString("objs_conversation.name")
         },
         types.ArrayType(None, types.PrimString("objs_user_profile.email")),
-        [[
-            "\\channel_name -> {",
-            "let x0 = /conversations.list_GET()",
-            "x1 <- x0.channels",
-            "if x1.name = channel_name",
-            "let x2 = /conversations.members_GET(channel=x1.id)",
-            "x3 <- x2.members",
-            "let x4 = /users.profile.get_GET(user=x3)",
-            "return x4.profile.email",
-            "}"
-        ]],
+        [
+            Program(
+                ["channel_name"],
+                [
+                    AssignExpr("x0", AppExpr("/conversations.list_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
+                    FilterExpr(VarExpr("x1"), "name", VarExpr("channel_name"), False),
+                    AssignExpr("x2", AppExpr("/conversations.members_GET", [("channel", ProjectionExpr(VarExpr("x1"), "id"))]), False),
+                    AssignExpr("x3", ProjectionExpr(VarExpr("x2"), "members"), True),
+                    AssignExpr("x4", AppExpr("/users.profile.get_GET", [("user", VarExpr("x3"))]), False),
+                    ProjectionExpr(ProjectionExpr(VarExpr("x4"), "profile"), "email"),
+                ]
+            ),
+        ],
     ),
     Benchmark(
         "1.2",
@@ -82,14 +87,17 @@ slack_benchmarks = [
             "email": types.PrimString("objs_user_profile.email")
         },
         types.SchemaObject("objs_message"),
-        [[
-            "\\email -> {",
-            "let x0 = /users.lookupByEmail_GET(email=email)",
-            "let x1 = /conversations.open_POST(users=x0.user.id)",
-            "let x2 = /chat.postMessage_POST(channel=x1.channel.id)",
-            "return x2.message",
-            "}"
-        ]],
+        [
+            Program(
+                ["email"],
+                [
+                    AssignExpr("x0", AppExpr("/users.lookupByEmail_GET", [("email", VarExpr("email"))]), False),
+                    AssignExpr("x1", AppExpr("/conversations.open_POST", [("users", ProjectionExpr(ProjectionExpr(VarExpr("x0"), "user"), "id"))]), False),
+                    AssignExpr("x2", AppExpr("/chat.postMessage_POST", [("channel", ProjectionExpr(ProjectionExpr(VarExpr("x1"), "channel"), "id"))]), False),
+                    ProjectionExpr(VarExpr("x2"), "message"),
+                ]
+            ),
+        ],
     ),
     Benchmark(
         "1.3",
@@ -98,16 +106,18 @@ slack_benchmarks = [
             "user_id": types.PrimString("defs_user_id")
         },
         types.ArrayType(None, types.ArrayType(None, types.SchemaObject("objs_message"))),
-        [[
-            "\\user_id -> {",
-            "let x0 = /users.conversations_GET(user=user_id)",
-            "x1 <- x0.channels",
-            "let x2 = /conversations.info_GET(channel=x1.id)",
-            "let x3 = x2.last_read",
-            "let x5 = /conversations.history_GET(channel=x2.id, oldest=x3)",
-            "return x5",
-            "}"
-        ]],
+        [
+            Program(
+                ["user_id"],
+                [
+                    AssignExpr("x0", AppExpr("/users.conversations_GET", [("user", VarExpr("user_id"))]), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
+                    AssignExpr("x2", AppExpr("/conversations.info_GET", [("channel", ProjectionExpr(VarExpr("x1"), "id"))]), False),
+                    AssignExpr("x3", AppExpr("/conversations.history_GET", [("channel", ProjectionExpr(ProjectionExpr(VarExpr("x2"), "channel"), "id")), ("oldest", ProjectionExpr(ProjectionExpr(VarExpr("x2"), "channel"), "last_read"))]), False),
+                    ProjectionExpr(VarExpr("x3"), "messages")
+                ]
+            ),
+        ],
     ),
 ]
 
@@ -127,18 +137,21 @@ stripe_benchmarks = [
         "2.1",
         "Make a subscription to a product for a customer",
         {
-            "customer": types.PrimString("customer.id"),
-            "product": types.PrimString("product.id"),
+            "customer_id": types.PrimString("customer.id"),
+            "product_id": types.PrimString("product.id"),
         },
         types.SchemaObject("subscription"),
-        [[
-            "\\customer_id product_id -> {",
-            "let x1 = /v1/prices_GET(product=product_id)",
-            "x2 <- x1.data",
-            "let x3 = /v1/subscriptions_POST(customer=customer_id, items[0].price=x2.id)",
-            "return x3",
-            "}"
-        ]]
+        [
+            Program(
+                ["customer_id", "product_id"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/prices_GET", [("product", VarExpr("product_id"))]), False),
+                    AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "data"), True),
+                    AssignExpr("x3", AppExpr("/v1/subscriptions_POST", [("customer", VarExpr("customer_id")), ("items[0][price]", ProjectionExpr(VarExpr("x2"), "id"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ]
     ),
     Benchmark(
         "2.2",
@@ -147,34 +160,41 @@ stripe_benchmarks = [
             "customer_id": types.PrimString("customer.id"),
             "cur": types.PrimString("fee.currency"),
             "amt": types.PrimInt("price.unit_amount"),
+            "pm_type": types.PrimString("source.type"),
         },
         types.SchemaObject("payment_intent"),
-        [[
-            "\\customer_id cur amt -> {",
-            "let x1 = /v1/payment_methods_GET(customer=customer_id, type=card)",
-            "let x2 = /v1/payment_intents_POST(customer=customer_id, payment_method=x1.id, currency=cur, amount=amt)",
-            "let x3 = /v1/payment_intents/{pi}/confirm_POST(pi=x2.id, setup_future_usage=off_session)",
-            "return x3",
-            "}"
-        ]]
+        [
+            Program(
+                ["customer_id", "cur", "amt", "pm_type"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/payment_methods_GET", [("customer", VarExpr("customer_id")), ("type", VarExpr("pm_type"))]), False),
+                    AssignExpr("x2", AppExpr("/v1/payment_intents_POST", [("customer", VarExpr("customer_id")), ("payment_method", ProjectionExpr(VarExpr("x1"), "id")), ("currency", VarExpr("cur")), ("amount", VarExpr("amt"))]), False),
+                    AssignExpr("x3", AppExpr("/v1/payment_intents/{intent}/confirm", [("intent", ProjectionExpr(VarExpr("x2"), "id"))]), False),
+                    VarExpr("x3")
+                ]
+            ),
+        ]
     ),
     Benchmark(
         "2.3",
         "Subscribe to multiple items",
         {
             "customer_id": types.PrimString("customer.id"),
-            "product_id": types.ArrayType(None, types.PrimString("product.id")),
+            "product_ids": types.ArrayType(None, types.PrimString("product.id")),
         },
         types.ArrayType(None, types.SchemaObject("subscription")),
-        [[
-            "\\customer_id product_ids -> {",
-            "x0 <- product_ids"
-            "let x1 = /v1/prices_GET(product=x0)",
-            "x2 <- x1.data",
-            "let x3 = /v1/subscriptions_POST(customer=customer_id, items[0].price=x2.id)",
-            "return x3",
-            "}"
-        ]]
+        [
+            Program(
+                ["customer_id", "product_ids"],
+                [
+                    AssignExpr("x0", VarExpr("product_ids"), True),
+                    AssignExpr("x1", AppExpr("/v1/prices_GET", [("product", VarExpr("x0"))]), False),
+                    AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "data"), True),
+                    AssignExpr("x3", AppExpr("/v1/subscriptions_POST", [("customer", VarExpr("customer_id")), ("items[0][price]", ProjectionExpr(VarExpr("x2"), "id"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ]
     ),
     Benchmark(
         "2.4",
@@ -183,17 +203,20 @@ stripe_benchmarks = [
             "product_name": types.PrimString("product.name"),
             "customer_id": types.PrimString("customer.id"),
             "currency": types.PrimString("fee.currency"),
-            "unit_amount": types.PrimInt("price.unit_amount"),
+            "unit_amount": types.PrimInt("unit_amount_/v1/prices_POST_unit_amount"),
         },
         types.SchemaObject("invoiceitem"),
-        [[
-            "\\product_name customer_id currency unit_amount -> {",
-            "let x0 = /v1/products_POST(name=product_name)",
-            "let x1 = /v1/prices_POST(currency=currency, product=x0.id, unit_amount=unit_amount)",
-            "let x2 = /v1/invoiceitems_POST(customer=customer_id, price=x1.id)",
-            "return x2",
-            "}"
-        ]]
+        [
+            Program(
+                ["product_name", "customer_id", "currency", "unit_amount"],
+                [
+                    AssignExpr("x0", AppExpr("/v1/products_POST", [("name", VarExpr("product_name"))]), False),
+                    AssignExpr("x1", AppExpr("/v1/prices_POST", [("currency", VarExpr("currency")), ("product", ProjectionExpr(VarExpr("x0"), "id")), ("unit_amount", VarExpr("unit_amount"))]), False),
+                    AssignExpr("x2", AppExpr("/v1/invoiceitems_POST", [("customer", VarExpr("customer_id")), ("price", ProjectionExpr(VarExpr("x1"), "id"))]), False),
+                    VarExpr("x2")
+                ]
+            )
+        ]
     ),
     Benchmark(
         "2.5",
@@ -203,14 +226,17 @@ stripe_benchmarks = [
             "price_id": types.PrimString("plan.id"),
         },
         types.SchemaObject("invoice"),
-        [[
-            "\\customer_id price_id -> {",
-            "let x1 = /v1/invoiceitems_POST(customer=customer_id, price=price_id);",
-            "let x2 = /v1/invoices_POST(customer=x1.customer);",
-            "let x3 = /v1/invoices/{invoice}/send_POST(invoice=x2.id);",
-            "return x3;",
-            "}"
-        ]]
+        [
+            Program(
+                ["customer_id", "price_id"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/invoiceitems_POST", [("customer", VarExpr("customer_id")), ("price", VarExpr("price_id"))]), False),
+                    AssignExpr("x2", AppExpr("/v1/invoices_POST", [("customer", ProjectionExpr(VarExpr("x1"), "customer"))]), False),
+                    AssignExpr("x3", AppExpr("/v1/invoices/{invoice}/send_POST", [("invoice", ProjectionExpr(VarExpr("x2"), "id"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ]
     ),
     Benchmark(
         "2.6",
@@ -219,14 +245,17 @@ stripe_benchmarks = [
             "email": types.PrimString("customer.email"),
         },
         types.SchemaObject("customer"),
-        [[
-            "\\customer_email -> {",
-            "let x0 = /v1/customers_GET()",
-            "x1 <- x0.data",
-            "if x1.email = customer_email",
-            "return x1",
-            "}"
-        ]]
+        [
+            Program(
+                ["email"],
+                [
+                    AssignExpr("x0", AppExpr("/v1/customers_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "data"), True),
+                    FilterExpr(VarExpr("x1"), "email", VarExpr("email"), False),
+                    VarExpr("x1")
+                ]
+            )
+        ]
     ),
     Benchmark(
         "2.7",
@@ -235,14 +264,17 @@ stripe_benchmarks = [
             "customer_id": types.PrimString("customer.id"),
         },
         types.ArrayType(None, types.SchemaObject("charge")),
-        [[
-            "\\customer_id -> {",
-            "let x1 = /v1/invoices_GET(customer=customer_id)",
-            "x2 <- x1.data",
-            "let x3 = /v1/charges/{charge}_GET(charge=x2.charge)",
-            "return x3",
-            "}"
-        ]]
+        [
+            Program(
+                ["customer_id"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/invoices_GET", [("customer", VarExpr("customer_id"))]), False),
+                    AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "data"), True),
+                    AssignExpr("x3", AppExpr("/v1/charges/{charge}_GET", [("charge", ProjectionExpr(VarExpr("x2"), "charge"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ]
     ),
     Benchmark(
         "2.8",
@@ -251,15 +283,17 @@ stripe_benchmarks = [
             "subscription": types.PrimString("subscription.id"),
         },
         types.SchemaObject("refund"),
-        [[
-            "\\subscription_id -> {",
-            "let x0 = /v1/subscriptions/{subscription_exposed_id}_GET(subscription_exposed_id=subscription_id)",
-            "let x1 = /v1/invoices_GET(customer=x0.customer)",
-            "x2 <- x1.data",
-            "let x3 = /v1/refunds/{refund}_POST(refund=x2.charge)",
-            "return x3",
-            "}"
-        ]]
+        [
+            Program(
+                ["subscription"],
+                [
+                    AssignExpr("x0", AppExpr("/v1/subscriptions/{subscription_exposed_id}_GET", [("subscription_exposed_id", VarExpr("subscription"))]), False),
+                    AssignExpr("x1", AppExpr("/v1/invoices/{invoice}_GET", [("invoice", ProjectionExpr(VarExpr("x0"), "latest_invoice"))]), False),
+                    AssignExpr("x2", AppExpr("/v1/refunds_POST", [("charge", ProjectionExpr(VarExpr("x1"), "charge"))]), False),
+                    VarExpr("x2")
+                ]
+            )
+        ]
     ),
     Benchmark(
         "2.9",
@@ -267,13 +301,16 @@ stripe_benchmarks = [
         {
         },
         types.ArrayType(None, types.PrimString("customer.email")),
-        [[
-            "\\ -> {",
-            "let x0 = /v1/customers_GET()",
-            "x1 <- x0.data",
-            "return x1.email",
-            "}"
-        ]]
+        [
+            Program(
+                [],
+                [
+                    AssignExpr("x0", AppExpr("/v1/customers_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "data"), True),
+                    ProjectionExpr(VarExpr("x1"), "email")
+                ]
+            )
+        ]
     ),
     Benchmark(
         "2.10",
@@ -282,15 +319,30 @@ stripe_benchmarks = [
             "product_id": types.PrimString("product.id"),
         },
         types.ArrayType(None, types.PrimString("customer.email")),
-        [[
-            "\\product_id -> {",
-            "let x1 = /v1/subscriptions_GET()",
-            "x2 <- x1",
-            "if x2.items.product = product_id",
-            "let x3 = /v1/customers/{customer}_GET(customer=x2.customer_id)",
-            "return x3",
-            "}"
-        ]]
+        [
+            # [
+            #     "\\product_id -> {",
+            #     "let x1 = /v1/subscriptions_GET()",
+            #     "x2 <- x1.data",
+            #     "x3 <- x2.items",
+            #     "if x3.price.product = product_id",
+            #     "let x4 = /v1/customers/{customer}_GET(customer=x2.customer_id)",
+            #     "return x4",
+            #     "}"
+            # ],
+            # types do not flow in this benchmark
+            Program(
+                ["product_id"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/subscriptions_GET", []), False),
+                    AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "data"), True),
+                    AssignExpr("x3", ProjectionExpr(VarExpr("x2"), "items"), True),
+                    FilterExpr(VarExpr("x3"), "price.product", VarExpr("product_id"), False),
+                    AssignExpr("x4", AppExpr("/v1/customers/{customer}_GET", [("customer", ProjectionExpr(VarExpr("x1"), "customer"))]), False),
+                    VarExpr("x4")
+                ]
+            )
+        ]
     ),
     Benchmark(
         "2.11",
@@ -299,29 +351,34 @@ stripe_benchmarks = [
             "customer_id": types.PrimString("customer.id"),
         },
         types.PrimString("bank_account.last4"),
-        [[
-            "\\customer_id -> {",
-            "let x0 = /v1/customers/{customer}/sources_GET(customer=customer_id)",
-            "x1 <- x0.data",
-            "return x1.last4",
-            "}"
-        ]]
+        [
+            Program(
+                ["customer_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v1/customers/{customer}/sources_GET", [("customer", VarExpr("customer_id"))]), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "data"), True),
+                    ProjectionExpr(VarExpr("x1"), "last4")
+                ]
+            )
+        ]
     ),
     Benchmark(
         "2.12",
         "Delete a card for a customer",
         {
-            "payment_method": types.SchemaObject("payment_method"),
+            "customer_id": types.SchemaObject("customer.id"),
         },
         types.SchemaObject("deleted_payment_source"),
-        [[
-            "\\customer_id -> {",
-            "let x1 = /v1/customers/{customer}_GET(customer=customer_id)",
-            "let x2 = customer.default_source",
-            "let x3 = /v1/customers/{customer}/sources/{source}_DELETE(customer=customer_id, source=x2)",
-            "return x3",
-            "}"
-        ]]
+        [
+            Program(
+                ["customer_id"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/customers/{customer}_GET", [("customer", VarExpr("customer_id"))]), False),
+                    AssignExpr("x2", AppExpr("/v1/customers/{customer}/sources/{id}_DELETE", [("customer", VarExpr("customer_id")), ("source", ProjectionExpr(VarExpr("x1"), "default_source"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ]
     ),
     Benchmark(
         "2.13",
@@ -331,13 +388,17 @@ stripe_benchmarks = [
             "customer_id": types.PrimString("customer.id"),
         },
         types.ArrayType(None, types.SchemaObject("subscription")),
-        [[
-            "(payment, customer_id) -> {",
-            "x1 <- /v1/subscriptions_GET(customer=customer_id)",
-            "let x2 = /v1/subscriptions/{subscription}_POST(subscription=x1.id, default_payment_method=payment)",
-            "return x2",
-            "}"
-        ]]
+        [
+            Program(
+                ["payment_method", "customer_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v1/subscriptions_GET", [("customer", VarExpr("customer_id"))]), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "data"), True),
+                    AssignExpr("x2", AppExpr("/v1/subscriptions/{subscription_exposed_id}_POST", [("subscription_exposed_id", ProjectionExpr(VarExpr("x1"), "id")), ("default_payment_method", ProjectionExpr(VarExpr("payment_method"), "id"))]), False),
+                    VarExpr("x2")
+                ]
+            )
+        ]
     ),
 ]
 
@@ -359,14 +420,15 @@ square_benchmarks = [
             "location_id": types.PrimString("Location.id"),
         },
         types.ArrayType(None, types.SchemaObject("Invoice")),
-        [[
-            "\\location_id -> {",
-                "let x0 = /v2/invoices_GET(location_id=location_id)",
-                "x1 <- x0.invoices",
-                "if x1.location_id = location_id",
-                "return x1",
-            "}"
-        ]],
+        [
+            Program(
+                ["location_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/invoices_GET", [("location_id", VarExpr("location_id"))]), False),
+                    ProjectionExpr(VarExpr("x0"), "invoices")
+                ]
+            )
+        ],
     ),
     Benchmark(
         "3.2",
@@ -377,25 +439,30 @@ square_benchmarks = [
             "subscription_plan_id": types.PrimString("CatalogObject.id"),
         },
         types.ArrayType(None, types.SchemaObject("Subscription")),
-        [[
-            "\\customer_id location_id subscription_plan_id -> {",
-                "let x0 = /v2/subscriptions/search_POST()",
-                "x1 <- x0.subscriptions",
-                "if x1.customer_id = customer_id",
-                "if x1.plan_id = subscription_plan_id",
-                "if x1.location_id = location_id",
-                "return x1",
-            "}"
-        ], [
-            "\\customer_id location_id subscription_plan_id -> {",
-            "let x0 = /v2/subscriptions/search_POST()",
-            "x1 <- x0.subscriptions",
-            "if x1.location_id = location_id",
-            "if x1.plan_id = subscription_plan_id",
-            "if x1.customer_id = customer_id",
-            "return x1",
-            "}"
-        ]],
+        [
+            Program(
+                ["customer_id", "location_id", "subscription_plan_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/subscriptions/search_POST", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "subscriptions"), True),
+                    FilterExpr(VarExpr("x1"), "customer_id", VarExpr("customer_id"), False),
+                    FilterExpr(VarExpr("x1"), "location_id", VarExpr("location_id"), False),
+                    FilterExpr(VarExpr("x1"), "plan_id", VarExpr("subscription_plan_id"), False),
+                    VarExpr("x1")
+                ]
+            ),
+            Program(
+                ["customer_id", "location_id", "subscription_plan_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/subscriptions/search_POST", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "subscriptions"), True),
+                    FilterExpr(VarExpr("x1"), "location_id", VarExpr("location_id"), False),
+                    FilterExpr(VarExpr("x1"), "customer_id", VarExpr("customer_id"), False),
+                    FilterExpr(VarExpr("x1"), "plan_id", VarExpr("subscription_plan_id"), False),
+                    VarExpr("x1")
+                ]
+            )
+        ],
     ),
     Benchmark(
         "3.3",
@@ -404,13 +471,17 @@ square_benchmarks = [
             "tax_id": types.PrimString("CatalogObject.id"),
         },
         types.ArrayType(None, types.SchemaObject("CatalogObject")),
-        [[
-            "\\tax_id -> {",
-            "let x0 = /v2/catalog/batch-retrieve_POST()",
-            "x1 <- x0",
-            "if x1.tax_id = tax_id",
-            "}"
-        ]],
+        [
+            Program(
+                ["tax_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/catalog/list_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
+                    FilterExpr(VarExpr("x1"), "id", VarExpr("tax_id"), False),
+                    VarExpr("x1")
+                ]
+            )
+        ],
     ),
     Benchmark(
         "3.4",
@@ -418,57 +489,56 @@ square_benchmarks = [
         {
         },
         types.ArrayType(None, types.PrimString("CatalogDiscount")),
-        [[
-            "\\ -> {",
-            "let x0 = /v2/catalog/batch-retrieve_POST()",
-            "x1 <- x0",
-            "return x1.discount_data",
-            "}"
-        ]],
+        [
+            Program(
+                [],
+                [
+                    AssignExpr("x0", AppExpr("/v2/catalog/list_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
+                    ProjectionExpr(VarExpr("x1"), "discount_data")
+                ]
+            )
+        ],
     ),
     Benchmark(
         "3.5",
-        "Delete catalog items with [names]",
+        "Delete catalog items with names",
         {
             "item_type": types.PrimString("CatalogObject.type"),
             "names": types.ArrayType(None, types.PrimString("CatalogDiscount.name"))
         },
-        types.ArrayType(None, types.PrimString("CatalogObject.Id")),
-        [[
-            "\\item_type, names -> {",
-                "let x0 = names.map(name => {",
-                    "let x1 = /v2/catalog/search-catalog-items_POST({",
-                        "object_types: [item_type],",
-                        "query: {",
-                            "exact_query: {",
-                                "attribute_name: \"name\",",
-                                "attribute_value: name",
-                                "}",
-                                "}",
-                                "})",
-                                "x2 <- x1",
-                                "./v2/catalog/batch-delete({",
-                                    "object_ids: x2.id",
-                                    "})",
-                                    "return x1",
-                                    "})",
-                                    "return x0",
-                                    "}"
-        ]],
+        types.ArrayType(None, types.PrimString("CatalogObject.id")),
+        [
+            Program(
+                ["item_type", "names"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/catalog/list_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
+                    AssignExpr("x2", VarExpr("names"), True),
+                    FilterExpr(VarExpr("x1"), "item_data.name", VarExpr("x2"), False),
+                    AssignExpr("x3", AppExpr("/v2/catalog/batch-delete_DELETE", [("object_ids[0]", VarExpr("x1"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ],
     ),
     Benchmark(
         "3.6",
         "Delete all catalog items",
         {
         },
-        types.ArrayType(None, types.PrimString("CatalogObject.Id")),
-        [[
-            "\\ -> {",
-            "let x0 = /v2/catalog/batch-retrieve_POST()",
-            "x1 <- x0",
-            "/v2/catalog/batch-delete_POST(object_ids = x1)",
-            "}"
-        ]],
+        types.ArrayType(None, types.PrimString("CatalogObject.id")),
+        [
+            Program(
+                [],
+                [
+                    AssignExpr("x0", AppExpr("/v2/catalog/batch-retrieve_POST", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
+                    AssignExpr("x2", AppExpr("/v2/catalog/batch-delete_DELETE", [("object_ids[0]", VarExpr("x1"))]), False),
+                    VarExpr("x2")
+                ]
+            )
+        ],
     ),
     Benchmark(
         "3.7",
@@ -479,60 +549,73 @@ square_benchmarks = [
             "updates": types.SchemaObject("OrderFulfillment"),
         },
         types.ArrayType(None, types.SchemaObject("Order")),
-        [[
-            "\\location_id, order_ids, updates -> {",
-                "let x0 = /v2/orders/batch-retrieve_POST(location_id=location_id, order_ids=order_ids)",
-                "x1 <- x0",
-                "let x2 = /v2/orders_POST(order_id=x1, order[fulfillments]=updates)",
-                "return x2",
-            "}"
-        ]],
+        [
+            Program(
+                ["location_id", "order_ids", "updates"],
+                [
+                    AssignExpr("x0", VarExpr("order_ids"), True),
+                    AssignExpr("x1", AppExpr("/v2/orders/batch-retrieve_POST", [("location_id", VarExpr("location_id")), ("order_ids[0]", VarExpr("x0"))]), False),
+                    AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "orders"), True),
+                    AssignExpr("x3", AppExpr("/v2/orders/{order_id}_PUT", [("order_id", ProjectionExpr(VarExpr("x2"), "id")), ("order[fulfillments]", VarExpr("updates"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ],
     ),
     Benchmark(
         "3.8",
         "Get payment notes",
         {
         },
-        types.ArrayType(None, types.PrimString("Payment.note")),
-        [[
-            "\\ -> {",
-            "let x0 = /v2/payments_GET()",
-            "x1 <- x0.payments",
-            "return x1.note",
-            "}"
-        ]],
+        types.ArrayType(None, types.PrimString("Tender.note")),
+        [
+            Program(
+                [],
+                [
+                    AssignExpr("x0", AppExpr("/v2/payments_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "payments"), True),
+                    ProjectionExpr(VarExpr("x1"), "note")
+                ]
+            )
+        ],
     ),
     Benchmark(
         "3.9",
-        "Get customer and items associated with your transactions",
+        "Get order ids associated with your transactions",
         {
             "location_id": types.PrimString("Location.id"),
         },
         types.ArrayType(None, types.PrimString("Order.id")),
-        [[
-            "\\location_id -> {",
-            "let x0 = /v2/locations/{location_id}/transactions_GET(location_id=location_id)",
-            "x1 <- x0.transactions",
-            "return x1.order_id",
-            "}"
-        ]],
+        [
+            Program(
+                ["location_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/locations/{location_id}/transactions_GET", [("location_id", VarExpr("location_id"))]), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "transactions"), True),
+                    ProjectionExpr(VarExpr("x1"), "order_id"),
+                ]
+            )
+        ],
     ),
     Benchmark(
         "3.10",
-        "Get product details (names of orders) from transaction id",
+        "Get order names from transaction id",
         {
             "location_id": types.PrimString("Location.id"),
             "transaction_id": types.PrimString("Order.id"),
         },
         types.ArrayType(None, types.PrimString("Invoice.title")),
-        [[
-            "\\location_id transaction_id -> {",
-            "let x0 = /v2/orders/batch-retrieve_POST(locationId = location_id, orderIds = [transaction_id])",
-            "x1 <- x0",
-            "x2 <- x1.line_items",
-            "return item.name",
-            "}"
-        ]],
+        [
+            Program(
+                ["location_id", "transaction_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/orders/batch-retrieve_POST", [("location_id", VarExpr("location_id")), ("order_ids[0]", VarExpr("transaction_id"))]), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "orders"), True),
+                    AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "line_items"), True),
+                    ProjectionExpr(VarExpr("x2"), "name"),
+                ]
+            )
+        ],
     ),
     Benchmark(
         "3.11",
@@ -541,14 +624,17 @@ square_benchmarks = [
             "name": types.PrimString("Customer.given_name"),
         },
         types.SchemaObject("Customer"),
-        [[
-            "\\name -> {",
-            "let x0 = /v2/customers_GET()",
-            "x1 <- x0.customers",
-            "if x1.given_name = name",
-            "return x1",
-            "}"
-        ]],
+        [
+            Program(
+                ["name"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/customers_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "customers"), True),
+                    FilterExpr(VarExpr("x1"), "given_name", VarExpr("name"), False),
+                    VarExpr("x1")
+                ]
+            )
+        ],
     )
 ]
 
@@ -581,7 +667,7 @@ def main():
         output=args.output, 
         print_api=True, 
         print_results=True, 
-        cached_results=False)
+        cached_results=True)
 
 if __name__ == '__main__':
     main()

@@ -18,6 +18,7 @@ def prep_exp_dir(config):
 
 def parse_entries(configuration, exp_dir, base_path, endpoints):
     trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
+    print(trace_file)
     if not os.path.exists(trace_file):
         print("Parsing OpenAPI document...")
         # entries = None
@@ -50,7 +51,7 @@ def replace_variables(progstr):
     vnames = re.findall("x\d+", progstr)
     varnames = []
     for vname in vnames:
-        if not vname in varnames:
+        if vname not in varnames:
             varnames.append(vname)
 
     for i, vname in enumerate(varnames):
@@ -100,3 +101,9 @@ def index_entries(entries, skip_fields):
         index_result[fun][param_names].append(e)
 
     return index_result
+
+def pretty_none(v):
+    if isinstance(v, float):
+        return round(v, 2)
+        
+    return v or '-'

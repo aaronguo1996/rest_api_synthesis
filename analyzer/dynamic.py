@@ -164,7 +164,7 @@ class DynamicAnalysis:
         if entry_vals:
             return random.choices(entry_vals, weights=weights, k=1)[0]
         else:
-            print("no successful entry found")
+            # print("no successful entry found")
             return None
 
     def get_trace(self, fun, args):
@@ -181,7 +181,7 @@ class DynamicAnalysis:
 
         # get all entries with the same arg names
         arg_names = sorted([x for x, _ in args])
-        same_args_calls = same_endpoint_calls.get(tuple(arg_names))
+        same_args_calls = same_endpoint_calls.get(tuple(arg_names), [])
 
         if self._abstraction_level == CMP_ENDPOINT_AND_ARG_NAME:
             # return self._sample_entry(same_args_calls, same_endpoint_calls)

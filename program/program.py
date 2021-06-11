@@ -494,7 +494,7 @@ class FilterExpr(Expression):
         # for o in obj:
         tmp = obj
         for p in paths:
-            if p in tmp:
+            if isinstance(tmp, dict) and p in tmp:
                 tmp = tmp.get(p)
                 # print("[Filter] get field", p, "returns", tmp)
             else:
@@ -837,7 +837,8 @@ class Program:
         elif len(self._inputs) == len(other._inputs):
             subst = {}
             for i, x in enumerate(other._inputs):
-                subst[x] = VarExpr(self._inputs[i])
+                if x != self._inputs[i]:
+                    subst[x] = VarExpr(self._inputs[i])
             other = other.apply_subst(subst)
             return self.to_expression({}) == other.to_expression({})
         else:
@@ -983,6 +984,10 @@ class Program:
                     return None, consts.MAX_COST
 
                 if expr._is_bind:
+                    if not isinstance(val, list):
+                        # print(expr, "cannot be evaled")
+                        return None, consts.MAX_COST
+
                     vals = []
                     bind_cost = 0
                     for v in val:
