@@ -106,4 +106,4 @@ def pretty_none(v):
     if isinstance(v, float):
         return round(v, 2)
         
-    return v or '-'
+    return v if v is not None else '-'

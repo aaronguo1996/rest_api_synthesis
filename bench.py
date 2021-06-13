@@ -15,7 +15,7 @@ import argparse
 from benchmarks.benchmark import BenchConfig, Benchmark, BenchmarkSuite, Bencher
 from schemas import types
 from analyzer import dynamic
-from program.program import (Program, ProjectionExpr, FilterExpr, 
+from program.program import (Program, ProjectionExpr, FilterExpr,
                             AssignExpr, VarExpr, AppExpr)
 
 bias_type_args = {
@@ -35,7 +35,7 @@ def build_cmd_parser():
         help="Number of times to repeat filtering")
     parser.add_argument("--filter-num", type=int, nargs='?', default=3,
         help="Number of times to run filtering")
-    parser.add_argument("--bias-type", default='simple', 
+    parser.add_argument("--bias-type", default='simple',
         choices=list(bias_type_args.keys()) ,dest='bias_type',
         help="Bias type for retrospective execution")
     parser.add_argument("--bench", nargs='?',
@@ -649,7 +649,7 @@ def main():
     args = cmd_parser.parse_args()
 
     config = BenchConfig(
-        args.cache, 
+        args.cache,
         args.repeat,
         args.filter_num,
         args.filter_sol_only,
@@ -664,9 +664,9 @@ def main():
         config)
     b.run(
         args.names,
-        output=args.output, 
-        print_api=True, 
-        print_results=True, 
+        output=args.output,
+        print_api=True,
+        print_results=True,
         cached_results=True)
 
 if __name__ == '__main__':

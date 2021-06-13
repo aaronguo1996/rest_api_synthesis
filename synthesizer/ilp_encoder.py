@@ -323,6 +323,10 @@ class ILPetriEncoder:
         # if trans_name != make_entry_name(entry.endpoint, entry.method):
         #     raise Exception("name mismatch", trans_name, make_entry_name(entry.endpoint, entry.method))
         # print(trans_name)
+        # skip filters
+        if "filter" in trans_name:
+            return
+
         self._entries[trans_name] = entry
         self._net.add_transition(Transition(trans_name))
 
@@ -348,6 +352,7 @@ class ILPetriEncoder:
     def _add_copy_transitions(self):
         places = self._net.place()
         for place in places:
+            # copy transitions
             trans_name = place.name + "_clone"
             self._net.add_transition(Transition(trans_name))
             self._net.add_input(place.name, trans_name, Value(1))

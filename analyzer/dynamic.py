@@ -1,6 +1,7 @@
 import random
 from enum import IntEnum
 import time
+import xeger
 
 from analyzer.entry import ErrorResponse
 from analyzer.multiplicity import MUL_ZERO_MORE
@@ -35,15 +36,30 @@ class DynamicAnalysis:
     """search for trace either by a parameter value or the endpoint name
     """
 
-    def __init__(self, entries, skip_fields, abstraction_level=0, bias_type=BiasType.NONE):
+    def __init__(self, entries, skip_fields, log_analyzer,
+        abstraction_level=0, bias_type=BiasType.NONE):
         self._entries = entries
         self._skip_fields = skip_fields
         self._environment = {}
+        self._log_analyzer = log_analyzer
         self._abstraction_level = abstraction_level
         self._bias_type = bias_type
 
     def reset_env(self):
         self._environment = {}
+
+    def sample_value_by_type(self, typ):
+        vals = self._log_analyzer.get_values_by_type(typ)
+        vals = list({v:v for v in vals}.keys())
+        if not vals:
+            # only two cases here
+            if str(typ) == "unit_amount_/v1/prices_POST_unit_amount":
+                vals = [random.randint(1,10)]
+            else:
+                x = xeger.Xeger()
+                vals = [x.xeger("^[a-z0-9]{10,}$")]
+        
+        return random.choice(vals)
 
     def get_traces_by_param(self, param):
         results = []
@@ -149,12 +165,14 @@ class DynamicAnalysis:
     def _sample_entry(self, entries, backup=[]):
         entry_vals = []
         for e in entries:
-            entry_vals.append(e.response.value)
+            if e.response.value not in entry_vals:
+                entry_vals.append(e.response.value)
 
         if not entry_vals:
             # print("cannot find trace in the given group, using backups")
             for e in backup:
-                entry_vals.append(e.response.value)
+                if e.response.value not in entry_vals:
+                    entry_vals.append(e.response.value)
 
         weights = None
         if self._bias_type == BiasType.SIMPLE:

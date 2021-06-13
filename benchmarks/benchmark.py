@@ -14,7 +14,7 @@ import benchmarks.utils as utils
 from schemas import types
 from analyzer import dynamic
 from synthesizer.filtering import run_filter
-from program.program import ProjectionExpr, AppExpr
+from program.program import ProjectionExpr, AppExpr, FilterExpr
 from synthesizer import parallel
 
 class BenchConfig:
@@ -38,6 +38,7 @@ class BenchmarkResult:
         self.median_rank = None
         self.ast_size = None
         self.projects = None
+        self.filters = None
         self.endpoint_calls = None
 
 class APIInfo:
@@ -99,7 +100,7 @@ class Benchmark:
         results = []
         with pebble.ThreadPool() as pool:
             for i, p in enumerate(solutions):
-                # print(f"{i}/{len(solutions)}", flush=True)
+                print(f"{i}/{len(solutions)}", flush=True)
                 is_target_sol = False
                 for tgt_sol in self.solutions:
                     eq_target = tgt_sol == p
@@ -113,17 +114,17 @@ class Benchmark:
                             entries, 
                             configuration.get(consts.KEY_SKIP_FIELDS),
                             runtime_config.re_bias_type,
-                            self.inputs, p,
+                            p,
                             isinstance(self.output, types.ArrayType),
                             runtime_config.repeat))
-                    results.append((p, future))
+                    results.append((i, p, future.result()))
 
-        results = [(p, future.result()) for p, future in results]
+        # results = [(i, p, future.result()) for i, p, future in results]
         res = sorted(results, key=lambda x: x[-1])
-        # for r in res:
-        #     print(r[1], r[0])
+        for r in res:
+            print(r[0], r[2], r[1])
 
-        for rank, (res_sol, _) in enumerate(res):
+        for rank, (_, res_sol, _) in enumerate(res):
             for tgt_sol in self.solutions:
                 if tgt_sol == res_sol:
                     return rank + 1, res_sol
@@ -166,6 +167,8 @@ class Benchmark:
             self.latex_entry.ast_size = len(ns)
             self.latex_entry.projects = len(
                 list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
+            self.latex_entry.filters = len(
+                list(filter(lambda x: isinstance(x, FilterExpr), ns)))
             self.latex_entry.endpoint_calls = len(
                 list(filter(lambda x: isinstance(x, AppExpr), ns)))
 
@@ -357,11 +360,11 @@ class Bencher:
     def print_benchmark_results(self, results, output=None):
         res = ("% auto-generated: ./bench.py, table 2\n"
                "\\resizebox{\\textwidth}{!}{"
-               "\\begin{tabular}{l|lp{7.5cm}|rrr|rr}"
+               "\\begin{tabular}{l|lp{7.5cm}|rrrr|rr}"
                "\\toprule"
-               "& \\multicolumn{2}{c|}{Benchmark info} & \\multicolumn{3}{c|}{Solution stats} & \\multicolumn{2}{c}{Solution rank} \\\\"
-               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-6} \\cmidrule(lr){7-8}"
-               "API & Name & Description & Size & $n_{ep}$ & $n_{proj}$ & w/o RE & w/ RE \\\\"
+               "& \\multicolumn{2}{c|}{Benchmark info} & \\multicolumn{4}{c|}{Solution stats} & \\multicolumn{2}{c}{Solution rank} \\\\"
+               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9}"
+               "API & Name & Description & Size & $n_{ep}$ & $n_{proj}$ & $n_{filter} $ & w/o RE & w/ RE \\\\"
                "\\midrule")
         res += "\n"
 
@@ -378,6 +381,7 @@ class Bencher:
                     f"& {utils.pretty_none(r.ast_size)} "
                     f"& {utils.pretty_none(r.endpoint_calls)} "
                     f"& {utils.pretty_none(r.projects)} "
+                    f"& {utils.pretty_none(r.filters)} "
                     f"& {utils.pretty_none(r.rank_no_re)} "
                     f"& {utils.pretty_none(r.mean_rank)} ")
                 res += r" \\"

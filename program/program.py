@@ -1,6 +1,6 @@
-from collections import defaultdict
-from synthesizer.utils import make_entry_name
+import random
 
+from synthesizer.utils import make_entry_name
 from analyzer.multiplicity import MUL_ONE_ONE, MUL_ZERO_MORE, MUL_ZERO_ONE
 from analyzer.dynamic import Goal
 import program.utils as utils
@@ -89,8 +89,8 @@ class AppExpr(Expression):
         arg_vars = [arg.get_vars() for _, arg in self._args]
         return set().union(*arg_vars)
 
-    def execute(self, analyzer):
-        args = [arg.execute(analyzer) for _, arg in self._args]
+    def execute(self, analyzer, _):
+        args = [arg.execute(analyzer, []) for _, arg in self._args]
 
         # if any of the argument fails, the whole term fails
         for arg, _ in args:
@@ -260,10 +260,18 @@ class VarExpr(Expression):
     def get_vars(self):
         return set([self._var])
 
-    def execute(self, analyzer):
+    def execute(self, analyzer, candidates):
         val = analyzer.lookup_var(self._var)
         if val is None:
-            return None, consts.MAX_COST
+            if candidates:
+                # print("sampling", self.var, "from", candidates)
+                val = random.choice(candidates)
+            else:
+                # sample a value by type
+                val = analyzer.sample_value_by_type(self.type)
+
+            analyzer.push_var(self._var, val)
+            return val, 1
         else:
             # print("[Var] get back", val, "for", self._var)
             return val, 1
@@ -335,8 +343,8 @@ class ProjectionExpr(Expression):
         obj_vars = self._obj.get_vars()
         return obj_vars
 
-    def execute(self, analyzer):
-        val, cost = self._obj.execute(analyzer)
+    def execute(self, analyzer, _):
+        val, cost = self._obj.execute(analyzer, [])
         try:
             val = val.get(self._field)
             # print("[Projection] get back", val, "for", self._field)
@@ -471,46 +479,35 @@ class FilterExpr(Expression):
         val_vars = self._val.get_vars()
         return obj_vars.union(val_vars)
 
-    def execute(self, analyzer):
-        obj, score1 = self._obj.execute(analyzer)
-        val, score2 = self._val.execute(analyzer)
-        # print("[Filter] get back", val, "as filter")
-
-        if obj is None or val is None:
-            # if obj is None:
-            #     print("[Filter] obj cannot be evaluated")
-
-            # if val is None:
-            #     print("[Filter] val cannot be evaluated")
-
+    def execute(self, analyzer, _):
+        obj, score1 = self._obj.execute(analyzer, [])
+        
+        if obj is None:
             return None, consts.MAX_COST
 
-        # if not isinstance(obj, list):
-        #     obj = [obj]
-
         paths = self._field.split('.')
-        # print("[Filter] filtering by path", paths)
-        # result = []
-        # for o in obj:
         tmp = obj
+
         for p in paths:
-            if isinstance(tmp, dict) and p in tmp:
-                tmp = tmp.get(p)
-                # print("[Filter] get field", p, "returns", tmp)
-            else:
-                tmp = None
+            tmp = utils.get_field_value(tmp, p)
+            if tmp is None:
                 # print("[Filter] cannot find field", p, "in", tmp)
                 break
 
+        if isinstance(tmp, list):
+            tmp = list(utils.flatten(tmp))
+            val_candidates = tmp
+        else:
+            val_candidates = [tmp]
+        
+        val, score2 = self._val.execute(analyzer, val_candidates)
+        # print("[Filter] get back", val, "as filter")
+        if val is None:
+            return None, consts.MAX_COST
+
         if tmp == val:
-            # result.append(o)
-
-        # if all_fails:
-        #     return None, consts.MAX_COST
-
             variables = self._obj.get_vars()
             analyzer.push_var(list(variables)[0], obj)
-            # print("[Filter] get back", obj, "for filter on", self._field)
             return obj, score1 + score2 + 1
 
         else:
@@ -636,8 +633,8 @@ class ListExpr(Expression):
     def get_vars(self):
         return self._item.get_vars()
 
-    def execute(self, analyzer):
-        item, score = self._item.execute(analyzer)
+    def execute(self, analyzer, _):
+        item, score = self._item.execute(analyzer, [])
         return [item], score
 
     def to_program_graph(self, graph, var_to_trans):
@@ -710,8 +707,8 @@ class AssignExpr(Expression):
         rhs_vars.add(self._lhs)
         return rhs_vars
 
-    def execute(self, analyzer):
-        val, score = self._rhs.execute(analyzer)
+    def execute(self, analyzer, _):
+        val, score = self._rhs.execute(analyzer, [])
         if val is None:
             return None
 
@@ -974,11 +971,11 @@ class Program:
 
     def _execute_exprs(self, exprs, analyzer):
         if len(exprs) == 1:
-            return exprs[0].execute(analyzer)
+            return exprs[0].execute(analyzer, [])
         else:
             expr = exprs[0]
             if isinstance(expr, AssignExpr): 
-                val, cost = expr._rhs.execute(analyzer)
+                val, cost = expr._rhs.execute(analyzer, [])
                 if val is None:
                     # print(expr, "cannot be evaled")
                     return None, consts.MAX_COST
@@ -990,6 +987,7 @@ class Program:
 
                     vals = []
                     bind_cost = 0
+                    random.shuffle(val)
                     for v in val:
                         analyzer.push_var(expr.var, v)
                         sub_val, sub_cost = self._execute_exprs(exprs[1:], analyzer)
@@ -1010,7 +1008,7 @@ class Program:
                     val, sub_cost = self._execute_exprs(exprs[1:], analyzer)
                     cost += sub_cost
             else:
-                val, cost = expr.execute(analyzer)
+                val, cost = expr.execute(analyzer, [])
                 if val is None:
                     # print(expr, "cannot be evaled")
                     return None, consts.MAX_COST
