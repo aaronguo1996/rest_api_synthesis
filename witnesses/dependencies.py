@@ -2,10 +2,7 @@ from typing import List
 import re
 
 from openapi import defs
-from witnesses import error
 from witnesses.utils import split_by
-from analyzer.entry import RequestParameter
-from schemas.schema_type import SchemaType
 
 class EndpointProducer:
     def __init__(self, ep: str, method: str, ep_method_def, path: List[str]):
@@ -63,10 +60,10 @@ class DependencyResolver:
     # create dependency mapping from union-find results
     def get_dependencies_from_groups(self, groups):
         self._dependencies = {}
-        paths = self._doc.get(defs.DOC_PATHS)
+        paths = self._doc
         for group in groups:
             params, resps = split_by(
-                lambda x: isinstance(x, RequestParameter), group)
+                lambda x: x.array_level is None, group)
             
             producers = set()
             for resp in resps:
@@ -80,10 +77,9 @@ class DependencyResolver:
                 
                 ep_def = paths.get(endpoint)
                 if not ep_def:
-                    # TODO: construct a definition with the information we know
                     ep_method_def = None
                 else:
-                    ep_method_def = ep_def.get(resp.method.lower())
+                    ep_method_def = ep_def.get(resp.method.upper())
                 
                 producer = EndpointProducer(
                     endpoint, resp.method, ep_method_def, resp.path)
@@ -114,9 +110,9 @@ class DependencyResolver:
                         method = producer.get(defs.ANN_METHOD)
                         path = producer.get(defs.ANN_PATH).split('/')
                         # get the definition from doc
-                        paths = self._doc.get(defs.DOC_PATHS)
+                        paths = self._doc
                         ep_def = paths.get(ep)
-                        ep_method_def = ep_def.get(method.lower())
+                        ep_method_def = ep_def.get(method.upper())
                         # create the producer for this
                         producer = EndpointProducer(
                             ep, method, ep_method_def, path
@@ -128,36 +124,17 @@ class DependencyResolver:
     def get_dependencies_from_annotations(self, annotations):
         self._dependencies = {}
 
-        paths = self._doc.get(defs.DOC_PATHS)
+        paths = self._doc
         for ep, path_def in paths.items():
             for _, method_def in path_def.items():
-                parameters = method_def.get(defs.DOC_PARAMS, [])
+                parameters = method_def.parameters
                 for param in parameters:
-                    param_name = param.get(defs.DOC_NAME)
+                    param_name = param.arg_name
                     producers = self._generate_annotation_for(
                         annotations, 
                         ep, param_name
                     )
                     if producers:
                         self._dependencies[(ep, param_name)] = producers
-
-                request_body = method_def.get(defs.DOC_REQUEST)
-                if not request_body:
-                    continue
-
-                request_content = request_body.get(defs.DOC_CONTENT)
-                if not request_content:
-                    raise Exception("Request content is unavailable")
-
-                for _, request_def in request_content.items():
-                    request_schema = request_def.get(defs.DOC_SCHEMA)
-                    request_properties = request_schema.get(defs.DOC_PROPERTIES)
-                    for param_name in request_properties:
-                        producers = self._generate_annotation_for(
-                            annotations, 
-                            ep, param_name
-                        )
-                        if producers:
-                            self._dependencies[(ep, param_name)] = producers
 
         return self._dependencies

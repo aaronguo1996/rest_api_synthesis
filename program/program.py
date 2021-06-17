@@ -3,13 +3,15 @@ from synthesizer.utils import make_entry_name
 
 from analyzer.multiplicity import MUL_ONE_ONE, MUL_ZERO_MORE, MUL_ZERO_ONE
 from analyzer.dynamic import Goal
-
-SPACE = '    '
-MAX_COST = 9999
+import program.utils as utils
+import consts
+from analyzer.utils import name_to_path
+from schemas import types
 
 class Expression:
-    def __init__(self, typ):
+    def __init__(self, typ, signature):
         self.type = typ
+        self.signature = signature
 
     def __repr__(self):
         return self.__str__()
@@ -24,14 +26,14 @@ class Expression:
         self.type = typ
 
     def pretty(self, hang):
-        return f"{SPACE * hang}" + self.__str__()
+        return f"{consts.SPACE * hang}" + self.__str__()
 
     def collect_exprs(self):
         raise NotImplementedError
 
 class AppExpr(Expression):
-    def __init__(self, fun, args, typ=None):
-        super().__init__(typ)
+    def __init__(self, fun, args, typ=None, sig=None):
+        super().__init__(typ, sig)
         self._fun = fun
         self._args = args
 
@@ -93,7 +95,7 @@ class AppExpr(Expression):
         # if any of the argument fails, the whole term fails
         for arg, _ in args:
             if arg is None:
-                return None, MAX_COST
+                return None, consts.MAX_COST
 
         if args:
             arg_vals, arg_scores = zip(*args)
@@ -108,7 +110,7 @@ class AppExpr(Expression):
         val = analyzer.get_trace(self._fun, named_arg_vals)
         if val is None:
             print("fail to get successful trace for", self._fun, named_arg_vals)
-            return None, MAX_COST
+            return None, consts.MAX_COST
         else:
             print("[App] get back", val, "for", self._fun, named_arg_vals)
             return val, 1 + sum(arg_scores)
@@ -152,28 +154,54 @@ class AppExpr(Expression):
             arg_goal = Goal(multi, values, fields)
             arg.goal_search(analyzer, arg_goal)
 
-    def to_multiline(self, signatures, counter):
-        args = []
+    def to_multiline(self, signatures, subst, counter):
+        exprs = []
+        var = utils.find_expr(subst, self)
+        if var is not None:
+            let_var = var
+        else:
+            args = []
+            for name, arg in self._args:
+                arg_exprs, arg_expr = arg.to_multiline(
+                    signatures, subst, counter)
+                args.append((name, arg_expr))
+                exprs.extend(arg_exprs)
+
+            app_expr = AppExpr(self._fun, args, self.type)
+
+            let_x = counter.get("x", 0)
+            counter["x"] += 1
+            let_var = VarExpr(f"x{let_x}", self.type)
+
+            sig = signatures.get(self._fun)
+            if sig and sig.response.array_level > 0:
+                let_expr = AssignExpr(f"x{let_x}", app_expr, True)
+            else:
+                let_expr = AssignExpr(f"x{let_x}", app_expr, False)
+
+            exprs.append(let_expr)
+            subst.append((self, let_var))
+
+        return exprs, let_var
+
+    def lift(self, counter):
+        sig = self.signature
+        sig_params = sig.parameters
+        
+        arguments = []
         exprs = []
         for name, arg in self._args:
-            arg_exprs, arg_expr = arg.to_multiline(signatures, counter)
-            args.append((name, arg_expr))
-            exprs.extend(arg_exprs)
+            path = name_to_path(name)
+            for param in sig_params:
+                if path == param.path:
+                    break
 
-        app_expr = AppExpr(self._fun, args, self.type)
+            arg_binds, x = insert_binds(counter, arg, param.type)
+            exprs += arg_binds
+            arguments.append((name, VarExpr(x, param.type)))
 
-        let_x = counter.get("x", 0)
-        counter["x"] += 1
-        let_var = VarExpr(f"x{let_x}", self.type)
-
-        sig = signatures.get(self._fun)
-        if sig and sig.response.array_level > 0:
-            let_expr = AssignExpr(f"x{let_x}", app_expr, True)
-        else:
-            let_expr = AssignExpr(f"x{let_x}", app_expr, False)
-
-        exprs.append(let_expr)
-        return exprs, let_var
+        app_expr = AppExpr(self._fun, arguments, sig.response.type, sig)        
+        return exprs, app_expr
 
     def check_fields(self, analyzer, var_to_trans):
         for _, arg in self._args:
@@ -197,8 +225,8 @@ class AppExpr(Expression):
         return (num_endpoints + 1), num_projections, (size + 1)
 
 class VarExpr(Expression):
-    def __init__(self, x, typ=None):
-        super().__init__(typ)
+    def __init__(self, x, typ=None, sig=None):
+        super().__init__(typ, sig)
         self._var = x
 
     def __str__(self):
@@ -215,12 +243,8 @@ class VarExpr(Expression):
         return self._var
 
     def apply_subst(self, subst):
-        ret = subst.get(self._var, self)
+        ret = subst.get(self._var, VarExpr(self._var, self.type))
         ret.type = self.type
-        # propagate type into each return statement of Map
-        if isinstance(ret, MapExpr):
-            ret._prog.assign_type(self.type)
-
         return ret
 
     def collect_exprs(self):
@@ -239,7 +263,7 @@ class VarExpr(Expression):
     def execute(self, analyzer):
         val = analyzer.lookup_var(self._var)
         if val is None:
-            return None, MAX_COST
+            return None, consts.MAX_COST
         else:
             # print("[Var] get back", val, "for", self._var)
             return val, 1
@@ -255,7 +279,7 @@ class VarExpr(Expression):
     def goal_search(self, analyzer, goal):
         analyzer.push_var(self._var, goal)
 
-    def to_multiline(self, signatures, counter):
+    def to_multiline(self, signatures, subst, counter):
         return [], self
 
     def check_fields(self, analyzer, var_to_trans):
@@ -267,9 +291,12 @@ class VarExpr(Expression):
     def sizes(self):
         return 0, 0, 1
 
+    def lift(self, signatures, counter):
+        return [], self
+
 class ProjectionExpr(Expression):
-    def __init__(self, obj, field, typ=None):
-        super().__init__(typ)
+    def __init__(self, obj, field, typ=None, sig=None):
+        super().__init__(typ, sig)
         self._obj = obj
         self._field = field
 
@@ -286,14 +313,6 @@ class ProjectionExpr(Expression):
         )
 
     def apply_subst(self, subst):
-        # return AppExpr(
-        #     "projection",
-        #     [
-        #         ("obj", self._obj.apply_subst(subst)),
-        #         ("field", VarExpr("@@" + self._field)),
-        #     ],
-        #     self.type
-        # )
         return ProjectionExpr(
             self._obj.apply_subst(subst),
             self._field,
@@ -324,7 +343,7 @@ class ProjectionExpr(Expression):
             return val, cost + 1
         except:
             print("[Projection] field projection fails for", self._field)
-            return None, MAX_COST
+            return None, consts.MAX_COST
 
     def get_multiplicity(self, analyzer):
         return analyzer.check_endpoint(f"projection({self._obj.type}, {self._field})")
@@ -345,23 +364,42 @@ class ProjectionExpr(Expression):
         obj_goal = Goal(goal.multiplicity, goal.values, fields)
         self._obj.goal_search(analyzer, obj_goal)
 
-    def to_multiline(self, signatures, counter):
-        exprs, obj_expr = self._obj.to_multiline(signatures, counter)
-        proj_expr = ProjectionExpr(obj_expr, self._field, self.type)
+    def to_multiline(self, signatures, subst, counter):
+        var = utils.find_expr(subst, self)
+        exprs = []
+        if var is not None:
+            proj_expr = var
+        else:
+            exprs, obj_expr = self._obj.to_multiline(signatures, subst, counter)
+            proj_expr = ProjectionExpr(obj_expr, self._field, self.type)
 
-        proj_trans = f"projection({self._obj.type}, {self._field})"
-        proj_name = make_entry_name(proj_trans, "")
-        proj_sig = signatures.get(proj_name)
-        if not proj_sig:
-            raise Exception("cannot find signature for projection", proj_name)
-        if proj_sig and proj_sig.response.array_level > 0:
-            let_x = counter.get("x", 0)
-            counter["x"] += 1
-            bind_expr = AssignExpr(f"x{let_x}", proj_expr, True)
-            exprs.append(bind_expr)
-            proj_expr = VarExpr(f"x{let_x}", self.type)
+            proj_trans = f"projection({self._obj.type}, {self._field})"
+            proj_name = make_entry_name(proj_trans, "")
+            proj_sig = signatures.get(proj_name)
+            if not proj_sig:
+                raise Exception("cannot find signature for projection", proj_name)
+            if proj_sig and proj_sig.response.array_level > 0:
+                let_x = counter.get("x", 0)
+                counter["x"] += 1
+                bind_expr = AssignExpr(f"x{let_x}", proj_expr, True)
+                exprs.append(bind_expr)
+                proj_expr = VarExpr(f"x{let_x}", self.type)
+
+            subst.append((proj_expr, self))
         
         return exprs, proj_expr
+
+    def lift(self, counter):
+        proj_sig = self.signature
+        
+        param = proj_sig.parameters[0]
+        arg_binds, x = insert_binds(counter, self._obj, param.type)
+        proj_expr = ProjectionExpr(
+            VarExpr(x, param.type),
+            self._field,
+            proj_sig.response.type,
+            proj_sig)
+        return arg_binds, proj_expr
 
     def check_fields(self, analyzer, var_to_trans):
         # print(self)
@@ -385,18 +423,15 @@ class ProjectionExpr(Expression):
         return endpoints, (projections + 1), (sz + 1)
 
 class FilterExpr(Expression):
-    def __init__(self, obj, field, val, is_val_list, typ=None):
-        super().__init__(typ)
+    def __init__(self, obj, field, val, is_val_list, typ=None, sig=None):
+        super().__init__(typ, sig)
         self._obj = obj
         self._field = field
         self._val = val
         self._is_val_list = is_val_list
 
     def __str__(self):
-        if self._is_val_list:
-            return f"{self._obj}.filter(x => x.{self._field} in {self._val})"
-        else:
-            return f"{self._obj}.filter(x => x.{self._field} == {self._val})"
+        return f"if {self._obj}.{self._field} = {self._val}"
 
     def __eq__(self, other):
         if not isinstance(other, FilterExpr):
@@ -409,15 +444,6 @@ class FilterExpr(Expression):
         )
 
     def apply_subst(self, subst):
-        # return AppExpr(
-        #     "filter",
-        #     [
-        #         ("obj1", self._obj.apply_subst(subst)),
-        #         ("field", VarExpr("@@" + self._field)),
-        #         ("obj2", self._val.apply_subst(subst)),
-        #     ],
-        #     self.type
-        # )
         return FilterExpr(
             self._obj.apply_subst(subst),
             self._field,
@@ -448,7 +474,7 @@ class FilterExpr(Expression):
     def execute(self, analyzer):
         obj, score1 = self._obj.execute(analyzer)
         val, score2 = self._val.execute(analyzer)
-        
+
         if obj is None or val is None:
             if obj is None:
                 print("[Filter] obj cannot be evaluated")
@@ -456,7 +482,7 @@ class FilterExpr(Expression):
             if val is None:
                 print("[Filter] val cannot be evaluated")
 
-            return None, MAX_COST
+            return None, consts.MAX_COST
 
         # if not isinstance(obj, list):
         #     obj = [obj]
@@ -474,12 +500,12 @@ class FilterExpr(Expression):
                 tmp = None
                 print("[Filter] cannot find field", p, "in", tmp)
                 break
-            
+
         if tmp == val:
             # result.append(o)
 
         # if all_fails:
-        #     return None, MAX_COST
+        #     return None, consts.MAX_COST
 
             variables = self._obj.get_vars()
             analyzer.push_var(list(variables)[0], obj)
@@ -487,7 +513,7 @@ class FilterExpr(Expression):
             return obj, score1 + score2 + 1
 
         else:
-            return None, MAX_COST
+            return None, consts.MAX_COST
 
 
     def get_multiplicity(self, analyzer):
@@ -522,16 +548,26 @@ class FilterExpr(Expression):
         val_goal = Goal(MUL_ONE_ONE, goal.values[:1])
         self._val.goal_search(analyzer, val_goal)
 
-    def to_multiline(self, signatures, counter):
-        obj_exprs, obj_expr = self._obj.to_multiline(signatures, counter)
-        val_exprs, val_expr = self._val.to_multiline(signatures, counter)
-        exprs = obj_exprs + val_exprs
-        filter_expr = FilterExpr(
-            obj_expr, self._field, 
-            val_expr, self._is_val_list, self.type
-        )
+    def to_multiline(self, signatures, subst, counter):
+        var = utils.find_expr(subst, self)
+        exprs = []
+        if var is not None:
+            obj_expr = var
+        else:
+            val_exprs, val_expr = self._val.to_multiline(
+                signatures, subst, counter)
+            obj_exprs, obj_expr = self._obj.to_multiline(
+                signatures, subst, counter)
+            exprs = obj_exprs + val_exprs
+            filter_expr = FilterExpr(
+                obj_expr, self._field, 
+                val_expr, self._is_val_list, self.type
+            )
 
-        exprs.append(filter_expr)
+            exprs.append(filter_expr)
+            # TODO: is this correct?
+            subst.append((obj_expr, self))
+
         return exprs, obj_expr
 
     def check_fields(self, analyzer, var_to_trans):
@@ -549,159 +585,33 @@ class FilterExpr(Expression):
         return match, trans
 
     def pretty(self, hang):
-        return SPACE * hang + f"if {self._obj}.{self._field} = {self._val}"
+        return consts.SPACE * hang + f"if {self._obj}.{self._field} = {self._val}"
 
     def sizes(self):
         obj_eps, obj_prs, obj_sz = self._obj.sizes()
         val_eps, val_prs, val_sz = self._val.sizes()
         return (obj_eps + val_eps), (obj_prs + val_prs), (obj_sz + val_sz + 1)
 
-class MapExpr(Expression):
-    def __init__(self, obj, prog, typ=None):
-        super().__init__(typ)
-        self._obj = obj
-        self._prog = prog
-
-    def __str__(self):
-        return f"{self._obj}.map({self._prog})"
-
-    def __eq__(self, other):
-        if not isinstance(other, MapExpr):
-            return NotImplemented
-
-        return (
-            self._obj == other._obj and
-            self._prog == other._prog
-        )
-
-    def apply_subst(self, subst):
-        # print(self._prog._inputs)
-        # print(type(self._prog._inputs[0]))
-        # expr = self._prog.to_expression({self._prog._inputs[0]: self._obj})
-        # return expr.apply_subst(subst)
-        # f = self._prog.to_expression(subst)
-        # f.type = self.type
-        # return AppExpr(
-        #     "map",
-        #     [
-        #         ("obj", self._obj.apply_subst(subst)),
-        #         ("f", f),
-        #     ],
-        # )
-        return MapExpr(
-            self._obj.apply_subst(subst),
-            self._prog.apply_subst(subst),
-            self.type,
-        )
-
-    def collect_exprs(self):
-        return [self] + self._obj.collect_exprs() + self._prog.collect_exprs()
-
-    def body(self):
-        expr = self._prog.to_expression({self._prog._inputs[0]: self._obj})
-        return expr
-
-    def to_graph(self, graph):
-        # print(self)
-        # n1 = self._obj.to_graph(dot)
-        expr = self.body()
-        # expr.type = self.type
-        n2 = expr.to_graph(graph)
-        # return [n1, n2]
-        # raise NotImplementedError
-        return n2
-
-    def get_vars(self):
-        obj_vars = self._obj.get_vars()
-        prog_vars = self._prog.get_vars()
-        return obj_vars.union(prog_vars)
-
-    def taint_var(self, taint):
-        obj_vars = self._obj.get_vars()
-        exprs = self._prog.reachable_expressions(taint)
-        expr_vars = [e.get_vars() for e in exprs]
-        return obj_vars.union(*expr_vars)
-
-    def execute(self, analyzer):
-        obj, obj_score = self._obj.execute(analyzer)
-        if obj is None:
-            return None, MAX_COST
-
-        scores = 0
-        results = []
-        x = self._prog._inputs[0]
-        for o in obj:
-            analyzer.push_var(x, o)
-            prog, prog_score = self._prog.execute(analyzer)
-            analyzer.pop_var(x)
-            scores += prog_score
-            # do not add None to the results, ensure the following operations can be applied
-            if prog is not None:
-                results.append(prog)
-
-        # print("get back", results, "for Map")
-        return results, (obj_score + scores / len(obj) if obj else obj_score)
-
-    def get_multiplicity(self, analyzer):
-        obj_mul = self._obj.get_multiplicity(analyzer)
-        x = self._prog._inputs[0]
-        x_mul = obj_mul[0] - 1, MUL_ONE_ONE
-        analyzer.push_var(x, x_mul)
-        prog_mul = self._prog.get_multiplicity(analyzer)
-        print("[Map]", analyzer.pretty(prog_mul[1]))
-        if obj_mul[1] == MUL_ZERO_MORE:
-            return obj_mul[0], MUL_ZERO_MORE
-        else:
-            return obj_mul[0], prog_mul[1]
-
-    def to_program_graph(self, graph, var_to_trans):
-        obj_trans = self._obj.to_program_graph(graph, var_to_trans)
-        if obj_trans is not None:
-            x = self._prog._inputs[0]
-            var_to_trans[x] = obj_trans
-        return self._prog.to_program_graph(graph, var_to_trans)
-
-    def goal_search(self, analyzer, goal):
-        raise NotImplementedError
-
-    def to_multiline(self, signatures, counter):
-        raise NotImplementedError
-        # exprs, obj_expr = self._obj.to_multiline(signatures, counter)
-        # map_body = self._prog.to_multiline(signatures, counter)
-        # map_expr = MapExpr(obj_expr, map_body, self.type)
+    def lift(self, counter):
+        filter_sig = self.signature
         
-        # let_x = counter.get("x", 0)
-        # counter["x"] += 1
-        # let_var = VarExpr(f"x{let_x}", self.type)
-        # let_expr = AssignExpr(f"x{let_x}", map_expr, False)
-        # exprs.append(let_expr)
-        # return exprs, let_var
+        obj_param = filter_sig.parameters[0]
+        obj_binds, obj_x = insert_binds(counter, self._obj, obj_param.type)
+        obj = VarExpr(obj_x, obj_param.type)
 
-    def check_fields(self, analyzer, var_to_trans):
-        match, trans = self._obj.check_fields(analyzer, var_to_trans)
-        if match:
-            x = self._prog._inputs[0]
-            var_to_trans[x] = trans
-            match, trans = self._prog.check_fields(analyzer, var_to_trans)
-        return match, trans
+        val_param = filter_sig.parameters[1]
+        val_binds, val_x = insert_binds(counter, self._val, val_param.type)
+        val = VarExpr(val_x, val_param.type)
 
-    def set_type(self, typ):
-        self.type = typ
-        self._prog.set_type(typ)
+        filter_expr = FilterExpr(
+            obj, self._field, val,
+            filter_sig.response.type, filter_sig)
 
-    def pretty(self, hang):
-        # print("calling from MapExpr")
-        return (
-            f"{self._obj}.map("
-            f"{self._prog.pretty(hang)})"
-        )
-
-    def sizes(self):
-        raise NotImplementedError
+        return (obj_binds + val_binds), filter_expr
 
 class AssignExpr(Expression):
     def __init__(self, x, expr, is_bind):
-        super().__init__(None)
+        super().__init__(None, None)
         self._lhs = x
         self._rhs = expr
         self._is_bind = is_bind
@@ -710,7 +620,7 @@ class AssignExpr(Expression):
         if self._is_bind:
             return f"{self._lhs} <- {self._rhs}"
         else:
-            return f"{self._lhs} = {self._rhs}"
+            return f"let {self._lhs} = {self._rhs}"
 
     def __eq__(self, other):
         if not isinstance(other, AssignExpr):
@@ -731,10 +641,7 @@ class AssignExpr(Expression):
         return self._rhs
 
     def taint_var(self, taint):
-        if isinstance(self._rhs, MapExpr):
-            rhs_vars = self._rhs.taint_var(taint)
-        else:
-            rhs_vars = self._rhs.get_vars()
+        rhs_vars = self._rhs.get_vars()
         rhs_reachable_vars = [taint.get(v, set()) for v in rhs_vars]
         reachable_vars = set().union(*rhs_reachable_vars)
         curr_reachable = taint.get(self._lhs, set())
@@ -777,10 +684,7 @@ class AssignExpr(Expression):
     def goal_search(self, analyzer, goal):
         raise NotImplementedError
 
-    def to_multiline(self, signatures, counter):
-        # exprs, rhs = self._rhs.to_multiline(signatures, counter)
-        # exprs.append(AssignExpr(self._lhs, rhs, self._is_bind))
-        # return exprs, VarExpr(self._lhs, rhs.type)
+    def to_multiline(self, signatures, subst, counter):
         raise NotImplementedError
 
     def check_fields(self, analyzer, var_to_trans):
@@ -792,9 +696,9 @@ class AssignExpr(Expression):
 
     def pretty(self, hang):
         if self._is_bind:
-            return f"{SPACE * hang}{self._lhs} <- {self._rhs.pretty(hang)}"
+            return f"{consts.SPACE * hang}{self._lhs} <- {self._rhs.pretty(hang)}"
         else:
-            return f"{SPACE * hang}let {self._lhs} = {self._rhs.pretty(hang)}"
+            return f"{consts.SPACE * hang}let {self._lhs} = {self._rhs.pretty(hang)}"
 
     def sizes(self):
         endpoints, projections, sz = self._rhs.sizes()
@@ -802,6 +706,17 @@ class AssignExpr(Expression):
             return endpoints, projections, sz + 1
         else:
             return endpoints, projections, sz
+
+    def lift(self, counter):
+        binds, rhs = self._rhs.lift(counter)
+        # print(type(rhs))
+        if isinstance(rhs, FilterExpr):
+            binds.append(rhs)
+            expr = AssignExpr(self._lhs, rhs._obj, False)
+        else:
+            expr = AssignExpr(self._lhs, rhs, False)
+        binds.append(expr)
+        return binds
 
 class ProgramGraph:
     def __init__(self):
@@ -864,9 +779,9 @@ class Program:
     def __str__(self):
         expr_strs = [str(expr) + '    \n' for expr in self._expressions[:-1]]
         return (
-            f"\\{' '.join(self._inputs)} -> {{"
-            f"{' '.join(expr_strs)}"
-            f" return {self._expressions[-1]}}}"
+            f"\\{' '.join(self._inputs)} -> {{\n"
+            f"{''.join([consts.SPACE + expr for expr in expr_strs])}"
+            f"{consts.SPACE}return {self._expressions[-1]}\n}}"
         )
 
     def __eq__(self, other):
@@ -891,18 +806,17 @@ class Program:
         return self.__str__()
 
     def to_expression(self, subst={}):
+        exprs = []
         for expr in self._expressions:
             # eagerly substitute the previous variables into the new expression
             # print(expr)
             expr = expr.apply_subst(subst)
             if isinstance(expr, AssignExpr):
-                # expr.expr.type = expr.type
-                if isinstance(expr.expr, MapExpr):
-                    subst[expr.var] = expr.expr.body()
-                else:
-                    subst[expr.var] = expr.expr
+                subst[expr.var] = expr.expr
+            else:
+                exprs.append(expr)
 
-        return expr
+        return exprs
 
     def apply_subst(self, subst={}):
         exprs = []
@@ -919,7 +833,7 @@ class Program:
     def get_vars(self):
         all_vars = set()
         for expr in self._expressions:
-            all_vars.union(expr.get_vars())
+            all_vars = all_vars.union(expr.get_vars())
 
         return all_vars
 
@@ -930,7 +844,7 @@ class Program:
                 expr.taint_var(taint)
 
         # print(taint)
-        print(expr)
+        # print(expr)
         expr_vars = expr.get_vars()
         reachable_sets = [taint.get(v, set()) for v in expr_vars]
         reachable_vars = set(expr_vars).union(*reachable_sets)
@@ -948,36 +862,6 @@ class Program:
         expr = self.to_expression({})
         return expr.to_graph(graph)
 
-    def merge_maps(self):
-        maps = {}
-        mark_delete = set()
-        for expr in self._expressions:
-            if isinstance(expr, AssignExpr) and isinstance(expr._rhs, MapExpr):
-                var_obj = expr._rhs._obj
-                map_body = expr._rhs._prog
-                if (isinstance(var_obj, VarExpr) and var_obj._var in maps):
-                    rhs = maps[var_obj._var]
-                    # modify the last expression into let
-                    last_expr = AssignExpr(
-                        map_body._inputs[0],
-                        rhs._prog._expressions[-1],
-                        True,
-                    )
-                    expr._rhs._obj = rhs._obj
-                    expr._rhs._prog = rhs._prog
-                    expr._rhs._prog._expressions = (
-                        rhs._prog._expressions[:-1] + 
-                        [last_expr] + 
-                        map_body._expressions
-                    )
-                    mark_delete.add(var_obj._var)
-
-                maps[expr.var] = expr._rhs
-
-        self._expressions = [e for e in self._expressions
-            if not isinstance(e, AssignExpr) or e.var not in mark_delete
-        ]
-
     def merge_projections(self, subst={}):
         mark_delete = set()
         exprs = []
@@ -989,9 +873,6 @@ class Program:
             if isinstance(expr, AssignExpr) and not expr._is_bind: 
                 if isinstance(expr._rhs, ProjectionExpr):
                     subst[expr.var] = expr._rhs
-                elif isinstance(expr._rhs, MapExpr):
-                    expr._rhs._prog.merge_projections(subst)
-                    expr._rhs._prog.simplify()
 
             exprs.append(expr)
 
@@ -1004,12 +885,10 @@ class Program:
         exprs = []
         for expr in self._expressions:
             expr = expr.apply_subst(subst)
-            if isinstance(expr, AssignExpr):
+            if isinstance(expr, AssignExpr) and not expr._is_bind:
                 if isinstance(expr.expr, VarExpr):
                     subst[expr.var] = expr.expr
                     mark_delete.add(expr.var)
-                elif isinstance(expr.expr, MapExpr):
-                    expr.expr._prog.merge_direct_eqs(subst)
 
             exprs.append(expr)
 
@@ -1022,15 +901,26 @@ class Program:
         while old_expressions != self._expressions:
             old_expressions = self._expressions.copy()
             self.merge_direct_eqs(subst={})
-            self.merge_maps()
             self.merge_projections(subst={})
 
     def assign_type(self, t):
         self._expressions[-1].type = t
-        if (len(self._expressions) > 1 and 
-            isinstance(self._expressions[-2], MapExpr)):
-            expr = self._expressions[-2]
-            expr._prog.assign_type(t)
+
+    def lift(self, counter):
+        # self._expressions = self.reachable_expressions({})
+
+        exprs = []
+        for expr in self._expressions:
+            if isinstance(expr, AssignExpr):
+                exprs += expr.lift(counter)
+            else:
+                exprs.append(expr)
+
+        # print(exprs)
+        program = Program(self._inputs, exprs)
+        # print("before simplify", program)
+        program.simplify()
+        return program
 
     def _execute_exprs(self, exprs, analyzer):
         if len(exprs) == 1:
@@ -1041,7 +931,7 @@ class Program:
                 val, cost = expr._rhs.execute(analyzer)
                 if val is None:
                     print(expr, "cannot be evaled")
-                    return None, MAX_COST
+                    return None, consts.MAX_COST
 
                 if expr._is_bind:
                     vals = []
@@ -1055,7 +945,7 @@ class Program:
                         analyzer.pop_var(expr.var)
 
                     if len(vals) == 0:
-                        return None, MAX_COST
+                        return None, consts.MAX_COST
 
                     if len(val) > 0:
                         cost += bind_cost / len(val)
@@ -1069,7 +959,7 @@ class Program:
                 val, cost = expr.execute(analyzer)
                 if val is None:
                     print(expr, "cannot be evaled")
-                    return None, MAX_COST
+                    return None, consts.MAX_COST
 
                 val, sub_cost = self._execute_exprs(exprs[1:], analyzer)
                 cost += sub_cost
@@ -1085,19 +975,19 @@ class Program:
 
         return self._expressions[-1].get_multiplicity(analyzer)
 
-    def pretty(self, signatures, hang=0):
-        counter = defaultdict(int)
-        prog = self.to_multiline(signatures, counter)
-        prog.simplify()
-        indent = SPACE * (hang + 1)
+    def pretty(self, hang=0):
+        indent = consts.SPACE * (hang + 1)
         newline = '\n'
-        expr_strs = [expr.pretty(hang + 1) + newline for expr in prog._expressions]
+        expr_strs = [
+            expr.pretty(hang + 1) + newline
+            for expr in self._expressions
+        ]
         
         return (
-            f"\\{' '.join(prog._inputs)} -> {{{newline}"
+            f"\\{' '.join(self._inputs)} -> {{{newline}"
             f"{''.join(expr_strs[:-1])}"
             f"{indent}return {expr_strs[-1][:-1]}{newline}"
-            f"{SPACE * hang}}}"
+            f"{consts.SPACE * hang}}}"
         )
 
     def to_program_graph(self, graph=ProgramGraph(), var_to_trans={}):
@@ -1109,24 +999,6 @@ class Program:
         
         # the last expression in the list
         return expr.to_program_graph(graph, var_to_trans)
-
-    def remove_map(self):
-        exprs = []
-        for expr in self._expressions:
-            if isinstance(expr, AssignExpr):
-                rhs = expr.expr
-                v = expr.var
-                if isinstance(rhs, MapExpr):
-                    prog = rhs._prog.remove_map()
-                    x = prog._inputs[0]
-                    prog = prog.apply_subst({x: rhs._obj})
-                    exprs += prog._expressions[:-1]
-                    exprs.append(AssignExpr(v, prog._expressions[-1]), True)
-                    continue
-
-            exprs.append(expr)
-
-        return Program(self._inputs, exprs)
 
     def goal_search(self, analyzer, goal):
         # initialization
@@ -1145,10 +1017,10 @@ class Program:
 
         return goal
 
-    def to_multiline(self, signatures, counter):
+    def to_multiline(self, signatures, subst, counter):
         exprs = []
         for expr in self._expressions:
-            expr_lines, ret_expr = expr.to_multiline(signatures, counter)
+            expr_lines, ret_expr = expr.to_multiline(signatures, subst, counter)
             exprs += expr_lines
 
         exprs.append(ret_expr)
@@ -1175,3 +1047,27 @@ class Program:
             size += sz
 
         return num_endpoints, num_projections, size
+
+# helper function
+def insert_binds(counter, var, arg_typ):
+    # print("lifting", var, "into type", arg_typ)
+    binds = []
+    var_typ = var.type
+    
+    # if two types match with each other
+    if (var_typ is not None and
+        arg_typ is not None and
+        str(var_typ) == str(arg_typ)):
+        # print("No binding, real var type", var.type, ", expect arg type", arg_typ)
+        return binds, var.var
+
+    if isinstance(var_typ, types.ArrayType):
+        # print("Binding", var, "with type", var.type)
+        let_x = counter.get("x", 0)
+        counter["x"] += 1
+        bind = AssignExpr(f"x{let_x}", var, True)
+        subvar = VarExpr(f"x{let_x}", var_typ.item)
+        inner_binds, x = insert_binds(counter, subvar, arg_typ)
+        return ([bind] + inner_binds), x
+    else:
+        raise Exception("cannot lift a non-array type")

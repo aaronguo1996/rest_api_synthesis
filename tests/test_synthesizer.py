@@ -1,6 +1,6 @@
 import unittest
 from synthesizer.synthesizer import *
-from analyzer.entry import TraceEntry, RequestParameter, ResponseParameter
+from analyzer.entry import TraceEntry, Parameter
 
 class SynthesizerTestCase(unittest.TestCase):
     @staticmethod
@@ -39,48 +39,48 @@ class SynthesizerTestCase(unittest.TestCase):
         self.assertEqual(projections, {
             "projection(user, id):": TraceEntry(
                 "projection(user, id)", "", [
-                    RequestParameter(
-                        "", "obj", "projection(user, id)", 
-                        True, None, None
+                    Parameter(
+                        "", "obj", "projection(user, id)", [],
+                        True, None, None, None
                     )
                 ],
-                ResponseParameter(
+                Parameter(
                     "", "field", "projection(user, id)", 
                     [], True, 0, None, None
                 )
             ),
             "projection(user, name):": TraceEntry(
                 "projection(user, name)", "", [
-                    RequestParameter(
-                        "", "obj", "projection(user, name)", 
-                        True, None, None
+                    Parameter(
+                        "", "obj", "projection(user, name)", [],
+                        True, None, None, None
                     )
                 ],
-                ResponseParameter(
+                Parameter(
                     "", "field", "projection(user, name)", 
                     [], True, 0, None, None
                 )
             ),
             "projection(user, profile):": TraceEntry(
                 "projection(user, profile)", "", [
-                    RequestParameter(
-                        "", "obj", "projection(user, profile)", 
-                        True, None, None
+                    Parameter(
+                        "", "obj", "projection(user, profile)", [],
+                        True, None, None, None,
                     )
                 ],
-                ResponseParameter(
+                Parameter(
                     "", "field", "projection(user, profile)", 
                     [], True, 0, None, None
                 )
             ),
             "projection(user.profile, email):": TraceEntry(
                 "projection(user.profile, email)", "", [
-                    RequestParameter(
-                        "", "obj", "projection(user.profile, email)", 
-                        True, None, None
+                    Parameter(
+                        "", "obj", "projection(user.profile, email)", [],
+                        True, None, None, None,
                     )
                 ],
-                ResponseParameter(
+                Parameter(
                     "", "field", "projection(user.profile, email)", 
                     [], True, 0, None, None
                 )
@@ -109,48 +109,48 @@ class SynthesizerTestCase(unittest.TestCase):
         self.assertEqual(filters, {
             "filter(user, user.id):": TraceEntry(
                 "filter(user, user.id)", "", [
-                    RequestParameter(
-                        "", "obj", "filter(user, user.id)", 
-                        True, None, None
+                    Parameter(
+                        "", "obj", "filter(user, user.id)", [],
+                        True, None, None, None
                     ),
-                    RequestParameter(
-                        "", "field", "filter(user, user.id)", 
-                        True, None, None
+                    Parameter(
+                        "", "field", "filter(user, user.id)", [],
+                        True, None, None, None
                     ),
                 ],
-                ResponseParameter(
-                    "", "obj", "filter(user, user.id)", 
+                Parameter(
+                    "", "obj", "filter(user, user.id)",
                     [], True, 1, None, None
                 )
             ),
             "filter(user, user.name):": TraceEntry(
                 "filter(user, user.name)", "", [
-                    RequestParameter(
-                        "", "obj", "filter(user, user.name)", 
-                        True, None, None
+                    Parameter(
+                        "", "obj", "filter(user, user.name)", [],
+                        True, None, None, None,
                     ),
-                    RequestParameter(
-                        "", "field", "filter(user, user.name)", 
-                        True, None, None
+                    Parameter(
+                        "", "field", "filter(user, user.name)", [],
+                        True, None, None, None
                     ),
                 ],
-                ResponseParameter(
+                Parameter(
                     "", "obj", "filter(user, user.name)", 
                     [], True, 1, None, None
                 )
             ),
             "filter(user, user.profile.email):": TraceEntry(
                 "filter(user, user.profile.email)", "", [
-                    RequestParameter(
-                        "", "obj", "filter(user, user.profile.email)", 
-                        True, None, None
+                    Parameter(
+                        "", "obj", "filter(user, user.profile.email)", [],
+                        True, None, None, None
                     ),
-                    RequestParameter(
-                        "", "field", "filter(user, user.profile.email)", 
-                        True, None, None
+                    Parameter(
+                        "", "field", "filter(user, user.profile.email)", [],
+                        True, None, None, None
                     ),
                 ],
-                ResponseParameter(
+                Parameter(
                     "", "obj", "filter(user, user.profile.email)", 
                     [], True, 1, None, None
                 )

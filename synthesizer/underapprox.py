@@ -3,7 +3,14 @@ class Approximation:
     def __init__(self, net):
         self._net = net
 
-    def approx_reachability(self, inputs, visited, reachables):
+    def approx_reachability(self, inputs, outputs):
+        forward_reachables = self._compute_reachability(
+            self._net.post, inputs, set(), set())
+        backward_reachables = self._compute_reachability(
+            self._net.pre, outputs, set(), set())
+        return forward_reachables.intersection(backward_reachables)
+
+    def _compute_reachability(self, direction, inputs, visited, reachables):
         if not inputs:
             return reachables
 
@@ -13,9 +20,10 @@ class Approximation:
                 continue
 
             visited.add(pl)
-            post_trans = self._net.post(pl)
+            post_trans = direction(pl)
             reachables = reachables.union(set(post_trans))
             for trans in post_trans:
-                output_places += self._net.post(trans)
+                output_places += direction(trans)
 
-        return self.approx_reachability(output_places, visited, reachables)
+        return self._compute_reachability(
+            direction, output_places, visited, reachables)

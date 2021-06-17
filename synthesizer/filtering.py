@@ -5,10 +5,10 @@ import xeger
 from program.program import ProgramGraph
 import globs
 
-def run_filter(log_analyzer, dynamic_analyzer, inputs, program, multiple, repeat=5):
+def run_filter(synthesizer, log_analyzer, dynamic_analyzer, inputs, program, multiple, repeat=5):
     print(program)
     counter = defaultdict(int)
-    program = program.to_multiline(globs.synthesizer._entries, counter)
+    program = program.to_multiline(synthesizer._entries, counter)
     program.simplify()
     print(program)
 
@@ -63,6 +63,7 @@ def run_filter(log_analyzer, dynamic_analyzer, inputs, program, multiple, repeat
 
             scores.append(score)
 
+    print("scores: ", scores)
     # if all_singleton:
     #     print("this program returns a singleton")
     # else:

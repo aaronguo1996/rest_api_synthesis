@@ -128,16 +128,6 @@
                 "endpoint": "/v1/charges",
                 "method": "post",
                 "path": "id"
-            },
-            {
-                "endpoint": "/v1/charges/{charge}",
-                "method": "get",
-                "path": "id"
-            },
-            {
-                "endpoint": "/v1/charges/{charge}",
-                "method": "post",
-                "path": "id"
             }
         ]
     },
@@ -210,13 +200,18 @@
         "endpoint": null,
         "producer": [
             {
-                "endpoint": "/v1/sources",
+                "endpoint": "/v1/customers/{customer}/sources",
                 "method": "get",
                 "path": "data/[?]/id"
             },
             {
                 "endpoint": "/v1/sources",
                 "method": "post",
+                "path": "id"
+            },
+            {
+                "endpoint": "/v1/sources/{source}",
+                "method": "get",
                 "path": "id"
             }
         ]
@@ -366,6 +361,38 @@
         ]
     },
     {
+        "consumer": "issuer_fraud_record",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/issuer_fraud_records",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/issuer_fraud_records",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "authorization",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v1/issuing/authorizations",
+                "method": "get",
+                "path": "data/[?]/id"
+            },
+            {
+                "endpoint": "/v1/issuing/authorizations",
+                "method": "post",
+                "path": "id"
+            }
+        ]
+    },
+    {
         "consumer": "id",
         "endpoint": "/v1/credit_notes/{id}",
         "producer": [
@@ -399,26 +426,6 @@
     },
     {
         "consumer": "id",
-        "endpoint": "/v1/customers/{customer}/sources/{id}",
-        "producer": [
-            {
-                "enum": ["card_1IZ1eeDLm14arRKVTozikUnP", "card_1IZ1euDLm14arRKVzLVieBb8"],
-                "combine": false
-            }
-        ]
-    },
-    {
-        "consumer": "customer",
-        "endpoint": "/v1/customers/{customer}/sources/{id}",
-        "producer": [
-            {
-                "enum": ["cus_IpIhIZuvL3Lerc"],
-                "combine": false
-            }
-        ]
-    },
-    {
-        "consumer": "id",
         "endpoint": "/v1/products/{id}",
         "producer": [
             {
@@ -434,16 +441,16 @@
         ]
     },
     {
-        "consumer": "id",
-        "endpoint": "/v1/balance_transactions/{id}",
+        "consumer": "product",
+        "endpoint": null,
         "producer": [
             {
-                "endpoint": "/v1/balance_transactions",
+                "endpoint": "/v1/products",
                 "method": "get",
                 "path": "data/[?]/id"
             },
             {
-                "endpoint": "/v1/balance_transactions",
+                "endpoint": "/v1/products",
                 "method": "post",
                 "path": "id"
             }
@@ -558,6 +565,16 @@
                 "endpoint": "/v1/payment_intents",
                 "method": "post",
                 "path": "client_secret"
+            }
+        ]
+    },
+    {
+        "consumer": "type",
+        "endpoint": "/v1/credit_notes",
+        "producer": [
+            {
+                "enum": ["invoice_line_item"],
+                "combine": false
             }
         ]
     }

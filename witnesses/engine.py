@@ -1,29 +1,31 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from graphviz import Digraph
-from urllib.parse import urlparse
 from xeger import Xeger
 import json
 import logging
 import os
 import pickle
 import random
+import re
 import time
 
-from analyzer.entry import ErrorResponse, RequestParameter, ResponseParameter, TraceEntry
+from analyzer.entry import ErrorResponse, Parameter, TraceEntry
+from analyzer.utils import path_to_name, name_to_path
 from openapi import defs
-from witnesses.dependencies import DependencyResolver, EndpointProducer, EnumProducer
-from witnesses.error import EndpointNotFoundError, ExceedDepthLimit
-from witnesses.request import Connection
+from schemas import types
 from synthesizer.utils import make_entry_name
+from witnesses.dependencies import DependencyResolver, EndpointProducer, EnumProducer
+from witnesses.request import Connection
+import consts
+import witnesses.utils as utils
 
 RESULT_FILE = os.path.join("output/", "results.pkl")
 
 class Result:
-    def __init__(self, method, endpoint, code, response, params):
-        self.method = method
-        self.endpoint = endpoint
+    def __init__(self, entry, code, params, response):
+        self.entry = entry
         self.return_code = code
-        
+
         if code < defs.CODE_ERROR:
             self.has_error = False
             self.response_body = json.loads(response)
@@ -34,7 +36,12 @@ class Result:
         if self.response_body.get("error") is not None:
             self.has_error = True
 
-        self.request_params = params
+        self.request_params = {}
+        for name, val in params.items():
+            path = name_to_path(name)
+            self.request_params = utils.add_as_object(
+                self.request_params, path, val
+            )
 
     def __eq__(self, other):
         return (
@@ -51,19 +58,17 @@ class Result:
 
 
 class BasicGenerator:
-    def __init__(self, hostname, base_path, endpoint, method, ep_method_def,
-        token, skip_fields, value_dict, 
-        real_dependencies, annotations, depth_limit):
+    def __init__(self, hostname, base_path, entry,
+        token, skip_fields, value_dict,
+        real_dependencies, annotations, opt_param_indices):
         # create a logger for this module
         self._logger = logging.getLogger(__name__)
-        self._endpoint = endpoint
-        self._method = method
-        self._ep_method_def = ep_method_def
+        self._entry = entry
         self._hostname = hostname
         self._base_path = base_path
         self._value_dict = value_dict
         self._conn = Connection(hostname, base_path)
-        self._generateing_depth_limit = depth_limit
+        self._opt_param_indices = opt_param_indices
         self._real_dependencies = real_dependencies
         self._annotations = annotations
         self._token = token
@@ -76,112 +81,60 @@ class BasicGenerator:
             self._logger.debug(f"Witness {param_name} in the value_dict")
             defined_regex = self._value_dict.get(param_name)
 
-        if param_type == defs.TYPE_STRING:
-            regex = defined_regex or r"^[a-z0-9]{10,}$"
-            return x.xeger(regex)
-        elif param_type == defs.TYPE_ARRAY:
+        if isinstance(param_type, types.ArrayType):
             return []
-        elif param_type == defs.TYPE_INT:
-            int_range = defined_regex or range(0,5)
+        elif isinstance(param_type, types.PrimInt):
+            int_range = defined_regex or range(0, 1000)
             return random.choice(int_range)
-        elif param_type == defs.TYPE_NUM:
+        elif isinstance(param_type, types.PrimNum):
             float_range = defined_regex or (0, 1)
             return random.uniform(*float_range)
-        elif param_type == defs.TYPE_BOOL:
+        elif isinstance(param_type, types.PrimBool):
             return random.choice([True, False])
-        elif param_type == defs.TYPE_OBJECT:
+        elif isinstance(param_type, types.ObjectType):
             return {}
+        elif isinstance(param_type, types.PrimEnum):
+            return random.choice(param_type.enums)
         else:
-            print("Cannot generate random values for type", param_type, "with name", param_name)
-            return None
+            print(param_name, type(param_type))
+            regex = defined_regex or r"^[a-z0-9]{10,}$"
+            return x.xeger(regex)
 
-    def _generate_get(self, depth):
-        params = self._ep_method_def.get(defs.DOC_PARAMS, [])
-        return self._generate_params(depth + 1, params, 2)
-
-    def _generate_post(self, depth):
-        header_params = self._ep_method_def.get(defs.DOC_PARAMS, [])
-        headers = self._generate_params(depth + 1, header_params, 2)
-        
-        request_body = self._ep_method_def.get(defs.DOC_REQUEST)
-        body = {}
-        if request_body:
-            body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_JSON)
-            if not body_def:
-                body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_FORM)
-
-            if body_def is not None:
-                body_schema = body_def.get(defs.DOC_SCHEMA)
-                requires = body_schema.get(defs.DOC_REQUIRED, [])
-                body_params = body_schema.get(defs.DOC_PROPERTIES, {})
-
-                body_param_lst = []
-                for param_name in body_params:
-                    param = body_params[param_name]
-                    param.update({
-                        defs.DOC_NAME: param_name,
-                        defs.DOC_REQUIRED: param_name in requires,
-                    })
-                    body_param_lst.append(param)
-                body = self._generate_params(depth + 1, body_param_lst, 2)    
-
-        body.update(headers)
-        return body
-
-    def _generate_params(self, depth, params):
+    def _generate_params(self, params):
         raise NotImplementedError
 
-    def _generate_one(self, depth):
-        if depth > self._generateing_depth_limit:
-            raise ExceedDepthLimit
-
-        self._logger.debug(f"generateing for endpoint {self._endpoint}"
-            f" at depth {depth}")
+    def _generate_one(self):
+        entry = self._entry
+        self._logger.debug(f"generating for endpoint {entry.endpoint}")
 
         try:
-            # get parameters
-            if self._method.upper() == defs.METHOD_GET:
-                # parameters are defined in the "parameters" section
-                params = self._generate_get(depth)
-                code, response = self._conn.send_and_recv(
-                    self._endpoint,
-                    self._method.upper(),
-                    {
-                        defs.HEADER_AUTH: f"{defs.HEADER_BEARER} {self._token}",
-                    },
-                    params)
-            elif self._method.upper() == defs.METHOD_POST:
-                # parameters are defined in both the "parameters" and "requestBody"
-                params = self._generate_post(depth)
-                code, response = self._conn.send_and_recv(
-                    self._endpoint,
-                    self._method.upper(),
-                    {
-                        defs.HEADER_AUTH: f"{defs.HEADER_BEARER} {self._token}",
-                    },
-                    params)
-            else:
-                raise Exception("Unsupported method for generateing:", self._method)
-            return Result(self._method, self._endpoint, code, response, params)
+            params = self._generate_params(
+                entry.parameters,
+                self._opt_param_indices)
+            code, response = self._conn.send_and_recv(
+                entry.endpoint,
+                entry.method.upper(),
+                {
+                    defs.HEADER_AUTH: f"{defs.HEADER_BEARER} {self._token}",
+                },
+                params,
+            )
+            return Result(entry, code, params, response)
         except:
             return None
 
 
     def run(self):
-        # try:
-            return self._generate_one(1)
-        # except Exception as e:
-        #     self._logger.debug(f"Exception: {e}")
-        #     return None
+        return self._generate_one()
 
 class SaturationThread(BasicGenerator):
-    def __init__(self, hostname, base_path, endpoint, method, ep_method_def, 
-        token, skip_fields, value_dict, 
-        real_dependencies, annotations, analyzer, depth_limit):
+    def __init__(self, hostname, base_path, entry,
+        token, skip_fields, value_dict,
+        real_dependencies, annotations, analyzer, opt_param_indices):
         super().__init__(
             hostname, base_path,
-            endpoint, method, ep_method_def, token, skip_fields, value_dict,
-            real_dependencies, annotations, depth_limit)
+            entry, token, skip_fields, value_dict,
+            real_dependencies, annotations, opt_param_indices)
         self._analyzer = analyzer
 
     def _try_producer(self, producer):
@@ -193,9 +146,8 @@ class SaturationThread(BasicGenerator):
             else:
                 return random.choice(producer.values)
         elif isinstance(producer, EndpointProducer):
-            self._logger.debug(f"Trying the producer {producer.endpoint}"
-                f" with path {producer.path}")
-            resp = ResponseParameter(
+            self._logger.debug(f"Trying the producer {producer.endpoint} with path {producer.path}")
+            resp = Parameter(
                 producer.method,
                 producer.path[-1],
                 producer.endpoint,
@@ -214,92 +166,89 @@ class SaturationThread(BasicGenerator):
             self._logger.debug(f"Trying the parameter value {producer}")
             return producer
 
-    # get params from bank
-    def _generate_params(self, _, params, n):
-        param_dict = {}
+    def _generate_object(self, param):
+        param_type = param.type
 
-        req_params = []
-        opt_params = []
-        for param_obj in params:
-            required = param_obj.get(defs.DOC_REQUIRED)
-            if required:
-                req_params.append(param_obj)
-            else:
-                opt_params.append(param_obj)
+        self._logger.debug(f"Generating string values for {param.arg_name} with path {param.path}")
 
-        picked_num = random.randint(0, n)
-        picked_num = min(picked_num, len(opt_params))
-        picked_opt_params = random.sample(opt_params, picked_num)
+        if self._analyzer.dsu.find(param) and param.arg_name != defs.DOC_NAME:
+            self._logger.debug(
+                f"Trying fill parameter {param.arg_name} by real dependencies")
+            # if we already have the value bank for this variable
+            param_value_bank = self._analyzer.dsu.get_value_bank(param)
+            param_val = random.choice(list(param_value_bank))
+        elif (param_type.name in self._analyzer.type_values and
+            param.arg_name != defs.DOC_NAME):
+            self._logger.debug(
+                f"Trying fill parameter {param.arg_name} with object values of type {param_type.name}")
+            param_value_bank = self._analyzer.type_values[param_type.name]
+            param_val = random.choice(list(param_value_bank))
+        elif ((self._entry.endpoint, param.arg_name) in self._annotations and
+            param.arg_name != defs.DOC_NAME):
+            self._logger.debug(
+                f"Trying fill parameter {param.arg_name}"
+                f" by annotated dependencies")
+            # try inferred dependencies but do not create new values
+            producers = self._annotations.get(
+                (self._entry.endpoint, param.arg_name), [])
+            param_value_bank = set()
+            for producer in producers:
+                v = self._try_producer(producer)
+                if v:
+                    param_value_bank.add(v)
 
-        for param_obj in req_params + picked_opt_params:
-            param_name = param_obj.get(defs.DOC_NAME)
-            if param_name == "token": # in self._skip_fields:
-                continue
-
-            required = param_obj.get(defs.DOC_REQUIRED)
-            param_schema = param_obj.get(defs.DOC_SCHEMA)
-            if param_schema: # for parameters
-                param_type = param_schema.get(defs.DOC_TYPE)
-            else: # for requestBody
-                param_type = param_obj.get(defs.DOC_TYPE)
-
-            self._logger.debug(f"Filling for parameter {param_name} in {self._endpoint}")
-            param = RequestParameter(
-                self._method,
-                param_name, 
-                self._endpoint, 
-                required, 
-                None, 
-                None
-            )
-            if self._analyzer.dsu.find(param) and param_name != "name":
-                self._logger.debug(f"Trying fill parameter {param_name} by real dependencies")
-                # if we already have the value bank for this variable
-                param_value_bank = self._analyzer.dsu.get_value_bank(param)
+            if param_value_bank:
                 param_val = random.choice(list(param_value_bank))
-            elif (self._endpoint, param_name) in self._annotations and param_name != "name":
-                self._logger.debug(f"Trying fill parameter {param_name} by annotated dependencies")
-                # try inferred dependencies but do not create new values
-                producers = self._annotations.get(
-                    (self._endpoint, param_name), [])
-                param_value_bank = set()
-                for producer in producers:
-                    v = self._try_producer(producer)
-                    if v:
-                        param_value_bank.add(v)
-
-                if param_value_bank:
-                    param_val = random.choice(list(param_value_bank))
-                else:
-                    param_val = None
             else:
                 param_val = None
+        else:
+            param_val = None
 
-            # if we cannot find a value for an optional arg, skip it
-            if not param_val and not required and param_type == "string":
-                print(f"Parameter {param_name} is not required in {self._endpoint}")
+        if not param_val:
+            self._logger.debug(
+                f"No dependency found for {(self._entry.endpoint, param.arg_name)}. "
+                f"Trying random values.")
+            param_val = self._random_from_type(param.arg_name, param_type)
+
+        return param_val
+
+    # get params from bank
+    def _generate_params(self, params, opt_indices):
+        param_dict = {}
+
+        req_params, opt_params = utils.filter_optional(params)
+        selected_opt_params = list(map(lambda idx: opt_params[idx], opt_indices))
+        for param in req_params + selected_opt_params:
+            if (param.arg_name == defs.DOC_TOKEN or
+                param.arg_name == defs.DOC_EXPAND):
                 continue
 
-            if not param_val:
-                self._logger.debug(f"No dependency found for {(self._endpoint, param_name)}. Trying random values.")
-                param_val = self._random_from_type(param_name, param_type)
+            param_val = self._generate_object(param)
 
+            # if we cannot find a value for an arg, skip it
             if param_val is not None:
-                param_dict[param_name] = param_val
+                key = path_to_name(param.path)
+                param_dict[key] = param_val
+                # param_dict = add_as_object(param_dict, param.path, param_val)
+            else:
+                print("cannot find a value for param", param)
 
         return param_dict
 
 class WitnessGenerator:
-    def __init__(self, openapi_doc, analyzer, token, val_dict, ann_path, exp_dir,
-        depth_limit=3, path_to_defs="#/components/schemas", 
+    def __init__(self, openapi_entries, hostname, base_path,
+        entries, analyzer, token, val_dict, ann_path, exp_dir,
+        path_to_defs=consts.REF_PREFIX,
         skip_fields=[], plot_freq = 1):
         self._logger = logging.getLogger(__name__)
         # parse the spec into dict
-        self._doc = openapi_doc
-        self._paths = self._doc.get(defs.DOC_PATHS)
+        self._doc_entries = openapi_entries
+        self._hostname = hostname
+        self._base_path = base_path
+        self._entries = entries
 
         # resolve dependencies from the spec
-        resolver = DependencyResolver(openapi_doc)
+        resolver = DependencyResolver(openapi_entries)
         self._analyzer = analyzer
         groups = analyzer.analysis_result()
 
@@ -313,17 +262,10 @@ class WitnessGenerator:
         # value patterns injected by users
         self._token = token
         self._value_dict = val_dict
-        self._depth_limit = depth_limit
         self._exp_dir = exp_dir
 
-        # start a new connection for generateing
-        servers = self._doc.get("servers")
-        server = servers[0].get("url")
-        server_result = urlparse(server)
-        self._hostname = server_result.netloc
-        self._base_path = server_result.path
-        self._logger.debug(f"Get hostname: {self._hostname}"
-            f" and basePath: {self._base_path}")
+        # start a new connection for generating
+        self._logger.debug(f"Get hostname: {self._hostname} and basePath: {self._base_path}")
 
         self._path_to_defs = path_to_defs
         self._skip_fields = skip_fields
@@ -333,84 +275,118 @@ class WitnessGenerator:
         self._plot_freq = plot_freq
         # self._annotations = annotations
 
-    def _add_new_result(self, result: Result):
-        requests = []
+    def _add_new_result(self, entries, result: Result):
+        params = []
+        entry = self._doc_entries[result.entry.endpoint][result.entry.method]
         for name, val in result.request_params.items():
-            request = RequestParameter(
-                result.method, name, result.endpoint, True, None, val)
-            requests.append(request)
+            # find the corresponding param type
+            match_param = None
+            for param in entry.parameters:
+                if param.arg_name == name:
+                    match_param = param
+                    break
+
+            if match_param is None:
+                raise Exception(name, val, "does not have a matching param from params", [p.arg_name for p in entry.parameters])
+
+            request = Parameter(
+                entry.method, name, entry.endpoint, [name],
+                match_param.is_required, None, match_param.type, val)
+            params.append(request)
+            requests, values = request.flatten(
+                self._path_to_defs,
+                self._skip_fields
+            )
+            self._analyzer.insert_value(values)
             if not result.has_error:
-                self._analyzer.insert(request)
+                for request in requests:
+                    self._analyzer.insert(request)
 
         if result.has_error:
             response = ErrorResponse(result.response_body)
         else:
-            response = ResponseParameter(
-                result.method, "", result.endpoint, [], True, 0, None, result.response_body)
+            response = Parameter(
+                entry.method, "", entry.endpoint, [],
+                True, 0, entry.response.type, result.response_body)
+        
+        if not result.has_error:
+            responses, values = response.flatten(
+                self._path_to_defs,
+                self._skip_fields
+            )
+            self._analyzer.insert_value(values)
+            for r in responses:
+                self._analyzer.insert(r)
 
-        witness_path = os.path.join(self._exp_dir, 'traces.pkl')
-        with open(witness_path, 'rb') as f:
-            entries = pickle.load(f)
-            print(len(entries))
-            entries.append(
-                TraceEntry(
-                    result.endpoint,
-                    result.method,
-                    requests,
-                    response,
-                ))
+        entries.append(
+            TraceEntry(entry.endpoint, entry.method, params, response,)
+        )
+        return entries
 
-        with open(witness_path, 'wb') as f:
-            pickle.dump(entries, f)
-            
-        if result.has_error:
-            return
-
-        responses, _ = response.flatten(self._path_to_defs, self._skip_fields)
-        for r in responses:
-            self._analyzer.insert(r)
-
-    def _run_all(self, generate_type, endpoints, iterations, timeout):
+    def _run_all(self, generate_type, endpoints, iterations, timeout, max_opt_params):
         for i in range(1, iterations+1):
             # fire many threads at one time
             with ThreadPoolExecutor(max_workers=8) as executor: # TODO: change this to configuration
                 futures = []
                 results = []
-                for ep in endpoints:
-                    ep_def = self._paths.get(ep)
-                    if not ep_def:
-                        raise EndpointNotFoundError(ep)
 
-                    for method, ep_method_def in ep_def.items():
-                        if method == "delete": # TODO: skip delete for now
-                            continue
+                for entry in self._entries.values():
+                    # skip delete methods
+                    if entry.method.upper() == defs.METHOD_DELETE:
+                        continue
 
-                        self._logger.debug(f"Submit job for {method} {ep}")
-                        t = generate_type(
-                            self._hostname, self._base_path, 
-                            ep, method, ep_method_def,
-                            self._token,
-                            self._skip_fields,
-                            self._value_dict, 
-                            self._real_dependencies,
-                            self._annotations,
-                            self._analyzer, self._depth_limit)
-                        futures.append(executor.submit(t.run))
+                    # skip projections
+                    if re.search(r"^projection(.*, .*)$", entry.endpoint):
+                        continue
+
+                    self._logger.debug(f"Submit job for {entry.method} {entry.endpoint}")
+                    num_params = utils.num_optional_params(entry)
+
+                    def generate_opt_param_subsets(num_params, num_choose, indices):
+                        if num_params == 0 or num_choose == 0:
+                            t = generate_type(
+                                self._hostname,
+                                self._base_path,
+                                entry,
+                                self._token,
+                                self._skip_fields,
+                                self._value_dict,
+                                self._real_dependencies,
+                                self._annotations,
+                                self._analyzer,
+                                indices)
+                            futures.append(executor.submit(t.run))
+                            return
+
+                        generate_opt_param_subsets(
+                            num_params - 1, num_choose, indices)
+                        generate_opt_param_subsets(
+                            num_params - 1, num_choose - 1,
+                            [num_params - 1] + indices)
+
+                    generate_opt_param_subsets(
+                        num_params,
+                        min(num_params, max_opt_params), [])
+
                 for future in as_completed(futures):
                     try:
                         results.append(future.result(timeout=timeout))
                     except TimeoutError:
                         print("We lacked patience and got a TimeoutError")
-                    # except Exception as e:
-                    #     print(e)
-                    #     print("we get other exceptions")
 
-            # self._logger.debug("===============Start to write new results into DSU")
+            witness_path = os.path.join(self._exp_dir, consts.FILE_TRACE)
+            with open(witness_path, 'rb') as f:
+                entries = pickle.load(f)
+                print(len(entries))
+
             for generate_result in results:
                 if generate_result:
-                    self._add_new_result(generate_result)
+                    entries = self._add_new_result(entries, generate_result)
 
-            resolver = DependencyResolver(self._doc)
+            with open(witness_path, 'wb') as f:
+                pickle.dump(entries, f)
+
+            resolver = DependencyResolver(self._doc_entries)
             groups = self._analyzer.analysis_result()
             self._real_dependencies = resolver.get_dependencies_from_groups(groups)
 
@@ -441,52 +417,39 @@ class WitnessGenerator:
         for r in results:
             if r and not r.has_error:
                 cnt += 1
-                self._covered_endpoints.add(r.endpoint)
-        
+                self._covered_endpoints.add(r.entry.endpoint)
+
         coverage = cnt / len(results)
         self._logger.info(f"Coverage at iteration {i}: {coverage}")
         return coverage
 
-    def saturate_all(self, endpoints, iterations, timeout):
+    def saturate_all(self, endpoints, iterations, timeout, max_opt_params):
         if os.path.exists(RESULT_FILE):
             os.remove(RESULT_FILE)
 
-        self._run_all(SaturationThread, endpoints, iterations, timeout)
+        self._run_all(
+            SaturationThread,
+            endpoints, iterations,
+            timeout, max_opt_params)
 
     def get_param_names(self, ep_method_def):
-        header_params = ep_method_def.get(defs.DOC_PARAMS)
-        if header_params:
-            param_names = [p[defs.DOC_NAME] for p in header_params]
-        else:
-            param_names = []
-
-        request_body = ep_method_def.get(defs.DOC_REQUEST)
-        if request_body:
-            body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_JSON)
-            if not body_def:
-                body_def = request_body.get(defs.DOC_CONTENT).get(defs.HEADER_FORM)
-
-            if body_def is not None:
-                body_schema = body_def.get(defs.DOC_SCHEMA)
-                body_params = body_schema.get(defs.DOC_PROPERTIES, {})
-                param_names += list(body_params.keys())
-
-        return param_names
+        params = ep_method_def.parameters
+        return [p.arg_name for p in params]
 
     def to_graph(self, endpoints, filename):
         dot = Digraph(strict=True)
-        
+
         # add inferred dependencies as dashed edges in the graph
         # print(self._inferred_dependencies.get("user"))
         for ep in endpoints:
             # print(ep)
-            ep_def = self._paths.get(ep)
+            ep_def = self._doc_entries.get(ep)
             for _, ep_method_def in ep_def.items():
                 param_names = self.get_param_names(ep_method_def)
                 for name in param_names:
                     producers = self._annotations.get(name, [])
                     for producer in producers:
-                        resp = ResponseParameter(
+                        resp = Parameter(
                             producer.method,
                             producer.path[-1],
                             producer.endpoint,
@@ -499,11 +462,11 @@ class WitnessGenerator:
                         group = self._analyzer.dsu.get_group(resp)
                         rep = ""
                         for param in group:
-                            if isinstance(param, ResponseParameter):
+                            if param.array_level is not None:
                                 path_str = '.'.join(param.path)
                                 if not rep or len(rep) > len(path_str):
                                     rep = path_str
-                        
+
                         # if not rep:
                         #     rep = '.'.join(producer.path)
 
@@ -516,13 +479,13 @@ class WitnessGenerator:
                             )
                             dot.edge(rep, ep, style="dashed")
                             dot.edge(
-                                make_entry_name(producer.endpoint, producer.method), 
+                                make_entry_name(producer.endpoint, producer.method),
                                 rep, style="dashed"
                             )
 
         self._analyzer.to_graph(
             dot,
-            endpoints=endpoints, 
+            endpoints=endpoints,
             allow_only_input=False,
             filename=filename,
         )

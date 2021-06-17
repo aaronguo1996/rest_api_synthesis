@@ -1,0 +1,47 @@
+OBJ_MATCH_THRESHOLD = 0.6
+REF_PREFIX = "#/components/schemas/"
+CUSTOM_PREFIX = "x-"
+DEFAULT_LENGTH_LIMIT = 12
+JSON_TYPE = "application/json"
+HOSTNAME_PREFIX = "https://"
+HOSTNAME_PREFIX_LEN = len(HOSTNAME_PREFIX)
+
+KEY_ANALYSIS = "analysis"
+KEY_ANNOTATION = "annotation_path"
+KEY_BLACKLIST = "blacklist"
+KEY_DEBUG = "enable_debug"
+KEY_DOC_FILE = "doc_file"
+KEY_ENDPOINTS = "endpoints"
+KEY_EXP_NAME = "exp_name"
+KEY_GEN_DEPTH = "gen_depth"
+KEY_HOSTNAME = "hostname"
+KEY_ITERATIONS = "iterations"
+KEY_LOG_FILE = "log_file"
+KEY_OUTPUT = "debug_output"
+KEY_PATH_TO_DEFS = "path_to_definitions"
+KEY_PLOT_EVERY = "plot_every"
+KEY_PLOT_GRAPH = "plot_graph"
+KEY_SKIP_FIELDS = "ignore_field_names"
+KEY_SOLVER_NUM = "solver_number"
+KEY_SOLVER_TYPE = "solver_type"
+KEY_SYN_PREFILTER = "enable_prefilter"
+KEY_SYNTHESIS = "synthesis"
+KEY_TEST_SUITES = "test_suites"
+KEY_TIMEOUT = "timeout_per_request"
+KEY_TOKEN = "token"
+KEY_UNINTERESTING = "uninteresting_endpoints"
+KEY_VALUE_DICT = "value_dict"
+KEY_WITNESS = "witness"
+KEY_MAX_OPT = "max_opt_params"
+KEY_SOL_NUM = "solution_number"
+
+SOLVER_PN_SMT = "petri net SMT"
+SOLVER_HYPER = "hypergraph"
+SOLVER_PN_ILP = "petri net ILP"
+
+FILE_TRACE = "traces.pkl"
+FILE_ENTRIES = "entries.pkl"
+FILE_GRAPH = "graph.pkl"
+
+SPACE = '    '
+MAX_COST = 9999
