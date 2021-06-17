@@ -75,11 +75,6 @@ fn translate_expr<'p>(imports: &Imports<'p>, py_expr: &'p PyAny, arena: &mut Are
         // Then intern the field and alloc expr
         let field = arena.intern_str(py_expr.getattr("_field")?.extract()?);
         Ok(arena.alloc_expr(Expr::Filter(obj, field, val)))
-    } else if imports.map_expr.get_type().is_instance(py_expr)? {
-        // Translate the base object and program, then alloc expr
-        let obj = translate_expr(imports, py_expr.getattr("_obj")?, arena)?;
-        let prog = translate_prog(imports, py_expr.getattr("_prog")?, arena)?;
-        Ok(arena.alloc_expr(Expr::Map(obj, prog)))
     } else if imports.assign_expr.get_type().is_instance(py_expr)? {
         // Intern the variable and alloc the expr
         let v = arena.intern_str(py_expr.getattr("_var")?.extract()?);

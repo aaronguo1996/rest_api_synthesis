@@ -64,7 +64,7 @@ impl Arena {
         self.exprs.len() - 1
     }
 
-    pub fn push_prog(&mut self, prog: Prog) -> ExtraIx {
+    pub fn push_prog(&mut self, prog: Prog) -> ProgIx {
         self.progs.push(prog);
         self.progs.len() - 1
     }

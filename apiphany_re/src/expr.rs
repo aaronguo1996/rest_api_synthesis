@@ -14,7 +14,6 @@ pub enum Expr {
     Var(Spur),
     Proj(ExprIx, Spur),
     Filter(ExprIx, Spur, ExprIx),
-    Map(ExprIx, ProgIx),
     Assign(Spur, ExprIx, bool),
 }
 
