@@ -1,4 +1,5 @@
 import random
+import json
 
 from synthesizer.utils import make_entry_name
 from analyzer.multiplicity import MUL_ONE_ONE, MUL_ZERO_MORE, MUL_ZERO_ONE
@@ -7,14 +8,18 @@ import program.utils as utils
 import consts
 from analyzer.utils import name_to_path
 from schemas import types
+from program.utils import set_default
 
 class Expression:
     def __init__(self, typ, signature):
         self.type = typ
         self.signature = signature
 
-    def __repr__(self):
-        return self.__str__()
+    def to_json(self):
+        '''
+        convert the instance of this class to json
+        '''
+        return json.dumps(self, indent = 4, default=set_default)
 
     def apply_subst(self):
         raise NotImplementedError
@@ -271,10 +276,9 @@ class VarExpr(Expression):
                 val = analyzer.sample_value_by_type(self.type)
 
             analyzer.push_var(self._var, val)
-            return val, 1
-        else:
-            # print("[Var] get back", val, "for", self._var)
-            return val, 1
+
+        # print("[Var] get back", val, "for", self._var)
+        return val, 1
 
     def get_multiplicity(self, analyzer):
         var_mul = analyzer.lookup_var(self._var)
@@ -615,10 +619,10 @@ class ListExpr(Expression):
     def __str__(self):
         return f"[{self._item}]"
 
-    def __repr__(self):
-        return self.__str__()
-
     def __eq__(self, other):
+        if not isinstance(other, ListExpr):
+            return NotImplemented
+
         return self._item == other._item
 
     def pretty(self, hang):
@@ -845,7 +849,7 @@ class Program:
         return hash((tuple(self._inputs), str(self.to_expression({}))))
 
     def __repr__(self):
-        return self.__str__()
+        return self.__dict__
 
     def to_expression(self, subst={}):
         exprs = []
@@ -999,8 +1003,8 @@ class Program:
                     if len(vals) == 0:
                         return None, consts.MAX_COST
 
-                    if len(val) > 0:
-                        cost += bind_cost / len(val)
+                    if len(vals) > 0:
+                        cost += bind_cost / len(vals)
 
                     val = vals
                 else:

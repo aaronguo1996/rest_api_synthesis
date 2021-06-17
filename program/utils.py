@@ -21,3 +21,11 @@ def flatten(l):
             yield from flatten(el)
         else:
             yield el
+
+def set_default(obj):
+    if isinstance(obj, set):
+        return list(obj)
+    else:
+        obj_dict = obj.__dict__
+        obj_dict["object"] = type(obj).__name__
+        return obj_dict

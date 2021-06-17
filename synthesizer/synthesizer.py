@@ -278,6 +278,9 @@ class Synthesizer:
             # "/conversations.history_GET",
             # "projection(objs_conversation, last_read)_",
             # "/users.conversations_GET",
+            # "/conversations.invite_POST",
+            # "/chat.update_POST",
+            # "/chat.postMessage_POST"
 
             # "projection(ListInvoicesResponse, invoices)_",
             # "projection(Invoice, id)_",
@@ -295,6 +298,20 @@ class Synthesizer:
             # "projection(Order, line_items)_",
             # "projection(OrderLineItem, name)_",
             # "projection(Order, fulfillments)_",
+            # "projection(CatalogObject, item_data)_",
+            # "projection(CatalogObject, id)_",
+            # "projection(CatalogItem, tax_ids)_",
+            # "projection(Subscription, plan_id)_",
+            # "projection(Subscription, customer_id)_",
+            # "projection(Subscription, location_id)_",
+            # "/v2/subscriptions/search_POST",
+            # "projection(SearchSubscriptionsResponse, subscriptions)_",
+            # "filter(Subscription, Subscription.plan_id)_",
+            # "filter(Subscription, Subscription.customer_id)_",
+            # "filter(Subscription, Subscription.location_id)_",
+            # "/v2/catalog/search_POST",
+            # "projection(SearchCatalogObjectsResponse, objects)_",
+            # "filter(CatalogObject, CatalogObject.item_data.tax_ids)_"
         ]
 
         for name in lst:

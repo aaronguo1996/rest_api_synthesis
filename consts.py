@@ -48,4 +48,4 @@ FILE_ENTRIES = "entries.pkl"
 FILE_GRAPH = "graph.pkl"
 
 SPACE = '    '
-MAX_COST = 9999
+MAX_COST = 99999.9

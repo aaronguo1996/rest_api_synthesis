@@ -1,9 +1,11 @@
 import re
+import json
 
 from openapi import defs
 import schemas.utils as utils
 from openapi.utils import blacklist
 import consts
+from program.utils import set_default
 
 class BaseType:
     object_lib = {}
@@ -16,8 +18,11 @@ class BaseType:
     def __str__(self):
         return self.name
 
-    def __repr__(self):
-        return self.__str__()
+    def to_json(self):
+        '''
+        convert the instance of this class to json
+        '''
+        return json.dumps(self, indent = 4, default=set_default)
 
     @staticmethod
     def to_python_type(typ):
@@ -106,7 +111,8 @@ class SchemaObject(BaseType):
 
     def get_object_field(self, field):
         schema = BaseType.object_lib.get(self.name)
-        # print("SchemaObject: get_object_field from", self.name, "field", field, "type", type(schema))
+        schema.aliases = schema.aliases.union(self.aliases)
+        schema.aliases.add(self.name)
         if schema is None:
             raise Exception("Unknown object definition", self.name)
 
@@ -186,8 +192,12 @@ class ObjectType(BaseType):
     def get_object_field(self, field):
         # print("get_object_field from", self.name, "field name", field, "with fields", self.object_fields.keys())
         field_type = self.object_fields.get(field)
-        if field_type is not None and self.name is not None:
-            field_type.aliases.add(f"{self.name}.{field}")
+        if field_type is not None:
+            if self.name is not None:
+                field_type.aliases.add(f"{self.name}.{field}")
+            
+            for alias in self.aliases:
+                field_type.aliases.add(f"{alias}.{field}")
 
         return field_type, (field in self.required_fields)
 
@@ -236,6 +246,7 @@ class ArrayType(BaseType):
         return None
 
     def get_item(self):
+        self.item.aliases = self.item.aliases.union(self.aliases)
         return self.item
 
     def ignore_array(self):
@@ -281,6 +292,9 @@ class UnionType(BaseType):
                 if field_type is not None:
                     if self.name is not None:
                         field_type.aliases.add(f"{self.name}.{field}")
+
+                    for alias in self.aliases:
+                        field_type.aliases.add(f"{alias}.{field}")
 
                     return field_type, is_required
 

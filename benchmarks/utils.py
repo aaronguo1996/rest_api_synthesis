@@ -18,7 +18,6 @@ def prep_exp_dir(config):
 
 def parse_entries(configuration, exp_dir, base_path, endpoints):
     trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
-    print(trace_file)
     if not os.path.exists(trace_file):
         print("Parsing OpenAPI document...")
         # entries = None
@@ -67,6 +66,25 @@ def compare_program_strings(progstr_a, progstr_b):
 def avg(lst):
     return sum(lst) / len(lst)
 
+def get_obj_weight(obj):
+    """
+    weighs simply by calculating number of fields in object/list recursively
+    """
+    if isinstance(obj, list):
+        total = 1
+        for child in obj:
+            total += get_obj_weight(child)
+        return total
+    elif isinstance(obj, dict):
+        total = 1
+        for _, child in obj.items():
+            total += get_obj_weight(child)
+        return total
+    elif obj is not None:
+        return 1
+    else:
+        return 0
+
 def index_entries(entries, skip_fields):
     index_result = {}
     for e in entries:
@@ -97,8 +115,17 @@ def index_entries(entries, skip_fields):
 
         if param_names not in index_result[fun]:
             index_result[fun][param_names] = []
-        
-        index_result[fun][param_names].append(e)
+
+        found = False
+        for _, v, _ in index_result[fun][param_names]:
+            if v == e.response.value:
+                found = True
+
+        if not found:
+            weight = get_obj_weight(e.response.value)
+            index_result[fun][param_names].append(
+                (param_values, e.response.value, weight)
+            )
 
     return index_result
 

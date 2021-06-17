@@ -277,4 +277,4 @@ class SchemaType:
         return self.name
 
     def __repr__(self):
-        return self.name
+        return self.__dict__

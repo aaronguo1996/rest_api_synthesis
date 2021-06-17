@@ -1,5 +1,32 @@
 [
     {
+        "consumer": "customer_id",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v2/customers",
+                "method": "get",
+                "path": "customers/[?]/id"
+            },
+            {
+                "endpoint": "/v2/customers",
+                "method": "post",
+                "path": "customer/id"
+            }
+        ]
+    },
+    {
+        "consumer": "plan_id",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v2/subscriptions/search",
+                "method": "post",
+                "path": "subscriptions/[?]/plan_id"
+            }
+        ]
+    },
+    {
         "consumer": "location_id",
         "endpoint": null,
         "producer": [

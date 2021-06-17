@@ -17,7 +17,7 @@ from openapi.parser import OpenAPIParser
 from openapi.utils import read_doc, get_schema_forest
 from schemas import types
 from synthesizer.constructor import Constructor
-from synthesizer.filtering import run_filter
+from synthesizer.filtering import retrospective_execute
 from synthesizer.parallel import spawn_encoders
 from synthesizer.synthesizer import Synthesizer
 from synthesizer.utils import make_entry_name
@@ -146,6 +146,7 @@ def generate_witnesses(
     with open(os.path.join(exp_dir, consts.FILE_ENTRIES), "wb") as f:
         pickle.dump(entries, f)
 
+    log_analyzer.index_values_by_type()
     print("Writing graph to file...")
     with open(os.path.join(exp_dir, consts.FILE_GRAPH), "wb") as f:
         pickle.dump(log_analyzer, f)
@@ -226,9 +227,10 @@ def main():
 
             results = []
             for p in solutions:
-                score = run_filter(
-                    log_analyzer, dyn_analysis, 
-                    {"channel_name": "objs_message.name"}, p, True
+                score = retrospective_execute(
+                    log_analyzer, entries,
+                    configuration.get(consts.KEY_SKIP_FIELDS),
+                    dynamic.BiasType.SIMPLE, p
                 )
                 results.append((p, score))
 
@@ -246,7 +248,7 @@ def main():
                 # "price_id": types.PrimString("plan.id")
                 # "product_id": types.PrimString("product.id"),
             }
-            outputs = [types.SchemaObject("message")]
+            outputs = [types.SchemaObject("objs_message")]
             spawn_encoders(
                 synthesizer, inputs, outputs,
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
@@ -267,13 +269,18 @@ def main():
                     # "location_id": types.PrimString("Location.id"),
                     # "transaction_id": types.PrimString("Order.id"),
                     # "fulfillments": types.ArrayType(None, types.SchemaObject("OrderFulfillment")),
-                    "subscription": types.PrimString("subscription.id"),
+                    # "email": types.PrimString("objs_conversation.name"),
+                    # "location_id": types.PrimString("Location.id"),
+                    # "plan_id": types.PrimString("CatalogObject.id"),
+                    # "subscription": types.SchemaObject("Subscription")
+                    # "user_ids": types.ArrayType(None, types.PrimString("defs_user_id")),
+                    "channel_name": types.PrimString("objs_conversation.name"),
                 },
                 [
                     # types.SchemaObject("objs_message"),
                     # types.ArrayType(None, types.SchemaObject("bank_account.last4")),
                     # types.ArrayType(None, types.PrimString("Order"))
-                    types.SchemaObject("refund")
+                    types.ArrayType(None, types.SchemaObject("objs_message")),
                 ],
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOL_NUM]
             )

@@ -1,10 +1,12 @@
 import pebble
 
 from analyzer import dynamic
+import consts
 
 def retrospective_execute(
     log_analyzer, entries, skip_fields, 
     re_bias_type, program):
+    # print(program, flush=True)
     dynamic_analyzer = dynamic.DynamicAnalysis(
         entries,
         skip_fields,
@@ -17,24 +19,7 @@ def retrospective_execute(
     # execute the program with collected traces
     return program.execute(dynamic_analyzer)
 
-def run_filter(
-    log_analyzer, entries, skip_fields, re_bias_type, 
-    program, multiple, repeat=5):
-    print(program)
-
-    results = []
-    with pebble.ThreadPool(max_workers=1) as pool:
-        # try n times
-        for _ in range(repeat):
-            future = pool.schedule(
-                retrospective_execute,
-                args=(log_analyzer, entries, skip_fields, re_bias_type, program))
-            r, score = future.result()
-            print("****Program returns", r)
-            results.append(future)
-
-    results = [future.result() for future in results]
-
+def check_results(results, multiple):
     # decide multiplicity
     all_none = True
     all_singleton = True
@@ -61,11 +46,11 @@ def run_filter(
 
             scores.append(score)
 
-    print("scores: ", scores)
+    # print("scores: ", scores)
 
     # check methods always fail
     if all_none:
-        return 999999.9
+        return consts.MAX_COST
 
     # check multiplicity match
     score_avg = sum(scores) / len(scores)

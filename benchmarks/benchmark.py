@@ -4,6 +4,7 @@ import pickle
 import os
 import shutil
 import pebble
+import time
 
 import consts
 from openapi import defs
@@ -13,7 +14,7 @@ from synthesizer.synthesizer import Synthesizer
 import benchmarks.utils as utils
 from schemas import types
 from analyzer import dynamic
-from synthesizer.filtering import run_filter
+from synthesizer.filtering import retrospective_execute, check_results
 from program.program import ProjectionExpr, AppExpr, FilterExpr
 from synthesizer import parallel
 
@@ -21,13 +22,14 @@ class BenchConfig:
     def __init__(
         self, cache=False, repeat=5, filter_num=3,
         filter_sol_only=False, synthesis_only=False,
-        bias_type=dynamic.BiasType.SIMPLE):
+        bias_type=dynamic.BiasType.SIMPLE, use_parallel=True):
         self.cache = cache
         self.repeat = repeat
         self.filter_num = filter_num
         self.filter_sol_only = filter_sol_only
         self.synthesis_only = synthesis_only
         self.re_bias_type = bias_type
+        self.use_parallel = use_parallel
 
 class BenchmarkResult:
     def __init__(self, name, desc):
@@ -77,7 +79,7 @@ class Benchmark:
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
             )
             
-        solutions = set()
+        solutions = {}
         for j in range(consts.DEFAULT_LENGTH_LIMIT + 1):
             sol_file = os.path.join(bm_dir, f"solutions_{j}.pkl")
             if os.path.exists(sol_file):
@@ -88,53 +90,67 @@ class Benchmark:
                     print(j)
                     raise Exception(e)
 
-                solutions = solutions.union(programs)
+                solutions.update({p:p for p in programs})
 
         num_place, num_trans = get_petri_net_data(bm_dir)
 
-        return num_place, num_trans, solutions
+        return num_place, num_trans, list(solutions.keys())
 
     def _run_re(
         self, entries, configuration, runtime_config, 
         log_analyzer, solutions):
-        results = []
-        with pebble.ThreadPool() as pool:
+        all_results = []
+        
+        with pebble.ProcessPool() as pool:
             for i, p in enumerate(solutions):
                 print(f"{i}/{len(solutions)}", flush=True)
+                print(p, flush=True)
+
                 is_target_sol = False
                 for tgt_sol in self.solutions:
                     eq_target = tgt_sol == p
                     is_target_sol = is_target_sol or eq_target
 
+                start = time.time()
                 if is_target_sol or not runtime_config.filter_sol_only:
-                    future = pool.schedule(
-                        run_filter,
-                        args=(
-                            log_analyzer, 
-                            entries, 
-                            configuration.get(consts.KEY_SKIP_FIELDS),
-                            runtime_config.re_bias_type,
-                            p,
-                            isinstance(self.output, types.ArrayType),
-                            runtime_config.repeat))
-                    results.append((i, p, future.result()))
+                    reps = []
+                    for j in range(runtime_config.filter_num):
+                        group_results = []
+                        for k in range(runtime_config.repeat):
+                            if runtime_config.use_parallel:
+                                future = pool.schedule(
+                                    retrospective_execute,
+                                    args=(
+                                        log_analyzer,
+                                        entries,
+                                        configuration.get(consts.KEY_SKIP_FIELDS),
+                                        runtime_config.re_bias_type,
+                                        p)
+                                )
+                            else:
+                                future = retrospective_execute(
+                                    log_analyzer,
+                                    entries,
+                                    configuration.get(consts.KEY_SKIP_FIELDS),
+                                    runtime_config.re_bias_type,
+                                    p)
 
-        # results = [(i, p, future.result()) for i, p, future in results]
-        res = sorted(results, key=lambda x: x[-1])
-        for r in res:
-            print(r[0], r[2], r[1])
+                            group_results.append(future)
 
-        for rank, (_, res_sol, _) in enumerate(res):
-            for tgt_sol in self.solutions:
-                if tgt_sol == res_sol:
-                    return rank + 1, res_sol
+                        reps.append(group_results)
 
-        return None, None
+                    end = time.time()
+                    print("Time for running a program for all reptitions:", end - start, flush=True)
+
+                    all_results.append(reps)
+
+        return all_results
 
     def get_rank(
         self, entries, configuration, runtime_config, 
         log_analyzer, solutions):
         found = False
+        print("Total solutions:", len(solutions), flush=True)
         for rank, res_sol in enumerate(solutions):
             for tgt_sol in self.solutions:
                 if tgt_sol == res_sol:
@@ -145,18 +161,48 @@ class Benchmark:
             if found:
                 break
 
-        ranks = []
-        for _ in range(runtime_config.filter_num):
-            rank, sol_prog = self._run_re(
-                entries, configuration, runtime_config,
-                log_analyzer, solutions)
-            ranks.append(rank)
+        all_results = self._run_re(
+            entries, configuration, runtime_config,
+            log_analyzer, solutions)
 
+        program_ranks = [[] for _ in range(runtime_config.repeat)]
+        for i, reps in enumerate(all_results):
+            for j, rep in enumerate(reps):
+                if runtime_config.use_parallel:
+                    results = [x.result() for x in rep]
+                else:
+                    results = [x for x in rep]
+
+                score = check_results(
+                    results,
+                    isinstance(self.output, types.ArrayType))
+                if runtime_config.filter_sol_only:
+                    p = self.solutions[0]
+                else:
+                    p = solutions[i]
+
+                program_ranks[j].append((i, p, score))
+
+        ranks = []
+        for res in program_ranks:
+            res = sorted(res, key=lambda x: x[-1])
+            for rank, (_, res_sol, score) in enumerate(res):
+                if (res_sol in self.solutions and
+                    abs(score - consts.MAX_COST) > 1e-2):
+                    ranks.append((rank + 1, res_sol, score))
+
+                    for i, r in enumerate(res):
+                        print(i, r[0], r[2], r[1])
+
+                    break
+
+        sol_prog = ranks[0][1] if len(ranks) > 0 else None
+        ranks = [r[0] for r in ranks]
         return ranks, sol_prog
 
     def to_latex_entry(self, ranks, sol_prog):
-        if ranks[0] is not None:
-            print(f"PASS, Rank {ranks[0]}")
+        if len(ranks) > 0 and ranks[0] is not None:
+            print(f"PASS, Ranks {ranks}")
             self.latex_entry.mean_rank = sum(ranks) / len(ranks)
             self.latex_entry.median_rank = sorted(ranks)[len(ranks)//2]
         else:

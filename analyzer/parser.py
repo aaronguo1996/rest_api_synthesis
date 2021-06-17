@@ -66,7 +66,7 @@ class LogParser:
         request_params = []
         request_params += request.get(har_consts.HAR_QUERY, [])
 
-        post_data = request.get(har_consts.HAR_PARAMS, {})
+        post_data = request.get(har_consts.HAR_POSTDATA, {})
         if har_consts.HAR_PARAMS in post_data:
             post_params = post_data.get(har_consts.HAR_PARAMS)
             request_params += post_params

@@ -15,7 +15,7 @@ class ErrorResponse:
         return f"error: {self._error_msg}"
 
     def __repr__(self):
-        return self.__str__()
+        return self.__dict__
 
     def __eq__(self, other):
         if isinstance(other, ErrorResponse):
@@ -41,11 +41,8 @@ class Parameter:
 
         try:
             # store the value into a mapping
-            if self.type is not None and self.type.name is not None:
-                # if re.search(r"^.*_response$", self.type.name):
-                #     return [self], values
-
-                values[self.type.name].append(self.value)
+            if self.type is not None and str(self.type) != "None":
+                values[str(self.type)].append(self.value)
             
             for k, v in self.value.items():
                 if k in skip_fields:
@@ -77,8 +74,8 @@ class Parameter:
         values = defaultdict(list)
 
         for i in range(len(self.value)):
-            if self.type is not None and self.type.name is not None:
-                values[self.type.name].append(self.value)
+            if self.type is not None and str(self.type) != "None":
+                values[str(self.type)].append(self.value)
 
             if self.array_level is None:
                 array_level = None
@@ -286,7 +283,7 @@ class Parameter:
             self.method.upper() + '_' + '.'.join(self.path)
 
     def __repr__(self):
-        return self.__str__()
+        return self.__dict__
 
     def __hash__(self):
         return hash((
@@ -320,7 +317,7 @@ class TraceEntry:
                 ",".join(param_strs) + "\n" + str(self.response))
 
     def __repr__(self):
-        return self.__str__()
+        return self.__dict__
 
     def __eq__(self, other):
         if not isinstance(other, TraceEntry):

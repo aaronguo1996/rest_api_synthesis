@@ -19,7 +19,7 @@ class EndpointProducer:
         ])
 
     def __repr__(self):
-        return self.__str__()
+        return self.__dict__
 
     def __eq__(self, other):
         return (
@@ -40,7 +40,7 @@ class EnumProducer:
         return f"enum: {self.values}"
 
     def __repr__(self):
-        return self.__str__()
+        return self.__dict__
 
     def __eq__(self, other):
         return (

@@ -11,12 +11,14 @@
 #####
 
 import argparse
+import random
+import cProfile
 
 from benchmarks.benchmark import BenchConfig, Benchmark, BenchmarkSuite, Bencher
 from schemas import types
 from analyzer import dynamic
 from program.program import (Program, ProjectionExpr, FilterExpr,
-                            AssignExpr, VarExpr, AppExpr)
+                            AssignExpr, VarExpr, AppExpr, ListExpr)
 
 bias_type_args = {
     "none": dynamic.BiasType.NONE,
@@ -44,6 +46,8 @@ def build_cmd_parser():
         help="Benchmark name list")
     parser.add_argument("--cache", action='store_true', dest='cache',
         help="Whether to use cached results")
+    parser.add_argument("--parallel", action='store_true', dest='parallel',
+        help="Whether to run in parallel")
     parser.set_defaults(cache=False)
     parser.add_argument("--sol-only", action='store_true', dest='filter_sol_only',
         help="Whether to run retrospective execution on the solution only")
@@ -64,7 +68,7 @@ slack_benchmarks = [
         {
             "channel_name": types.PrimString("objs_conversation.name")
         },
-        types.ArrayType(None, types.PrimString("objs_user_profile.email")),
+        types.ArrayType(None, types.PrimString("objs_user.profile.email")),
         [
             Program(
                 ["channel_name"],
@@ -118,6 +122,87 @@ slack_benchmarks = [
                 ]
             ),
         ],
+    ),
+    Benchmark(
+        "1.4",
+        "Get all messages associated with a user",
+        {
+            "user_id": types.PrimString("defs_user_id"),
+            "ts": types.PrimString("defs_ts"),
+        },
+        types.ArrayType(None, types.SchemaObject("objs_message")),
+        [
+            Program(
+                ["user_id", "ts"],
+                [
+                    AssignExpr("x0", AppExpr("/conversations.list_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
+                    AssignExpr("x2", AppExpr("/conversations.history_GET", [("channel", ProjectionExpr(VarExpr("x1"), "id")), ("oldest", VarExpr("ts"))]), False),
+                    AssignExpr("x3", ProjectionExpr(VarExpr("x2"), "messages"), True),
+                    FilterExpr(VarExpr("x3"), "user", VarExpr("user_id"), False),
+                    VarExpr("x3")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "1.5",
+        "Create a channel and invite users",
+        {
+            "user_ids": types.ArrayType(None, types.PrimString("defs_user_id")),
+            "channel_name": types.PrimString("objs_conversation.name"),
+        },
+        types.ArrayType(None, types.SchemaObject("objs_conversation")),
+        [
+            Program(
+                ["user_ids", "channel_name"],
+                [
+                    AssignExpr("x0", AppExpr("/conversations.create_POST", [("name", VarExpr("channel_name"))]), False),
+                    AssignExpr("x1", VarExpr("user_ids"), True),
+                    AssignExpr("x2", AppExpr("/conversations.invite_POST", [("channel", ProjectionExpr(VarExpr("x0"), "id")), ("users", VarExpr("x1"))]), False),
+                    ProjectionExpr(VarExpr("x2"), "channel")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "1.6",
+        "Send a message, add a reply and update it",
+        {
+            "channel": types.PrimString("defs_channel"),
+        },
+        types.SchemaObject("objs_message"),
+        [
+            Program(
+                ["channel"],
+                [
+                    AssignExpr("x0", AppExpr("/chat.postMessage_POST", [("channel", VarExpr("channel"))]), False),
+                    AssignExpr("x1", AppExpr("/chat.postMessage_POST", [("channel", VarExpr("channel")), ("thread_ts", ProjectionExpr(VarExpr("x0"), "ts"))]), False),
+                    AssignExpr("x2", AppExpr("/chat.update_POST", [("channel", VarExpr("channel")), ("ts", ProjectionExpr(VarExpr("x1"), "ts"))]), False),
+                    ProjectionExpr(VarExpr("x2"), "message")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "1.7",
+        "Send a message to a given channel name",
+        {
+            "channel": types.PrimString("objs_conversation.name"),
+        },
+        types.SchemaObject("objs_message"),
+        [
+            Program(
+                ["channel"],
+                [
+                    AssignExpr("x0", AppExpr("/conversations.list_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
+                    FilterExpr(VarExpr("x1"), "name", VarExpr("channel"), False),
+                    AssignExpr("x2", AppExpr("/chat.postMessage", [("channel", ProjectionExpr(VarExpr("x1"), "id"))]), False),
+                    ProjectionExpr(VarExpr("x2"), "message")
+                ]
+            )
+        ]
     ),
 ]
 
@@ -368,7 +453,7 @@ stripe_benchmarks = [
         {
             "customer_id": types.SchemaObject("customer.id"),
         },
-        types.SchemaObject("deleted_payment_source"),
+        types.SchemaObject("payment_source"),
         [
             Program(
                 ["customer_id"],
@@ -382,7 +467,7 @@ stripe_benchmarks = [
     ),
     Benchmark(
         "2.13",
-        "Update payment methods of a customer for all subscriptions",
+        "Update payment methods for all subscriptions",
         {
             "payment_method": types.SchemaObject("payment_method"),
             "customer_id": types.PrimString("customer.id"),
@@ -432,33 +517,33 @@ square_benchmarks = [
     ),
     Benchmark(
         "3.2",
-        "Find subscription from location, customer, and plan id",
+        "Find subscription from location, customer and plan",
         {
             "customer_id": types.PrimString("Customer.id"),
             "location_id": types.PrimString("Location.id"),
-            "subscription_plan_id": types.PrimString("CatalogObject.id"),
+            "plan_id": types.PrimString("CatalogObject.id"),
         },
         types.ArrayType(None, types.SchemaObject("Subscription")),
         [
             Program(
-                ["customer_id", "location_id", "subscription_plan_id"],
+                ["customer_id", "location_id", "plan_id"],
                 [
                     AssignExpr("x0", AppExpr("/v2/subscriptions/search_POST", []), False),
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "subscriptions"), True),
                     FilterExpr(VarExpr("x1"), "customer_id", VarExpr("customer_id"), False),
                     FilterExpr(VarExpr("x1"), "location_id", VarExpr("location_id"), False),
-                    FilterExpr(VarExpr("x1"), "plan_id", VarExpr("subscription_plan_id"), False),
+                    FilterExpr(VarExpr("x1"), "plan_id", VarExpr("plan_id"), False),
                     VarExpr("x1")
                 ]
             ),
             Program(
-                ["customer_id", "location_id", "subscription_plan_id"],
+                ["customer_id", "location_id", "plan_id"],
                 [
                     AssignExpr("x0", AppExpr("/v2/subscriptions/search_POST", []), False),
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "subscriptions"), True),
                     FilterExpr(VarExpr("x1"), "location_id", VarExpr("location_id"), False),
                     FilterExpr(VarExpr("x1"), "customer_id", VarExpr("customer_id"), False),
-                    FilterExpr(VarExpr("x1"), "plan_id", VarExpr("subscription_plan_id"), False),
+                    FilterExpr(VarExpr("x1"), "plan_id", VarExpr("plan_id"), False),
                     VarExpr("x1")
                 ]
             )
@@ -475,9 +560,10 @@ square_benchmarks = [
             Program(
                 ["tax_id"],
                 [
-                    AssignExpr("x0", AppExpr("/v2/catalog/list_GET", []), False),
+                    AssignExpr("x0", AppExpr("/v2/catalog/search_POST", []), False),
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
-                    FilterExpr(VarExpr("x1"), "id", VarExpr("tax_id"), False),
+                    AssignExpr("x2", ListExpr(VarExpr("tax_id")), False),
+                    FilterExpr(VarExpr("x1"), "item_data.tax_ids", VarExpr("x2"), False),
                     VarExpr("x1")
                 ]
             )
@@ -654,7 +740,8 @@ def main():
         args.filter_num,
         args.filter_sol_only,
         args.synthesis_only,
-        bias_type_args[args.bias_type])
+        bias_type_args[args.bias_type],
+        args.parallel)
     b = Bencher(
         [
             slack_suite,
@@ -662,12 +749,19 @@ def main():
             square_suite,
         ],
         config)
-    b.run(
-        args.names,
-        output=args.output,
-        print_api=True,
-        print_results=True,
-        cached_results=True)
+    random.seed(1314)
+
+    with cProfile.Profile() as pr:
+        
+        b.run(
+            args.names,
+            output=args.output,
+            print_api=True,
+            print_results=True,
+            cached_results=False)
+
+    pr.print_stats()
+
 
 if __name__ == '__main__':
     main()

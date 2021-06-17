@@ -268,7 +268,7 @@ class LogAnalyzer:
                 rep = group[0].arg_name
 
             # for debug
-            if rep == "defs_channel":
+            if rep == "CatalogObject.id":
                 group_params = []
                 for param in group:
                     if param.type is not None:
@@ -397,22 +397,47 @@ class LogAnalyzer:
         return descendants
 
     def get_values_by_type(self, typ):
-        params = self.dsu._parents.keys()
-        values = set()
-        for param in params:
-            if param.type and param.type.name == typ.name:
-                values = values.union(self.dsu.get_value_bank(param))
+        # params = self.dsu._parents.keys()
+        # values = set()
+        # for param in params:
+        #     if param.type and param.type.name == typ.name:
+        #         values = values.union(self.dsu.get_value_bank(param))
 
-        return list(values)
+        # values = list(values) + self.type_values.get(str(typ), [])
+
+        return list(self.value_map.get(typ, []))
+
+    def index_values_by_type(self):
+        value_map = {}
+        params = self.dsu._parents.keys()
+        for param in params:
+            if param.type:
+                typ = str(param.type)
+                if typ not in value_map:
+                    value_map[typ] = set()
+
+                value_map[typ] = value_map[typ].union(
+                    self.dsu.get_value_bank(param)
+                )
+
+        for typ, values in self.type_values.items():
+            if typ not in value_map:
+                value_map[typ] = []
+
+            value_map[typ] = list(value_map[typ]) + values
+
+        self.value_map = value_map
 
     def find_same_type(self, param):
         if isinstance(param.type, types.UnionType):
             items = param.type.items
+        elif isinstance(param.type, types.ArrayType):
+            items = [param.type.item]
         else:
             items = [param.type]
-
-        # if str(param.type) == "invoice.charge, charge":
-        #     print("Trying to find type for parameter", param)
+        
+        if str(param.type) == "[CatalogObject.item_data.tax_ids]":
+            print("Trying to find type for parameter", param, flush=True)
 
         params = self.dsu._parents.keys()
         for p in params:
@@ -429,9 +454,12 @@ class LogAnalyzer:
                 if same_type_name(p, tmp_param):
                     has_same_name = True
 
+            # if str(p.type) == "CatalogObject.id" or str(p.type) == "CatalogItem.tax_ids":
+            #     print(p.type.aliases, flush=True)
+
             if p == param or has_same_name:
-                # if str(param.type) == "invoice.charge, charge":
-                #     print("find parameter", p)
+                if str(param.type) == "[CatalogObject.item_data.tax_ids]":
+                    print("found parameter", p, flush=True)
 
                 group = self.dsu.get_group(p)
                 rep = get_representative(group)
@@ -440,6 +468,9 @@ class LogAnalyzer:
                     # if str(param.type) == "invoice.charge, charge":
                     #     print("Setting type", rep)
                     param.type.name = rep
+
+                    if isinstance(param.type, types.ArrayType):
+                        param.type.item.name = rep
 
                 break
 

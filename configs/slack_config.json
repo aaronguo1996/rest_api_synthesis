@@ -24,7 +24,7 @@
         "gen_depth": 3,
         "timeout_total": 600,
         "timeout_per_request": 60,
-        "iterations": 3,
+        "iterations": 0,
         "plot_every": 10,
         "max_opt_params": 2
     },
@@ -33,7 +33,7 @@
         "block_perms": true,
         "solver_type": "petri net ILP",
         "solver_number": 6,
-        "solution_number": 5000,
+        "solution_number": 500,
         "enable_prefilter": false
     },
     "endpoints": [

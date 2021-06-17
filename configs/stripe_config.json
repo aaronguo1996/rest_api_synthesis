@@ -27,7 +27,7 @@
         "timeout_per_request": 60,
         "iterations": 0,
         "plot_every": 10,
-        "max_opt_params": 2
+        "max_opt_params": 0
     },
     "synthesis": {
         "expand_group": true,
@@ -38,7 +38,6 @@
         "enable_prefilter": false
     },
     "endpoints": [
-        "/v1/subscriptions"
     ],
     "ignore_field_names": [
         "text",

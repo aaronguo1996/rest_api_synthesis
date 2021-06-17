@@ -5,8 +5,8 @@ import xeger
 
 from analyzer.entry import ErrorResponse
 from analyzer.multiplicity import MUL_ZERO_MORE
-from synthesizer.utils import make_entry_name
 from analyzer.utils import path_to_name
+from schemas import types
 
 CMP_ENDPOINT_NAME = 0
 CMP_ENDPOINT_AND_ARG_NAME = 1
@@ -49,17 +49,31 @@ class DynamicAnalysis:
         self._environment = {}
 
     def sample_value_by_type(self, typ):
-        vals = self._log_analyzer.get_values_by_type(typ)
-        vals = list({v:v for v in vals}.keys())
-        if not vals:
-            # only two cases here
-            if str(typ) == "unit_amount_/v1/prices_POST_unit_amount":
-                vals = [random.randint(1,10)]
-            else:
-                x = xeger.Xeger()
-                vals = [x.xeger("^[a-z0-9]{10,}$")]
-        
-        return random.choice(vals)
+        if isinstance(typ, types.ArrayType):
+            lst_len = random.choice(range(1, 5))
+            vals = []
+            for _ in range(lst_len):
+                val = self.sample_value_by_type(typ.item)
+                vals.append(val)
+
+            return vals
+        else:
+            candidates = self._log_analyzer.get_values_by_type(typ)
+            vals = []
+            for v in candidates:
+                if v not in vals:
+                    vals.append(v)
+
+            if not vals:
+                # only two cases here
+                if str(typ) == "unit_amount_/v1/prices_POST_unit_amount":
+                    vals = [random.randint(1, 10)]
+                else:
+                    x = xeger.Xeger()
+                    vals = [x.xeger("^[a-z0-9]{10,}$")]
+            
+            # print("Sampling by type", typ, "from", vals)
+            return random.choice(vals)
 
     def get_traces_by_param(self, param):
         results = []
@@ -143,40 +157,13 @@ class DynamicAnalysis:
     def lookup_var(self, x):
         return self._environment.get(x)
 
-    def _get_obj_weight(self, obj):
-        """
-        weighs simply by calculating number of fields in object/list recursively
-        """
-        if isinstance(obj, list):
-            total = 1
-            for child in obj:
-                total += self._get_obj_weight(child)
-            return total
-        elif isinstance(obj, dict):
-            total = 1
-            for _, child in obj.items():
-                total += self._get_obj_weight(child)
-            return total
-        elif obj is not None:
-            return 1
-        else:
-            return 0
-
     def _sample_entry(self, entries, backup=[]):
-        entry_vals = []
-        for e in entries:
-            if e.response.value not in entry_vals:
-                entry_vals.append(e.response.value)
-
-        if not entry_vals:
-            # print("cannot find trace in the given group, using backups")
-            for e in backup:
-                if e.response.value not in entry_vals:
-                    entry_vals.append(e.response.value)
-
-        weights = None
-        if self._bias_type == BiasType.SIMPLE:
-            weights = [self._get_obj_weight(obj) for obj in entry_vals]
+        if entries:
+            entry_vals, weights = zip(*entries)
+        elif backup:
+            entry_vals, weights = zip(*backup)
+        else:
+            entry_vals, weights = [], []
 
         # print("entries:", entry_vals, weights)
         if entry_vals:
@@ -193,22 +180,22 @@ class DynamicAnalysis:
 
         if self._abstraction_level == CMP_ENDPOINT_NAME:
             calls = []
-            for es in same_endpoint_calls.values():
-                calls += es
-            return self._sample_entry(es)
+            for _, v, w in same_endpoint_calls.values():
+                calls.append((v, w))
+            return self._sample_entry(calls)
 
         # get all entries with the same arg names
         arg_names = sorted([x for x, _ in args])
         same_args_calls = same_endpoint_calls.get(tuple(arg_names), [])
+        same_args_values = [(v, w) for _, v, w in same_args_calls]
 
         if self._abstraction_level == CMP_ENDPOINT_AND_ARG_NAME:
             # return self._sample_entry(same_args_calls, same_endpoint_calls)
-            return self._sample_entry(same_args_calls)
+            return self._sample_entry(same_args_values)
 
         # get all entries with the same arg values
         same_arg_val_calls = []
-        for entry in same_args_calls:
-            params = {path_to_name(param.path): param.value for param in entry.parameters}
+        for params, v, w in same_args_calls:
             has_all_values = True
             for x, v in args:
                 if params[x] != v:
@@ -216,12 +203,14 @@ class DynamicAnalysis:
                     break
 
             if has_all_values:
-                same_arg_val_calls.append(entry)
+                same_arg_val_calls.append((v, w))
 
         if self._abstraction_level == CMP_ENDPOINT_AND_ARG_VALUE:
             # print("sampling entries for", fun)
             # return self._sample_entry(same_arg_val_calls, same_args_calls)
-            return self._sample_entry(same_arg_val_calls, backup=same_args_calls)
+            return self._sample_entry(
+                same_arg_val_calls,
+                backup=same_args_values)
         else:
             raise Exception("Unknown abstraction level")
 

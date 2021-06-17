@@ -145,18 +145,15 @@ class Constructor:
             ref_path = field_def.get(defs.DOC_REF)
             typ_name = ref_path[len(consts.REF_PREFIX):]
             schema = types.get_ref_type(self._doc, typ_name)
-            if obj_name == "objs_conversation" and field_name == "objs_conversation":
-                print(typ_name)
             filters = self._create_filter(obj_name, field_name, schema)
-            if obj_name == "objs_conversation" and field_name == "objs_conversation":
-                print(filters)
             results.update(filters)
         elif defs.DOC_PROPERTIES in field_def: # if the object has sub-fields
             properties = field_def.get(defs.DOC_PROPERTIES)
             for name, prop in properties.items():
-                field_type = types.construct_type(f"{obj_name}.{name}", prop)
-                # if obj_name == "objs_conversation" and name == "id":
-                #     print(field_name, field_type)
+                field_type = types.construct_type(f"{field_name}.{name}", prop)
+                if field_name == "CatalogObject.item_data" and name == "tax_ids":
+                    print(obj_name, type(field_type), field_type, flush=True)
+
                 if (prop.get(defs.DOC_TYPE) == defs.TYPE_OBJECT or
                     defs.DOC_PROPERTIES in prop or
                     isinstance(field_type, types.SchemaObject)):
@@ -219,6 +216,8 @@ class Constructor:
                     filter_in = [self._analyzer.find_same_type(fin)
                         for fin in filter_in]
                     
+                    if obj_name == "CatalogObject" and name == "tax_ids":
+                        print([x.type for x in filter_in])
                     if parts is None:
                         filter_out = self._analyzer.find_same_type(filter_out)
                         

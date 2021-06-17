@@ -54,7 +54,7 @@ class Result:
         return str((self.return_code, self.response_body, self.request_params))
 
     def __repr__(self):
-        return self.__str__()
+        return self.__dict__
 
 
 class BasicGenerator:
@@ -180,7 +180,7 @@ class SaturationThread(BasicGenerator):
         else:
             arg_name = param.arg_name
 
-        if self._analyzer.dsu.find(param) and arg_name != defs.DOC_NAME:
+        if self._analyzer.dsu.find(param) and arg_name != defs.DOC_NAME and arg_name != defs.DOC_TYPE:
             self._logger.debug(
                 f"Trying fill parameter {arg_name} by real dependencies")
             # if we already have the value bank for this variable

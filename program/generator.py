@@ -68,7 +68,10 @@ class ProgramGenerator:
             if self._filter_by_names(self._signatures, transitions, inputs, p):
                 # print(p, flush=True)
                 p = p.lift(self._name_counters)
-                programs.append(p)
+                if p not in programs:
+                    print(p)
+                    print(p.to_expression({}))
+                    programs.append(p)
 
         # raise Exception
         return programs
