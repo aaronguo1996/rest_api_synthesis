@@ -1,4 +1,4 @@
-use crate::{Expr, ExprIx, TraceVec, Prog, ProgIx};
+use crate::{Expr, ExprIx, Prog, ProgIx, TraceVec};
 use lasso::{Rodeo, Spur};
 use smallvec::SmallVec;
 
