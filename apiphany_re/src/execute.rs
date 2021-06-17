@@ -30,9 +30,6 @@ pub struct ExecEnv<'a> {
     // TODO: env: HashMap<(), ()>,
 }
 
-/// An index into the extra data of an `Arena`.
-pub type ExtraIx = usize;
-
 /// An `Arena` handles the allocated data needed for an RE pass:
 /// the list of `Expr`s, the list of trace entries, and the
 /// `rodeo::Rodeo` which holds interned strings. It also provides
