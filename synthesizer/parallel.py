@@ -45,7 +45,7 @@ def run_encoder(synthesizer, inputs, outputs, path_len):
         # print("Finding a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
 
         end = time.time()
-        print(path)
+        # print(path)
         programs, perms = synthesizer._generate_solutions(
             path_len, inputs, outputs, path, end - start
         )

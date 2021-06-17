@@ -58,7 +58,7 @@ class LogParser:
 
     def _resolve_entry(self, skip_fields, entry):
         '''
-            resolve a request/response entry into an LogEntry object
+            resolve a request/response entry into a TraceEntry object
         '''
 
         request = entry.get("request", None)

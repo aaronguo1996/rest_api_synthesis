@@ -209,7 +209,7 @@ class Bencher:
                 spawn_encoders(
                     synthesizer,
                     inputs, output,
-                    1 # configuration["synthesis"]["solver_number"]
+                    configuration["synthesis"]["solver_number"]
                 )
 
             # process solutions

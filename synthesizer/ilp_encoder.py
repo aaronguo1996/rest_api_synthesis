@@ -154,15 +154,6 @@ class ILPetriEncoder:
             input_places + null_places, set(), set()
         )
         self._reachables = self._reachables.union(reachables)
-        # print("/users.lookupByEmail_GET" in self._reachables)
-        # print("projection(/users.lookupByEmail_GET_response, user)_" in self._reachables)
-        # print("projection(objs_user, id)_" in self._reachables)
-        # print("/conversations.open_POST" in self._reachables)
-        # print("projection(/conversations.open_POST_response, channel)_" in self._reachables)
-        # print("projection(objs_conversation, id)_" in self._reachables)
-        # print("/chat.postMessage_POST" in self._reachables)
-        # print("projection(/chat.postMessage_POST_response, message)_" in self._reachables)
-        # print("after approximation:", len(self._reachables))
 
     def _add_variables(self, ck):
         places = self._net.place()
