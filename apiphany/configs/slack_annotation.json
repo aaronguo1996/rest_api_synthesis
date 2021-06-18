@@ -169,6 +169,22 @@
         ]
     },
     {
+        "consumer": "thread_ts",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/chat.postMessage",
+                "method": "post",
+                "path": "ts"
+            },
+            {
+                "endpoint": "/conversations.history",
+                "method": "get",
+                "path": "messages/[?]/ts"
+            }
+        ]
+    },
+    {
         "consumer": "timestamp",
         "endpoint": null,
         "producer": [

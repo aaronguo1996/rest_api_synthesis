@@ -19,7 +19,7 @@ class EndpointProducer:
         ])
 
     def __repr__(self):
-        return self.__str__()
+        return self.__dict__
 
     def __eq__(self, other):
         return (
@@ -40,7 +40,7 @@ class EnumProducer:
         return f"enum: {self.values}"
 
     def __repr__(self):
-        return self.__str__()
+        return self.__dict__
 
     def __eq__(self, other):
         return (
@@ -82,7 +82,7 @@ class DependencyResolver:
                     ep_method_def = ep_def.get(resp.method.upper())
                 
                 producer = EndpointProducer(
-                    endpoint, resp.method, ep_method_def, resp.path)
+                    endpoint, resp.method.upper(), ep_method_def, resp.path)
                 producers.add(producer)
 
             if producers:
@@ -115,7 +115,7 @@ class DependencyResolver:
                         ep_method_def = ep_def.get(method.upper())
                         # create the producer for this
                         producer = EndpointProducer(
-                            ep, method, ep_method_def, path
+                            ep, method.upper(), ep_method_def, path
                         )
                         valid_producers.add(producer)
 

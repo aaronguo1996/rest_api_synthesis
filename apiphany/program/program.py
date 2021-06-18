@@ -1,20 +1,25 @@
-from collections import defaultdict
-from synthesizer.utils import make_entry_name
+import random
+import json
 
+from synthesizer.utils import make_entry_name
 from analyzer.multiplicity import MUL_ONE_ONE, MUL_ZERO_MORE, MUL_ZERO_ONE
 from analyzer.dynamic import Goal
 import program.utils as utils
 import consts
 from analyzer.utils import name_to_path
 from schemas import types
+from program.utils import set_default
 
 class Expression:
     def __init__(self, typ, signature):
         self.type = typ
         self.signature = signature
 
-    def __repr__(self):
-        return self.__str__()
+    def to_json(self):
+        '''
+        convert the instance of this class to json
+        '''
+        return json.dumps(self, indent = 4, default=set_default)
 
     def apply_subst(self):
         raise NotImplementedError
@@ -89,8 +94,8 @@ class AppExpr(Expression):
         arg_vars = [arg.get_vars() for _, arg in self._args]
         return set().union(*arg_vars)
 
-    def execute(self, analyzer):
-        args = [arg.execute(analyzer) for _, arg in self._args]
+    def execute(self, analyzer, _):
+        args = [arg.execute(analyzer, []) for _, arg in self._args]
 
         # if any of the argument fails, the whole term fails
         for arg, _ in args:
@@ -102,17 +107,17 @@ class AppExpr(Expression):
             arg_names = list(zip(*self._args))[0]
             # print("[App] arg names", arg_names)
             named_arg_vals = list(zip(arg_names, arg_vals))
-            print("[App] arg names and vals", list(named_arg_vals))
+            # print("[App] arg names and vals", list(named_arg_vals))
         else:
             arg_scores = [0]
             named_arg_vals = []
 
         val = analyzer.get_trace(self._fun, named_arg_vals)
         if val is None:
-            print("fail to get successful trace for", self._fun, named_arg_vals)
+            # print("fail to get successful trace for", self._fun, named_arg_vals)
             return None, consts.MAX_COST
         else:
-            print("[App] get back", val, "for", self._fun, named_arg_vals)
+            # print("[App] get back", val, "for", self._fun, named_arg_vals)
             return val, 1 + sum(arg_scores)
 
     def get_multiplicity(self, analyzer):
@@ -260,17 +265,24 @@ class VarExpr(Expression):
     def get_vars(self):
         return set([self._var])
 
-    def execute(self, analyzer):
+    def execute(self, analyzer, candidates):
         val = analyzer.lookup_var(self._var)
         if val is None:
-            return None, consts.MAX_COST
-        else:
-            # print("[Var] get back", val, "for", self._var)
-            return val, 1
+            if candidates:
+                # print("sampling", self.var, "from", candidates)
+                val = random.choice(candidates)
+            else:
+                # sample a value by type
+                val = analyzer.sample_value_by_type(self.type)
+
+            analyzer.push_var(self._var, val)
+
+        # print("[Var] get back", val, "for", self._var)
+        return val, 1
 
     def get_multiplicity(self, analyzer):
         var_mul = analyzer.lookup_var(self._var)
-        print("[Var]", self._var, analyzer.pretty(var_mul[1]))
+        # print("[Var]", self._var, analyzer.pretty(var_mul[1]))
         return var_mul
 
     def to_program_graph(self, graph, var_to_trans):
@@ -335,14 +347,14 @@ class ProjectionExpr(Expression):
         obj_vars = self._obj.get_vars()
         return obj_vars
 
-    def execute(self, analyzer):
-        val, cost = self._obj.execute(analyzer)
+    def execute(self, analyzer, _):
+        val, cost = self._obj.execute(analyzer, [])
         try:
             val = val.get(self._field)
-            print("[Projection] get back", val, "for", self._field)
+            # print("[Projection] get back", val, "for", self._field)
             return val, cost + 1
         except:
-            print("[Projection] field projection fails for", self._field)
+            # print("[Projection] field projection fails for", self._field)
             return None, consts.MAX_COST
 
     def get_multiplicity(self, analyzer):
@@ -471,45 +483,35 @@ class FilterExpr(Expression):
         val_vars = self._val.get_vars()
         return obj_vars.union(val_vars)
 
-    def execute(self, analyzer):
-        obj, score1 = self._obj.execute(analyzer)
-        val, score2 = self._val.execute(analyzer)
-
-        if obj is None or val is None:
-            if obj is None:
-                print("[Filter] obj cannot be evaluated")
-
-            if val is None:
-                print("[Filter] val cannot be evaluated")
-
+    def execute(self, analyzer, _):
+        obj, score1 = self._obj.execute(analyzer, [])
+        
+        if obj is None:
             return None, consts.MAX_COST
 
-        # if not isinstance(obj, list):
-        #     obj = [obj]
-
         paths = self._field.split('.')
-        print("[Filter] filtering by path", paths)
-        # result = []
-        # for o in obj:
         tmp = obj
+
         for p in paths:
-            if p in tmp:
-                tmp = tmp.get(p)
-                print("[Filter] get field", p, "returns", tmp)
-            else:
-                tmp = None
-                print("[Filter] cannot find field", p, "in", tmp)
+            tmp = utils.get_field_value(tmp, p)
+            if tmp is None:
+                # print("[Filter] cannot find field", p, "in", tmp)
                 break
 
+        if isinstance(tmp, list):
+            tmp = list(utils.flatten(tmp))
+            val_candidates = tmp
+        else:
+            val_candidates = [tmp]
+        
+        val, score2 = self._val.execute(analyzer, val_candidates)
+        # print("[Filter] get back", val, "as filter")
+        if val is None:
+            return None, consts.MAX_COST
+
         if tmp == val:
-            # result.append(o)
-
-        # if all_fails:
-        #     return None, consts.MAX_COST
-
             variables = self._obj.get_vars()
             analyzer.push_var(list(variables)[0], obj)
-            print("[Filter] get back", obj, "for filter on", self._field)
             return obj, score1 + score2 + 1
 
         else:
@@ -523,10 +525,10 @@ class FilterExpr(Expression):
         filter_field = obj_typ + "." + self._field
         if (filter_field in analyzer._unique_fields and 
             val_mul[1] is not MUL_ZERO_MORE):
-            print("[Filter]", filter_field, "is found in the analysis result")
+            # print("[Filter]", filter_field, "is found in the analysis result")
             return obj_mul[0], MUL_ZERO_ONE
         else:
-            print("[Filter]", filter_field, "is not in the analysis result")
+            # print("[Filter]", filter_field, "is not in the analysis result")
             return obj_mul[0], MUL_ZERO_MORE
 
     def to_program_graph(self, graph, var_to_trans):
@@ -571,7 +573,7 @@ class FilterExpr(Expression):
         return exprs, obj_expr
 
     def check_fields(self, analyzer, var_to_trans):
-        print("Checking field", self._field, "for object", self._obj.type)
+        # print("Checking field", self._field, "for object", self._obj.type)
         match, trans = self._obj.check_fields(analyzer, var_to_trans)
         if match:
             match, _ = self._val.check_fields(analyzer, var_to_trans)
@@ -581,7 +583,7 @@ class FilterExpr(Expression):
                 self._obj.type.name, trans, self._field
             )
 
-        print("check result:", match)
+        # print("check result:", match)
         return match, trans
 
     def pretty(self, hang):
@@ -608,6 +610,49 @@ class FilterExpr(Expression):
             filter_sig.response.type, filter_sig)
 
         return (obj_binds + val_binds), filter_expr
+
+class ListExpr(Expression):
+    def __init__(self, expr, typ=None, sig=None):
+        super().__init__(typ, sig)
+        self._item = expr
+
+    def __str__(self):
+        return f"[{self._item}]"
+
+    def __eq__(self, other):
+        if not isinstance(other, ListExpr):
+            return NotImplemented
+
+        return self._item == other._item
+
+    def pretty(self, hang):
+        return f"[{self._item}]"
+
+    def apply_subst(self, subst):
+        return ListExpr(self._item.apply_subst(subst))
+
+    def collect_exprs(self):
+        return [self] + self._item.collect_exprs()
+
+    def get_vars(self):
+        return self._item.get_vars()
+
+    def execute(self, analyzer, _):
+        item, score = self._item.execute(analyzer, [])
+        return [item], score
+
+    def to_program_graph(self, graph, var_to_trans):
+        return self._item.to_program_graph(graph, var_to_trans)
+
+    def check_fields(self, analyzer, var_to_trans):
+        return self._item.check_fields(analyzer, var_to_trans)
+
+    def sizes(self):
+        item_eps, item_prs, item_sz = self._obj.sizes()
+        return item_eps, item_prs, item_sz + 1
+
+    def lift(self, counter):
+        raise NotImplementedError
 
 class AssignExpr(Expression):
     def __init__(self, x, expr, is_bind):
@@ -666,8 +711,8 @@ class AssignExpr(Expression):
         rhs_vars.add(self._lhs)
         return rhs_vars
 
-    def execute(self, analyzer):
-        val, score = self._rhs.execute(analyzer)
+    def execute(self, analyzer, _):
+        val, score = self._rhs.execute(analyzer, [])
         if val is None:
             return None
 
@@ -793,7 +838,8 @@ class Program:
         elif len(self._inputs) == len(other._inputs):
             subst = {}
             for i, x in enumerate(other._inputs):
-                subst[x] = VarExpr(self._inputs[i])
+                if x != self._inputs[i]:
+                    subst[x] = VarExpr(self._inputs[i])
             other = other.apply_subst(subst)
             return self.to_expression({}) == other.to_expression({})
         else:
@@ -803,7 +849,7 @@ class Program:
         return hash((tuple(self._inputs), str(self.to_expression({}))))
 
     def __repr__(self):
-        return self.__str__()
+        return self.__dict__
 
     def to_expression(self, subst={}):
         exprs = []
@@ -827,8 +873,11 @@ class Program:
         return Program(self._inputs, exprs)
 
     def collect_exprs(self):
-        expr = self.to_expression({})
-        return expr.collect_exprs()
+        exprs = []
+        for expr in self._expressions:
+            exprs += expr.collect_exprs()
+
+        return exprs
 
     def get_vars(self):
         all_vars = set()
@@ -902,6 +951,8 @@ class Program:
             old_expressions = self._expressions.copy()
             self.merge_direct_eqs(subst={})
             self.merge_projections(subst={})
+            # print("old", old_expressions)
+            # print("new", self._expressions)
 
     def assign_type(self, t):
         self._expressions[-1].type = t
@@ -918,24 +969,29 @@ class Program:
 
         # print(exprs)
         program = Program(self._inputs, exprs)
-        # print("before simplify", program)
+        # print("before simplify", program, flush=True)
         program.simplify()
         return program
 
     def _execute_exprs(self, exprs, analyzer):
         if len(exprs) == 1:
-            return exprs[0].execute(analyzer)
+            return exprs[0].execute(analyzer, [])
         else:
             expr = exprs[0]
             if isinstance(expr, AssignExpr): 
-                val, cost = expr._rhs.execute(analyzer)
+                val, cost = expr._rhs.execute(analyzer, [])
                 if val is None:
-                    print(expr, "cannot be evaled")
+                    # print(expr, "cannot be evaled")
                     return None, consts.MAX_COST
 
                 if expr._is_bind:
+                    if not isinstance(val, list):
+                        # print(expr, "cannot be evaled")
+                        return None, consts.MAX_COST
+
                     vals = []
                     bind_cost = 0
+                    random.shuffle(val)
                     for v in val:
                         analyzer.push_var(expr.var, v)
                         sub_val, sub_cost = self._execute_exprs(exprs[1:], analyzer)
@@ -947,8 +1003,8 @@ class Program:
                     if len(vals) == 0:
                         return None, consts.MAX_COST
 
-                    if len(val) > 0:
-                        cost += bind_cost / len(val)
+                    if len(vals) > 0:
+                        cost += bind_cost / len(vals)
 
                     val = vals
                 else:
@@ -956,9 +1012,9 @@ class Program:
                     val, sub_cost = self._execute_exprs(exprs[1:], analyzer)
                     cost += sub_cost
             else:
-                val, cost = expr.execute(analyzer)
+                val, cost = expr.execute(analyzer, [])
                 if val is None:
-                    print(expr, "cannot be evaled")
+                    # print(expr, "cannot be evaled")
                     return None, consts.MAX_COST
 
                 val, sub_cost = self._execute_exprs(exprs[1:], analyzer)
@@ -1049,8 +1105,7 @@ class Program:
         return num_endpoints, num_projections, size
 
 # helper function
-def insert_binds(counter, var, arg_typ):
-    # print("lifting", var, "into type", arg_typ)
+def insert_lists(counter, var, arg_typ):
     binds = []
     var_typ = var.type
     
@@ -1061,6 +1116,29 @@ def insert_binds(counter, var, arg_typ):
         # print("No binding, real var type", var.type, ", expect arg type", arg_typ)
         return binds, var.var
 
+    # print("[insert_lists] lifting", var_typ, "into type", arg_typ)
+    if isinstance(arg_typ, types.ArrayType):
+        let_x = counter.get("x", 0)
+        counter["x"] += 1
+        bind_typ = types.ArrayType(None, var_typ)
+        bind = AssignExpr(f"x{let_x}", ListExpr(var, bind_typ), False)
+        subvar = VarExpr(f"x{let_x}", bind_typ)
+        inner_binds, x = insert_lists(counter, subvar, arg_typ)
+        return ([bind] + inner_binds), x
+    else:
+        raise Exception("cannot lift a non-array type", var_typ, type(var_typ), arg_typ, type(arg_typ))
+
+def insert_binds(counter, var, arg_typ):
+    var_typ = var.type
+    
+    # if two types match with each other
+    if (var_typ is not None and
+        arg_typ is not None and
+        str(var_typ) == str(arg_typ)):
+        # print("No binding, real var type", var.type, ", expect arg type", arg_typ)
+        return [], var.var
+
+    # print("[insert_binds] lifting", var_typ, "into type", arg_typ)
     if isinstance(var_typ, types.ArrayType):
         # print("Binding", var, "with type", var.type)
         let_x = counter.get("x", 0)
@@ -1070,4 +1148,4 @@ def insert_binds(counter, var, arg_typ):
         inner_binds, x = insert_binds(counter, subvar, arg_typ)
         return ([bind] + inner_binds), x
     else:
-        raise Exception("cannot lift a non-array type")
+        return insert_lists(counter, var, arg_typ)

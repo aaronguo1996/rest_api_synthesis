@@ -404,8 +404,8 @@ class PetriNetEncoder:
                 Int(f"t{t}") < len(self._trans_to_variable)
             )
 
-    def _add_transition(self, entry):
-        trans_name = make_entry_name(entry.endpoint, entry.method)
+    def add_transition(self, trans_name, entry):
+        # trans_name = make_entry_name(entry.endpoint, entry.method)
         self._entries[trans_name] = entry
         self._net.add_transition(Transition(trans_name))
 

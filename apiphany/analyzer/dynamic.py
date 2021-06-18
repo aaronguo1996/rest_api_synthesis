@@ -1,9 +1,12 @@
 import random
 from enum import IntEnum
+import time
+import xeger
 
 from analyzer.entry import ErrorResponse
 from analyzer.multiplicity import MUL_ZERO_MORE
-from synthesizer.utils import make_entry_name
+from analyzer.utils import path_to_name
+from schemas import types
 
 CMP_ENDPOINT_NAME = 0
 CMP_ENDPOINT_AND_ARG_NAME = 1
@@ -33,15 +36,44 @@ class DynamicAnalysis:
     """search for trace either by a parameter value or the endpoint name
     """
 
-    def __init__(self, entries, skip_fields, abstraction_level=0, bias_type=BiasType.NONE):
+    def __init__(self, entries, skip_fields, log_analyzer,
+        abstraction_level=0, bias_type=BiasType.NONE):
         self._entries = entries
         self._skip_fields = skip_fields
         self._environment = {}
+        self._log_analyzer = log_analyzer
         self._abstraction_level = abstraction_level
         self._bias_type = bias_type
 
     def reset_env(self):
         self._environment = {}
+
+    def sample_value_by_type(self, typ):
+        if isinstance(typ, types.ArrayType):
+            lst_len = random.choice(range(1, 5))
+            vals = []
+            for _ in range(lst_len):
+                val = self.sample_value_by_type(typ.item)
+                vals.append(val)
+
+            return vals
+        else:
+            candidates = self._log_analyzer.get_values_by_type(typ)
+            vals = []
+            for v in candidates:
+                if v not in vals:
+                    vals.append(v)
+
+            if not vals:
+                # only two cases here
+                if str(typ) == "unit_amount_/v1/prices_POST_unit_amount":
+                    vals = [random.randint(1, 10)]
+                else:
+                    x = xeger.Xeger()
+                    vals = [x.xeger("^[a-z0-9]{10,}$")]
+            
+            # print("Sampling by type", typ, "from", vals)
+            return random.choice(vals)
 
     def get_traces_by_param(self, param):
         results = []
@@ -125,108 +157,60 @@ class DynamicAnalysis:
     def lookup_var(self, x):
         return self._environment.get(x)
 
-    def _get_obj_weight(self, obj):
-        """
-        weighs simply by calculating number of fields in object/list recursively
-        """
-        if isinstance(obj, list):
-            total = 1
-            for child in obj:
-                total += self._get_obj_weight(child)
-            return total
-        elif isinstance(obj, dict):
-            total = 1
-            for _, child in obj.items():
-                total += self._get_obj_weight(child)
-            return total
-        else:
-            return 1
-
     def _sample_entry(self, entries, backup=[]):
-        entry_vals = []
-        for e in entries:
-            if (isinstance(e.response, ErrorResponse) or 
-                e.response.value is None):
-                continue
-            else:
-                entry_vals.append(e.response.value)
-
-        if not entry_vals:
-            # print("cannot find trace in the given group, using backups")
-            for e in backup:
-                if (isinstance(e.response, ErrorResponse) or 
-                    e.response.value is None):
-                    continue
-                else:
-                    entry_vals.append(e.response.value)
-
-        weights = None
-        if self._bias_type == BiasType.SIMPLE:
-            weights = [self._get_obj_weight(obj) for obj in entry_vals]
-
-        print("entries:", entry_vals, weights)
-        if entry_vals:
-            return random.choices(entry_vals, weights=weights)[0]
+        if entries:
+            entry_vals, weights = zip(*entries)
+        elif backup:
+            entry_vals, weights = zip(*backup)
         else:
-            print("not successful entry found")
+            entry_vals, weights = [], []
+
+        # print("entries:", entry_vals, weights)
+        if entry_vals:
+            return random.choices(entry_vals, weights=weights, k=1)[0]
+        else:
+            # print("no successful entry found")
             return None
 
     def get_trace(self, fun, args):
         # abstraction level matters here
         # get all entries with the same endpoint call
-        same_endpoint_calls = []
-        for entry in self._entries:
-            if make_entry_name(entry.endpoint, entry.method) == fun:
-                same_endpoint_calls.append(entry)
+        start = time.time()
+        same_endpoint_calls = self._entries.get(fun, {})
 
         if self._abstraction_level == CMP_ENDPOINT_NAME:
-            return self._sample_entry(same_endpoint_calls)
+            calls = []
+            for _, v, w in same_endpoint_calls.values():
+                calls.append((v, w))
+            return self._sample_entry(calls)
 
         # get all entries with the same arg names
-        same_args_calls = []
-        for entry in same_endpoint_calls:
-            param_names = [param.arg_name for param in entry.parameters]
-            has_all_args = True
-            for x, _ in args:
-                if x not in param_names:
-                    has_all_args = False
-                    break
-
-            arg_map = {x: v for x,v in args}
-            # print("arg_map", arg_map)
-            for param in entry.parameters:
-                if param.arg_name in self._skip_fields:
-                    continue
-
-                if param.arg_name not in arg_map:
-                    # print("cannot find the parameter from real trace", param.arg_name, "during execution")
-                    has_all_args = False
-                    break
-
-            if has_all_args:
-                same_args_calls.append(entry)
+        arg_names = sorted([x for x, _ in args])
+        same_args_calls = same_endpoint_calls.get(tuple(arg_names), [])
+        same_args_values = [(v, w) for _, v, w in same_args_calls]
 
         if self._abstraction_level == CMP_ENDPOINT_AND_ARG_NAME:
             # return self._sample_entry(same_args_calls, same_endpoint_calls)
-            return self._sample_entry(same_args_calls)
+            return self._sample_entry(same_args_values)
 
         # get all entries with the same arg values
         same_arg_val_calls = []
-        for entry in same_args_calls:
-            params = {param.arg_name: param.value for param in entry.parameters}
+        for params, v, w in same_args_calls:
             has_all_values = True
             for x, v in args:
-                if x not in param_names or params[x] != v:
+                if params[x] != v:
                     has_all_values = False
                     break
 
             if has_all_values:
-                same_arg_val_calls.append(entry)
+                same_arg_val_calls.append((v, w))
 
         if self._abstraction_level == CMP_ENDPOINT_AND_ARG_VALUE:
-            print("sampling entries for", fun)
+            # print("sampling entries for", fun)
             # return self._sample_entry(same_arg_val_calls, same_args_calls)
-            return self._sample_entry(same_arg_val_calls, backup=same_args_calls)
+            return self._sample_entry(
+                same_arg_val_calls,
+                backup=same_args_values)
         else:
             raise Exception("Unknown abstraction level")
 

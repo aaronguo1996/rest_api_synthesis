@@ -21,7 +21,7 @@
   },
   "servers": [
     {
-      "url": "https://connect.squareup.com/"
+      "url": "https://connect.squareupsandbox.com/"
     }
   ],
   "paths": {

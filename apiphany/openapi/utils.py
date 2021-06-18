@@ -60,4 +60,4 @@ def get_schema_forest(doc):
         if isinstance(schema, dict) and "children" in schema]
 
 def blacklist(obj_name):
-    return re.search("ref_\d+", obj_name) or re.search("(.*Request)|(.*Response)", obj_name)
+    return re.search("objs_ref_\d+", obj_name) # or re.search("(.*Request)|(.*Response)", obj_name)

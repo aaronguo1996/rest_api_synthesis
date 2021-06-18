@@ -3,7 +3,7 @@
     "log_file": "data/logs/dashboard.stripe.com.20210514.har",
     "doc_file": "data/openapi/stripe_spec3_sdk_full.json",
     "enable_debug": true,
-    "debug_output": "debug.log",
+    "debug_output": "stripe_debug.log",
     "hostname": "https://dashboard.stripe.com",
     "path_to_definitions": "#/components/schemas",
     "analysis": {
@@ -27,14 +27,14 @@
         "timeout_per_request": 60,
         "iterations": 0,
         "plot_every": 10,
-        "max_opt_params": 2
+        "max_opt_params": 0
     },
     "synthesis": {
         "expand_group": true,
         "block_perms": true,
         "solver_type": "petri net ILP",
         "solver_number": 4,
-        "solution_number": 5,
+        "solution_number": 100,
         "enable_prefilter": false
     },
     "endpoints": [
@@ -61,7 +61,10 @@
         "/v1/notes",
         "/v1/events",
         "/v1/search/radar/related_payments",
-        "/v1/accounts/{account}"
+        "/v1/accounts/{account}",
+        "/v1/balance_transactions",
+        "/v1/application_fees",
+        "/v1/disputes"
     ],
     "test_suites": []
 }

@@ -3,6 +3,7 @@ import itertools
 import pickle
 import time
 import os
+import shutil
 
 from program.generator import ProgramGenerator
 from program.program import ProgramGraph, all_topological_sorts
@@ -14,8 +15,7 @@ import consts
 
 
 class Synthesizer:
-    def __init__(self, doc, config, entries, exp_dir):
-        self._doc = doc
+    def __init__(self, config, entries, exp_dir):
         self._config = config
         self._groups = {}
         self._group_names = {}
@@ -24,8 +24,8 @@ class Synthesizer:
         self._entries = entries
         self._program_generator = ProgramGenerator({})
         # flags
-        self._expand_group = config["synthesis"]["expand_group"]
-        self._block_perms = config["synthesis"]["block_perms"]
+        self._expand_group = config[consts.KEY_SYNTHESIS][consts.KEY_EXPAND_GROUP]
+        self._block_perms = config[consts.KEY_SYNTHESIS][consts.KEY_BLOCK_PERM]
         self._exp_dir = exp_dir
 
     @TimeStats(key=STATS_GRAPH)
@@ -48,8 +48,11 @@ class Synthesizer:
             f.write(p.pretty(0))
             f.write("\n")
 
+    # make this operation all-or-nothing
     def _serialize_solutions(self, idx, progs):
         solution_path = os.path.join(self._exp_dir, f"solutions_{idx}.pkl")
+        bk_solution_path = os.path.join(self._exp_dir, f"solutions_{idx}_bk.pkl")
+
         if os.path.exists(solution_path):
             with open(solution_path, "rb") as f:
                 solutions = pickle.load(f)
@@ -57,8 +60,10 @@ class Synthesizer:
             solutions = []
 
         solutions += progs
-        with open(solution_path, "wb") as f:
+        with open(bk_solution_path, "wb") as f:
             pickle.dump(solutions, f)
+
+        os.rename(bk_solution_path, solution_path)
 
     def _expand_groups(self, result):
         groups = []
@@ -71,11 +76,11 @@ class Synthesizer:
                 if e is None:
                     raise Exception("Unknown transition", name)
 
-                param_typs = [p.type.name for p in e.parameters]
+                param_typs = [str(p.type) for p in e.parameters]
                 if isinstance(e.response.type, list):
-                    response_typ = [t.name for t in e.response.type]
+                    response_typ = [str(t) for t in e.response.type]
                 else:
-                    response_typ = [e.response.type.name]
+                    response_typ = [str(e.response.type)]
                 key = (tuple(param_typs), tuple(response_typ))
                 group = self._groups.get(key, [name])
                 groups.append(group)
@@ -146,8 +151,8 @@ class Synthesizer:
         else:
             raise Exception("Unknown solver type in config")
 
-        for e in self._unique_entries.values():
-            self._encoder._add_transition(e)
+        for name, e in self._unique_entries.items():
+            self._encoder.add_transition(name, e)
 
     def run_n(self, landmarks, inputs, outputs, n):
         """Single process version of synthesis
@@ -215,42 +220,107 @@ class Synthesizer:
         with open("data/solutions.pkl", "wb") as f:
             pickle.dump(solutions, f)
 
-        # write annotated entries
-        with open("data/annotated_entries.pkl", "wb") as f:
-            pickle.dump(self._entries, f)
+        # write petri net data
+        encoder_path = os.path.join(self._exp_dir, "encoder.txt")
+        with open(encoder_path, "w") as f:
+            f.write(str(len(self._encoder._net.place())))
+            f.write("\n")
+            f.write(str(len(self._encoder._net.transition())))
+
+        # # write annotated entries
+        # with open("data/annotated_entries.pkl", "wb") as f:
+        #     pickle.dump(self._entries, f)
 
         return solutions
 
     def _add_transitions(self):
         unique_entries = self._group_transitions(self._entries)
         lst = [
-            "/v1/subscriptions_POST",
-            "/v1/prices_GET",
-            # "projection({'data': [price], 'has_more': boolean, 'object': string, 'url': string}, data)_",
-            "projection(price, id)_",
-            "/v1/products_POST",
-            "/v1/prices_POST",
-            "/v1/invoiceitems_POST",
-            'projection(product, active)_',
-            "/v1/invoices_GET",
-            "projection(price, unit_amount)_",
-            "/v1/refunds_POST",
-            "/v1/subscriptions/{subscription_exposed_id}_GET",
-            "/v1/subscriptions/{subscription_exposed_id}_POST",
-            'projection(subscription, latest_invoice)_',
-            "/v1/invoices/{invoice}_GET",
-            "projection(card, last4)_",
-            "projection(payment_source, last4)_",
-            "/v1/customers/{customer}/sources_GET",
+            # "/v1/subscriptions_POST",
+            # "/v1/prices_GET",
+            # # "projection({'data': [price], 'has_more': boolean, 'object': string, 'url': string}, data)_",
+            # "projection(price, id)_",
+            # "/v1/products_POST",
+            # "/v1/prices_POST",
+            # "projection(subscription, items)_",
+            # "projection(subscription_item, price)_",
+            # "/v1/customers/{customer}/sources/{id}_DELETE"
+            # "/v1/invoiceitems_POST",
+            # 'projection(product, active)_',
+            # "/v1/invoices_GET",
+            # "/v1/charges/{charge}_GET",
+            # "projection(invoice, charge)_",
+            # "projection(price, unit_amount)_",
+            # "/v1/refunds_POST",
+            # "/v1/subscriptions/{subscription_exposed_id}_GET",
+            # "/v1/subscriptions/{subscription_exposed_id}_POST",
+            # 'projection(subscription, latest_invoice)_',
+            # "/v1/invoices/{invoice}_GET",
+            # "projection(card, last4)_",
+            # "projection(payment_source, last4)_",
+            # "projection(payment_method, type)_",
+            # "/v1/invoices/{invoice}/send_POST"
+            # "/v1/customers/{customer}/sources_GET",
             # 'filter(status_transitions, status_transitions.returned)_',
+
+            # "/conversations.list_GET",
+            # "/users.profile.get_GET",
+            # "/conversations.members_GET",
+            # "/users.lookupByEmail_GET",
+            # "/conversations.open_POST",
+            # "/chat.postMessage_POST",
+            # "projection(objs_conversation, id)_",
+            # "projection(objs_conversation, name)_",
+            # '/conversations.create_POST',
+            # "filter(objs_conversation, objs_conversation.name)_",
+            # 'filter(objs_conversation, objs_conversation.latest.bot_profile.name)_',
+            # "projection({'ok': defs_ok_true, 'profile': objs_user_profile}, profile)_",
+            # "/conversations.history_GET",
+            # "projection(objs_conversation, last_read)_",
+            # "/users.conversations_GET",
+            # "/conversations.invite_POST",
+            # "/chat.update_POST",
+            # "/chat.postMessage_POST"
+
+            # "projection(ListInvoicesResponse, invoices)_",
+            # "projection(Invoice, id)_",
+            # "filter(Invoice, Invoice.id)_",
+            # "filter(Invoice, Invoice.location_id)_",
+            # "projection(Invoice, location_id)_",
+            # "projection(Transaction, order_id)_",
+            # "/v2/locations/{location_id}/transactions_GET",
+            # "/v2/payments_GET",
+            # "projection(ListPaymentsResponse, payments)_",
+            # "projection(Payment, note)_",
+            # "/v2/orders/{order_id}_PUT",
+            # "/v2/orders/batch-retrieve_POST",
+            # "projection(BatchRetrieveOrdersResponse, orders)_",
+            # "projection(Order, line_items)_",
+            # "projection(OrderLineItem, name)_",
+            # "projection(Order, fulfillments)_",
+            # "projection(CatalogObject, item_data)_",
+            # "projection(CatalogObject, id)_",
+            # "projection(CatalogItem, tax_ids)_",
+            # "projection(Subscription, plan_id)_",
+            # "projection(Subscription, customer_id)_",
+            # "projection(Subscription, location_id)_",
+            # "/v2/subscriptions/search_POST",
+            # "projection(SearchSubscriptionsResponse, subscriptions)_",
+            # "filter(Subscription, Subscription.plan_id)_",
+            # "filter(Subscription, Subscription.customer_id)_",
+            # "filter(Subscription, Subscription.location_id)_",
+            # "/v2/catalog/search_POST",
+            # "projection(SearchCatalogObjectsResponse, objects)_",
+            # "filter(CatalogObject, CatalogObject.item_data.tax_ids)_"
         ]
 
         for name in lst:
-            e = unique_entries.get(name)
+            e = self._entries.get(name)
             print('-----')
             print(name)
             print([(p.arg_name, p.type, p.is_required) for p in e.parameters])
             print(e.response.type, flush=True)
+            print("group members:", self._group_names.get(name, []))
 
         for name, e in self._entries.items():
             self._program_generator.add_signature(name, e)

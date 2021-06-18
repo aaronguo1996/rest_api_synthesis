@@ -9,7 +9,7 @@ class GeneratorTestCase(unittest.TestCase):
         self._generator = ProgramGenerator({})
 
     def test_generate_projection(self):
-        sig = TraceEntry("projection(user, id)", "", 
+        sig = TraceEntry("projection(user, id)", "", None,
             [
                 Parameter(
                     "", "id", "projection(user, id)", [],
@@ -36,7 +36,7 @@ class GeneratorTestCase(unittest.TestCase):
         })
 
     def test_generate_filter(self):
-        sig = TraceEntry("filter(user, user.id)", "", 
+        sig = TraceEntry("filter(user, user.id)", "", None,
             [
                 Parameter(
                     "", "id", "filter(user, user.id)", [], 
@@ -73,7 +73,7 @@ class GeneratorTestCase(unittest.TestCase):
         })
 
     def test_generate_let(self):
-        sig = TraceEntry("/users.lookupByEmail", "", 
+        sig = TraceEntry("/users.lookupByEmail", "", None,
             [
                 Parameter(
                     "get", "email", "/users.lookupByEmail", [], 
@@ -104,7 +104,7 @@ class GeneratorTestCase(unittest.TestCase):
     def test_generate_program(self):
         sigs = {
             "/conversations.list:get": 
-                TraceEntry("/conversations.list", "", 
+                TraceEntry("/conversations.list", "", None,
                     [],
                     Parameter(
                         "get", "channels", "/conversations.list",
@@ -113,7 +113,7 @@ class GeneratorTestCase(unittest.TestCase):
                     ),
                 ),
             "/conversations.members:get":
-                TraceEntry("/conversations.members", "get",
+                TraceEntry("/conversations.members", "get", None,
                     [
                         Parameter(
                             "get", "channel", "/conversations.members", [],
@@ -127,7 +127,7 @@ class GeneratorTestCase(unittest.TestCase):
                     )
                 ),
             "/users.info:get":
-                TraceEntry("/users.info", "get",
+                TraceEntry("/users.info", "get", None,
                     [
                         Parameter(
                             "get", "user", "/users.info", [],
@@ -141,7 +141,8 @@ class GeneratorTestCase(unittest.TestCase):
                     ),
                 ),
             "filter(objs_conversation, objs_conversation.name):":
-                TraceEntry("filter(objs_conversation, objs_conversation.name)", "",
+                TraceEntry("filter(objs_conversation, objs_conversation.name)", 
+                    "", None,
                     [
                         Parameter(
                             "", "", 
@@ -164,7 +165,7 @@ class GeneratorTestCase(unittest.TestCase):
                     ),
                 ),
             "projection(objs_conversation, id):":
-                TraceEntry("projection(objs_conversation, id)", "",
+                TraceEntry("projection(objs_conversation, id)", "", None,
                     [
                         Parameter(
                             "", "", "projection(objs_conversation, id)", [],
@@ -179,7 +180,7 @@ class GeneratorTestCase(unittest.TestCase):
                     )
                 ),
             "projection(objs_user, profile):":
-                TraceEntry("projection(objs_user, profile)", "",
+                TraceEntry("projection(objs_user, profile)", "", None,
                     [
                         Parameter(
                             "", "", "projection(objs_user, profile)", [],
@@ -193,7 +194,7 @@ class GeneratorTestCase(unittest.TestCase):
                     )
                 ),
             "projection(objs_user.profile, email):":
-                TraceEntry("projection(objs_user.profile, email)", "",
+                TraceEntry("projection(objs_user.profile, email)", "", None,
                     [
                         Parameter(
                             "", "", "projection(objs_user.profile, email)", [],

@@ -17,11 +17,12 @@ from openapi.parser import OpenAPIParser
 from openapi.utils import read_doc, get_schema_forest
 from schemas import types
 from synthesizer.constructor import Constructor
-from synthesizer.filtering import run_filter
+from synthesizer.filtering import retrospective_execute
 from synthesizer.parallel import spawn_encoders
 from synthesizer.synthesizer import Synthesizer
 from synthesizer.utils import make_entry_name
 from witnesses.engine import WitnessGenerator
+from benchmarks.utils import prep_exp_dir, parse_entries
 import consts
 
 # test imports
@@ -53,41 +54,6 @@ def build_cmd_parser():
         help="Generate witnesses by configuration")
     return parser
 
-def prep_exp_dir(config):
-    exp_name = config[consts.KEY_EXP_NAME]
-    exp_dir = os.path.join("experiment_data/", exp_name)
-    if not os.path.exists(exp_dir):
-        os.makedirs(exp_dir)
-
-    return exp_dir
-
-def parse_entries(configuration, exp_dir, base_path, endpoints):
-    trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
-    if not os.path.exists(trace_file):
-        print("Parsing OpenAPI document...")
-        # entries = None
-        log_parser = parser.LogParser(
-            configuration[consts.KEY_LOG_FILE], 
-            configuration[consts.KEY_HOSTNAME],
-            base_path, endpoints)
-        entries = log_parser.parse_entries(
-            configuration[consts.KEY_ANALYSIS][consts.KEY_UNINTERESTING],
-            configuration.get(consts.KEY_SKIP_FIELDS),
-        )
-        if configuration[consts.KEY_DEBUG]:
-            # write entries to log file
-            logging.debug("========== Start Logging Parse Results ==========")
-            for e in entries:
-                logging.debug(e)
-
-        with open(trace_file, 'wb') as f:
-            pickle.dump(entries, f)
-    else:
-        with open(trace_file, 'rb') as f:
-            entries = pickle.load(f)
-
-    return entries
-
 def run_dynamic(configuration, entries, endpoint, limit=500):
     analysis = dynamic.DynamicAnalysis(
         entries,
@@ -113,7 +79,7 @@ def create_entries(doc, config, ascription):
             for entry in typed_entries:
                 # store results
                 entry_name = make_entry_name(entry.endpoint, entry.method)
-                if endpoint == "/v1/prices" or endpoint == "/v1/charges":
+                if endpoint == "/v2/orders/batch-retrieve":
                     print(entry_name)
                     print("*******", [(p.arg_name, p.path, p.is_required, p.type) for p in entry.parameters])
                     p = entry.response
@@ -132,13 +98,6 @@ def generate_witnesses(
     prefilter = configuration.get(consts.KEY_SYNTHESIS) \
                             .get(consts.KEY_SYN_PREFILTER)
     skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
-    f = doc_entries["/v1/subscriptions"]["POST"]
-    for param in f.parameters:
-        if param.arg_name == "items":
-            print(param.type)
-            # print(param.type.item)
-            print(param.type.item.get_object_field("plan"))
-            print(param.type.item.get_object_field("price"))
 
     log_analyzer.analyze(
         doc_entries,
@@ -187,6 +146,7 @@ def generate_witnesses(
     with open(os.path.join(exp_dir, consts.FILE_ENTRIES), "wb") as f:
         pickle.dump(entries, f)
 
+    log_analyzer.index_values_by_type()
     print("Writing graph to file...")
     with open(os.path.join(exp_dir, consts.FILE_GRAPH), "wb") as f:
         pickle.dump(log_analyzer, f)
@@ -267,9 +227,10 @@ def main():
 
             results = []
             for p in solutions:
-                score = run_filter(
-                    log_analyzer, dyn_analysis, 
-                    {"channel_name": "objs_message.name"}, p, True
+                score = retrospective_execute(
+                    log_analyzer, entries,
+                    configuration.get(consts.KEY_SKIP_FIELDS),
+                    dynamic.BiasType.SIMPLE, p
                 )
                 results.append((p, score))
 
@@ -280,34 +241,46 @@ def main():
                 print(p.pretty())
 
         elif args.parallel:
-            synthesizer = init_synthesizer(doc, configuration, entries, exp_dir)
+            synthesizer = init_synthesizer(configuration, entries, exp_dir)
             inputs = {
                 # "price": types.SchemaObject("price", None)
-                "customer_id": types.PrimString("customer.id"),
+                "email": types.PrimString("objs_user_profile.email"),
                 # "price_id": types.PrimString("plan.id")
                 # "product_id": types.PrimString("product.id"),
             }
-            outputs = [types.SchemaObject("subscription")]
+            outputs = [types.SchemaObject("objs_message")]
             spawn_encoders(
                 synthesizer, inputs, outputs,
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
             )
         elif args.synthesis:
-            synthesizer = Synthesizer(doc, configuration, entries, exp_dir)
+            synthesizer = Synthesizer(configuration, entries, exp_dir)
             synthesizer.init()
             solutions = synthesizer.run_n(
                 [],
                 {
-                    "customer_id": types.PrimString("customer.id"),
                     # "payment": types.PrimString("source.id"),
                     # "price": types.SchemaObject("price", None)
                     # "subscription": types.PrimString("subscription.id"),
+                    # "customer": types.PrimString("customer.id"),
                     # "price_id": types.PrimString("plan.id")
-                    "product_ids": types.ArrayType(None, types.PrimString("product.id")),
+                    # "product_ids": types.ArrayType(None, types.PrimString("product.id")),
+                    # "user_id": types.PrimString("defs_user_id")
+                    # "location_id": types.PrimString("Location.id"),
+                    # "transaction_id": types.PrimString("Order.id"),
+                    # "fulfillments": types.ArrayType(None, types.SchemaObject("OrderFulfillment")),
+                    # "email": types.PrimString("objs_conversation.name"),
+                    # "location_id": types.PrimString("Location.id"),
+                    # "plan_id": types.PrimString("CatalogObject.id"),
+                    # "subscription": types.SchemaObject("Subscription")
+                    # "user_ids": types.ArrayType(None, types.PrimString("defs_user_id")),
+                    "channel_name": types.PrimString("objs_conversation.name"),
                 },
                 [
+                    # types.SchemaObject("objs_message"),
                     # types.ArrayType(None, types.SchemaObject("bank_account.last4")),
-                    types.ArrayType(None, types.SchemaObject("subscription"))
+                    # types.ArrayType(None, types.PrimString("Order"))
+                    types.ArrayType(None, types.SchemaObject("objs_message")),
                 ],
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOL_NUM]
             )

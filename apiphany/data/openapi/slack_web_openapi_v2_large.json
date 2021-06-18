@@ -3523,7 +3523,6 @@
                         "description": "How this field works and whether it is required depends on other fields you use in your API call. [See below](#text_usage) for more detail.",
                         "in": "formData",
                         "name": "text",
-                        "required": true,
                         "type": "string"
                     },
                     {

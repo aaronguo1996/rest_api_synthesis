@@ -7,12 +7,12 @@ class EncoderTestCase(unittest.TestCase):
     def setUp(self):
         self._encoder = PetriNetEncoder({})
         self._entries = [
-            TraceEntry("/users.list", "GET", [], 
+            TraceEntry("/users.list", "GET", None, [], 
                 Parameter(
                     "GET", "users", "/users.list", 
                     [], True, 1, SchemaType("user", None), [])
             ),
-            TraceEntry("/conversations.members", "GET", [
+            TraceEntry("/conversations.members", "GET", None, [
                     Parameter(
                         "GET", "channel", "/conversations.members", [], 
                         True, None, SchemaType("channel.id", None), None)
@@ -21,7 +21,7 @@ class EncoderTestCase(unittest.TestCase):
                     "GET", "members", "/conversations.members", 
                     [], True, 1, SchemaType("user.id", None), [])
             ),
-            TraceEntry("/conversations.info", "GET", [
+            TraceEntry("/conversations.info", "GET", None, [
                     Parameter(
                         "GET", "channel", "/conversations.info", [],
                         True, None, SchemaType("channel.id", None), None)
@@ -30,12 +30,12 @@ class EncoderTestCase(unittest.TestCase):
                     "GET", "channel", "/conversations.info", 
                     [], True, 0, SchemaType("channel", None), [])
             ),
-            TraceEntry("/conversations.list", "GET", [],
+            TraceEntry("/conversations.list", "GET", None, [],
                 Parameter(
                     "GET", "channel", "/conversations.list", 
                     [], True, 1, SchemaType("channel", None), [])
             ),
-            TraceEntry("/users.lookupByEmail", "GET", [
+            TraceEntry("/users.lookupByEmail", "GET", None, [
                     Parameter(
                         "GET", "email", "/users.lookupByEmail", [],
                         True, None, SchemaType("user.profile.email", None), None)
@@ -44,7 +44,7 @@ class EncoderTestCase(unittest.TestCase):
                     "GET", "user", "/users.lookupByEmail", 
                     [], True, 0, SchemaType("user", None), None)
             ),
-            TraceEntry("/users.info", "GET", [
+            TraceEntry("/users.info", "GET", None, [
                     Parameter(
                         "GET", "user", "/users.info", [],
                         True, None, SchemaType("user.id", None), None)
@@ -53,7 +53,7 @@ class EncoderTestCase(unittest.TestCase):
                     "GET", "user", "/users.info", 
                     [], True, 0, SchemaType("user", None), [])
             ),
-            TraceEntry("projection_channel_id", "", [
+            TraceEntry("projection_channel_id", "", None, [
                     Parameter(
                         "", "", "projection_channel_id", [],
                         True, None, SchemaType("channel", None), None)
@@ -62,7 +62,7 @@ class EncoderTestCase(unittest.TestCase):
                     "", "", "projection_channel_id", 
                     [], True, 0, SchemaType("channel.id", None), None)
             ),
-            TraceEntry("projection_user_email", "", [
+            TraceEntry("projection_user_email", "", None, [
                     Parameter(
                         "", "", "projection_user_email", [],
                         True, None, SchemaType("user", None), None)
@@ -71,7 +71,7 @@ class EncoderTestCase(unittest.TestCase):
                     "", "", "projection_user_email", 
                     [], True, 0, SchemaType("user.profile.email", None), None)
             ),
-            TraceEntry("join_1_1", "", [ # this works like clone transitions, but allow produce tokens to be leaked
+            TraceEntry("join_1_1", "", None, [ # this works like clone transitions, but allow produce tokens to be leaked
                     Parameter(
                         "", "", "join_1", [],
                         True, None, SchemaType("channel.name", None), None),
@@ -83,7 +83,7 @@ class EncoderTestCase(unittest.TestCase):
                     "", "", "join_1", [], 
                     True, 1, SchemaType("channel", None), None),
             ),
-            TraceEntry("join_1_2", "", [ # this works like clone transitions, but allow produce tokens to be leaked
+            TraceEntry("join_1_2", "", None, [ # this works like clone transitions, but allow produce tokens to be leaked
                     Parameter(
                         "", "", "join_1", [],
                         True, None, SchemaType("channel.name", None), None),
@@ -95,7 +95,7 @@ class EncoderTestCase(unittest.TestCase):
                     "", "", "join_1", 
                     [], True, 1, SchemaType("channel.name", None), None),
             ),
-            TraceEntry("join_2_1", "", [ # this works like clone transitions, but allow produce tokens to be leaked
+            TraceEntry("join_2_1", "", None, [ # this works like clone transitions, but allow produce tokens to be leaked
                     Parameter(
                         "", "", "join_2", [],
                         True, None, SchemaType("user.id", None), None),
@@ -107,7 +107,7 @@ class EncoderTestCase(unittest.TestCase):
                     "", "", "join_2", [], 
                     True, 1, SchemaType("user.id", None), None),
             ),
-            TraceEntry("join_2_2", "", [ # this works like clone transitions, but allow produce tokens to be leaked
+            TraceEntry("join_2_2", "", None, [ # this works like clone transitions, but allow produce tokens to be leaked
                     Parameter(
                         "", "", "join_2", [],
                         True, None, SchemaType("user.id", None), None),
@@ -119,7 +119,7 @@ class EncoderTestCase(unittest.TestCase):
                     "", "", "join_2", [], 
                     True, 1, SchemaType("user", None), None),
             ),
-            TraceEntry("/conversations.history", "GET", [
+            TraceEntry("/conversations.history", "GET", None, [
                     Parameter(
                         "GET", "channel", "/conversations.history", [],
                         True, None, SchemaType("channel.id", None), None),

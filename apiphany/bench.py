@@ -11,381 +11,20 @@
 #####
 
 import argparse
-from glob import glob
-import os
-from os.path import abspath, exists, join
-import json
-import logging
 import random
-import shutil
-import sys
-import pickle
-import re
+import cProfile
 
+from benchmarks.benchmark import BenchConfig, Benchmark, BenchmarkSuite, Bencher
+from schemas import types
 from analyzer import dynamic
-from globs import get_solution_strs, init_synthesizer, get_petri_net_data
-from openapi import defs
-from openapi.utils import read_doc
-from program.program import ProjectionExpr, AppExpr
-from program.program_equality import compare_program_strings
-from run import prep_exp_dir, parse_entries
-from schemas.schema_type import SchemaType
-from synthesizer.filtering import run_filter
-from synthesizer.parallel import spawn_encoders
-from synthesizer.utils import DEFAULT_LENGTH_LIMIT
-import consts
-
-BK_CONFIG = "config"
-BK_SOLUTION = "solutions"
-BK_BENCHES = "benchmarks"
+from program.program import (Program, ProjectionExpr, FilterExpr,
+                            AssignExpr, VarExpr, AppExpr, ListExpr)
 
 bias_type_args = {
     "none": dynamic.BiasType.NONE,
     "simple": dynamic.BiasType.SIMPLE,
     "look-ahead": dynamic.BiasType.LOOK_AHEAD
 }
-
-class SuppressPrint:
-    def __init__(self, verbose):
-        self.verbose = verbose
-
-    def __enter__(self):
-        if not self.verbose:
-            self._original_stdout = sys.stdout
-            sys.stdout = open(os.devnull, 'w')
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        sys.stdout.close()
-        sys.stdout = self._original_stdout
-
-def avg(lst):
-    return sum(lst) / len(lst)
-
-class Bencher:
-    def __init__(self, repeat, bench, cache, filter_num, filter_sol_only, re_bias_type):
-        self.benches = {}
-
-        # map from api to entry
-        self.table1 = {}
-        # map from api to list of benches for each api
-        self.table2 = {}
-
-        self.repeat = repeat
-        self.bench = bench
-        self.cache = cache
-        self.filter_num = filter_num
-        self.filter_sol_only = filter_sol_only
-        self.re_bias_type = re_bias_type
-
-    def tkey(self, bench_key):
-        return self.benches[bench_key][BK_CONFIG]["exp_name"].split("_")[0]
-
-    def run_benches(self, folder="benchmarks", names=None):
-        self.read_benches(folder)
-
-        for bench_key in self.benches.keys():
-            self.run_bench(bench_key, names)
-
-            print()
-
-    def read_benches(self, folder="benchmarks"):
-        "Reads a list JSON bench files from a folder, populating table1"
-
-        if self.bench is None:
-            self.bench = "benchmarks"
-
-        if os.path.isdir(self.bench):
-            files = [f for f in glob(f"{folder}/*.json")]
-        else:
-            files = [self.bench]
-
-        print("reading benches")
-
-        for inf in files:
-            with open(inf) as f:
-                js = json.load(f)
-                config_path = js.get(BK_CONFIG)
-                if not config_path:
-                    print(f"✗ {inf}: no config")
-                    continue
-
-                with open(config_path) as cf:
-                    js[BK_CONFIG] = json.load(cf)
-
-                print(f"✓ {inf}: read")
-
-            # set self.benches
-            self.benches[inf] = js
-
-            # populate table 1, part 1
-            # for the name, we use the first part of the experiment name when split by _s.
-            key = self.tkey(inf)
-            self.table1[key] = {}
-
-            # to get number of annotations, open the annotations file
-            with open(js[BK_CONFIG]["witness"]["annotation_path"]) as af:
-                a = json.load(af)
-                self.table1[key]["annotations"] = len(a)
-
-        print()
-
-    def run_bench(self, bench_key, names):
-        # this assumes bench_key is in self.benches
-        print(bench_key)
-        print(f"• setup")
-
-        configuration = self.benches[bench_key][BK_CONFIG]
-
-        # clear the log file if exists
-        output_file = configuration.get(consts.KEY_OUTPUT)
-        enable_debug = configuration.get(consts.KEY_DEBUG)
-        if enable_debug and exists(output_file):
-            os.remove(output_file)
-
-        logging.basicConfig(
-            filename=output_file, level=logging.DEBUG)
-
-        print("  • Reading OpenAPI document...")
-        doc_file = configuration.get(consts.KEY_DOC_FILE)
-        doc = read_doc(doc_file)
-        SchemaType.doc_obj = doc
-
-        endpoints = configuration.get(consts.KEY_ENDPOINTS)
-        if not endpoints:
-            endpoints = doc.get(defs.DOC_PATHS).keys()
-
-        exp_dir = prep_exp_dir(configuration)
-
-        print("  • Loading witnesses...")
-        entries = parse_entries(doc, configuration, exp_dir)
-
-        # initialize table 1, part 2
-        key = self.tkey(bench_key)
-        self.table1[key]["avg_num_args"] = avg([len(x.parameters) for x in entries])
-
-        obj_sizes = []
-        schemas = doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS)
-        for _, sch in schemas.items():
-            typ = sch.get(defs.DOC_TYPE)
-            if typ == "object":
-                if defs.DOC_PROPERTIES in sch:
-                    properties = sch.get(defs.DOC_PROPERTIES)
-                    obj_sizes.append(len(properties))
-                    continue
-
-            obj_sizes.append(1)
-
-        self.table1[key]["obj_size"] = avg(obj_sizes)
-        self.table1[key]["endpoints"] = len(endpoints)
-        covered = {x.endpoint for x in entries if str(x.endpoint) in endpoints}
-        self.table1[key]["endpoints_covered"] = len(covered)
-
-        log_analyzer = None
-        with open(os.path.join(exp_dir, "graph.pkl"), "rb") as f:
-            log_analyzer = pickle.load(f)
-
-        # initialize table 2, part 0
-        self.table2[key] = []
-
-        blen = len(self.benches[bench_key][BK_BENCHES])
-
-        print(f"• run {blen} benches")
-
-        for i, bench in enumerate(self.benches[bench_key][BK_BENCHES]):
-            print(f"  • [{i + 1}/{blen}]")
-
-            if names is not None and bench["name"] not in names:
-                continue
-
-            list_output = (re.match("\[.*\]", bench["output"]) != None)
-            if list_output:
-                bench["output"] = bench["output"][1:-1]
-
-            bm_dir = os.path.join(exp_dir, bench["name"])
-            # create a directory for the current benchmark
-            cached = os.path.exists(bm_dir) and len(os.listdir(bm_dir)) != 0
-            if cached and not self.cache:
-                shutil.rmtree(bm_dir)
-
-            os.makedirs(bm_dir, exist_ok=True)
-
-            synthesizer = init_synthesizer(doc, configuration, log_analyzer, bm_dir)
-            inputs = {k: SchemaType(v, None) for k, v in bench["input_args"].items()}
-            output = [SchemaType(bench["output"], None)]
-
-            if not cached or not self.cache:
-                spawn_encoders(
-                    synthesizer,
-                    inputs, output,
-                    1 # configuration["synthesis"]["solver_number"]
-                )
-
-            # process solutions
-            solutions = set()
-            for j in range(DEFAULT_LENGTH_LIMIT + 1):
-                sol_file = os.path.join(bm_dir, f"solutions_{j}.pkl")
-                if os.path.exists(sol_file):
-                    with open(sol_file, 'rb') as f:
-                        programs = pickle.load(f)
-
-                    solutions = solutions.union(programs)
-
-            # initialize table 1, part 3
-            # here, we report statistics on the petri net if they haven't been yet.
-            if "places" not in self.table1[key]:
-                num_place, num_trans = get_petri_net_data(synthesizer)
-                self.table1[key]["places"] = num_place
-                self.table1[key]["transitions"] = num_trans
-
-            # initialize table 2, part 1
-            arr = {
-                "name": bench["name"],
-                "desc": bench["desc"],
-                "ast_size": "-",
-                "endpoint_calls": "-",
-                "projects": "-",
-                "rank": "-",
-                "rank_no_re": "-",
-                "median_rank": "-",
-                "mean_rank": "-",
-            }
-
-            # the solution is contained as a list of lines in the solution key.
-            if BK_SOLUTION in bench:
-                tgt_sols = ["\n".join(sol) for sol in bench[BK_SOLUTION]]
-                res_no_re = get_solution_strs(synthesizer, solutions)
-
-                found = False
-                for rank, res_sol in enumerate(res_no_re):
-                    for tgt_sol in tgt_sols:
-                        if compare_program_strings(tgt_sol, res_sol):
-                            found = True
-                            arr["rank_no_re"] = rank
-
-                            break
-                    if found:
-                        break
-
-                sol_prog = None
-                # We need to rank our solutions by running filtering first.
-                def get_solution_rank():
-                    dyn_analysis = dynamic.DynamicAnalysis(
-                        entries,
-                        configuration.get(consts.KEY_SKIP_FIELDS),
-                        abstraction_level=dynamic.CMP_ENDPOINT_AND_ARG_VALUE,
-                        bias_type=self.re_bias_type
-                    )
-
-                    results = []
-                    for p in solutions:
-                        is_target_sol = False
-                        for tgt_sol in tgt_sols:
-                            eq_target = compare_program_strings(
-                                tgt_sol, 
-                                get_solution_strs([p])[0]
-                            )
-                            is_target_sol = is_target_sol or eq_target
-
-                        if is_target_sol or not self.filter_sol_only:
-                            cost = run_filter(
-                                synthesizer,
-                                log_analyzer, dyn_analysis,
-                                inputs, p, list_output,
-                                repeat=self.repeat
-                            )
-                            results.append((p, cost))
-
-                    res = sorted(results, key=lambda x: x[-1])
-                    for r in res:
-                        print(r[1], get_solution_strs([r[0]])[0])
-
-                    for rank, res_sol in enumerate(res):
-                        for tgt_sol in tgt_sols:
-                            if compare_program_strings(
-                                tgt_sol, 
-                                get_solution_strs([res_sol[0]])[0]):
-                                return rank + 1, res_sol[0]
-                    return None, None
-
-                ranks = [get_solution_rank() for _ in range(self.filter_num)]
-                sol_prog = ranks[0][1]
-                ranks = [rank for rank, _ in ranks]
-                print(ranks)
-                if ranks[0] is not None:
-                    print(f"  • [{i + 1}/{blen}] PASS, Rank {rank}")
-                    arr["mean_rank"] = sum(ranks) / len(ranks)
-                    arr["rank"] = arr["mean_rank"]
-                    arr["median_rank"] = sorted(ranks)[len(ranks)//2]
-                else:
-                    print(f"  • [{i + 1}/{blen}] FAIL")
-
-                print(arr["rank_no_re"], arr["rank"])
-                if sol_prog is not None:
-                    ns = sol_prog.collect_exprs()
-                    arr["ast_size"] = len(ns)
-                    arr["projects"] = len(list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
-                    arr["endpoint_calls"] = len(list(filter(lambda x: isinstance(x, AppExpr), ns)))
-            else:
-                print(f"  • [{i + 1}/{blen}] NO SOL")
-
-            self.table2[key].append(arr)
-
-    def print_table1(self, output=None):
-        res = ("% auto-generated: ./bench.py, table 1\n"
-            "\\resizebox{\\textwidth}{!}{\\begin{tabular}{lrrrrrrr}"
-            "\\toprule"
-            "& \\multicolumn{3}{c}{API size} & \\multicolumn{2}{c}{Sub-API size} & \\multicolumn{2}{c}{TNN size} \\\\"
-            "\\cmidrule(lr){2-4} \\cmidrule(lr){5-6} \\cmidrule(lr){7-8}"
-            "API & \\# endpoints & Avg. endpoint args & Avg. object size & \\# endpoints covered & \\# annotations & \\# places & \\# transitions \\\\"
-            "\\midrule")
-        res += "\n"
-
-        for api, rest in self.table1.items():
-            avg_num_args = round(rest['avg_num_args'], 2)
-            obj_size = round(rest['obj_size'], 2)
-            res += f"  {api.capitalize()} & {rest['endpoints']} & {avg_num_args} & {obj_size} & {rest['endpoints_covered']} & {rest['annotations']} & {rest['places']} & {rest['transitions']}"
-            res += r" \\"
-            res += "\n"
-
-        res += ("\\bottomrule"
-                "\\end{tabular}}")
-
-        # print(res)
-
-        if output:
-            with open(join(output, "table1.tex"), "w") as of:
-                of.write(res)
-                print(f"written to {join(output, 'table1.tex')}")
-
-    def print_table2(self, output=None):
-        res = ("% auto-generated: ./bench.py, table 2\n"
-               "\\resizebox{\\textwidth}{!}{"
-               "\\begin{tabular}{llp{5cm}rrrrr}"
-               "\\toprule"
-               "& \\multicolumn{2}{c}{Benchmark info} & \\multicolumn{3}{c}{Solution stats} & \\multicolumn{2}{c}{Solution rank} \\\\"
-               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-6} \\cmidrule(lr){7-8}"
-               "API & Name & Description & AST Size & \\# endpoint calls & \\# projections & Without RE & With RE \\\\"
-               "\\midrule")
-        res += "\n"
-
-        for i, (api, bench_results) in enumerate(self.table2.items()):
-            res += api.capitalize() + " "
-            for r in bench_results:
-                res += f"& {r['name']} & {r['desc']} & {r['ast_size']} & {r['endpoint_calls']} & {r['projects']} & {r['rank_no_re']} & {r['rank']} "
-                res += r" \\"
-                res += "\n"
-            if i < len(self.table2.items()) - 1:
-                res += "\\hline\n"
-
-        res += ("\\bottomrule"
-                "\\end{tabular}}")
-
-        # print(res)
-
-        if output:
-            with open(join(output, "table2.tex"), "w") as of:
-                of.write(res)
-                print(f"written to {join(output, 'table2.tex')}")
 
 def build_cmd_parser():
     '''
@@ -396,30 +35,733 @@ def build_cmd_parser():
         help="Path to output latex table to")
     parser.add_argument("--repeat", type=int, nargs='?', default=5,
         help="Number of times to repeat filtering")
-    parser.add_argument("--filternum", type=int, nargs='?', default=3,
+    parser.add_argument("--filter-num", type=int, nargs='?', default=3,
         help="Number of times to run filtering")
+    parser.add_argument("--bias-type", default='simple',
+        choices=list(bias_type_args.keys()) ,dest='bias_type',
+        help="Bias type for retrospective execution")
     parser.add_argument("--bench", nargs='?',
         help="Path to benchmark file or directory (by default runs all in benchmarks)")
     parser.add_argument("--names", nargs="+",
         help="Benchmark name list")
-    parser.add_argument("--bias-type", default='simple', choices=list(bias_type_args.keys()) ,dest='bias_type',
-        help="Bias type for retrospective execution")
     parser.add_argument("--cache", action='store_true', dest='cache',
         help="Whether to use cached results")
+    parser.add_argument("--parallel", action='store_true', dest='parallel',
+        help="Whether to run in parallel")
     parser.set_defaults(cache=False)
     parser.add_argument("--sol-only", action='store_true', dest='filter_sol_only',
         help="Whether to run retrospective execution on the solution only")
+    parser.add_argument("--synthesis-only", action='store_true',
+        help="Whether to run ranking")
     parser.set_defaults(filter_sol_only=False)
     return parser
+
+
+################################################################################
+##                                  SLACK                                     ##
+################################################################################
+
+slack_benchmarks = [
+    Benchmark(
+        "1.1",
+        "Retrieve all member emails from channel name",
+        {
+            "channel_name": types.PrimString("objs_conversation.name")
+        },
+        types.ArrayType(None, types.PrimString("objs_user.profile.email")),
+        [
+            Program(
+                ["channel_name"],
+                [
+                    AssignExpr("x0", AppExpr("/conversations.list_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
+                    FilterExpr(VarExpr("x1"), "name", VarExpr("channel_name"), False),
+                    AssignExpr("x2", AppExpr("/conversations.members_GET", [("channel", ProjectionExpr(VarExpr("x1"), "id"))]), False),
+                    AssignExpr("x3", ProjectionExpr(VarExpr("x2"), "members"), True),
+                    AssignExpr("x4", AppExpr("/users.profile.get_GET", [("user", VarExpr("x3"))]), False),
+                    ProjectionExpr(ProjectionExpr(VarExpr("x4"), "profile"), "email"),
+                ]
+            ),
+        ],
+    ),
+    Benchmark(
+        "1.2",
+        "Send a message to some user given the email address",
+        {
+            "email": types.PrimString("objs_user_profile.email")
+        },
+        types.SchemaObject("objs_message"),
+        [
+            Program(
+                ["email"],
+                [
+                    AssignExpr("x0", AppExpr("/users.lookupByEmail_GET", [("email", VarExpr("email"))]), False),
+                    AssignExpr("x1", AppExpr("/conversations.open_POST", [("users", ProjectionExpr(ProjectionExpr(VarExpr("x0"), "user"), "id"))]), False),
+                    AssignExpr("x2", AppExpr("/chat.postMessage_POST", [("channel", ProjectionExpr(ProjectionExpr(VarExpr("x1"), "channel"), "id"))]), False),
+                    ProjectionExpr(VarExpr("x2"), "message"),
+                ]
+            ),
+        ],
+    ),
+    Benchmark(
+        "1.3",
+        "Get all unread message for a user",
+        {
+            "user_id": types.PrimString("defs_user_id")
+        },
+        types.ArrayType(None, types.ArrayType(None, types.SchemaObject("objs_message"))),
+        [
+            Program(
+                ["user_id"],
+                [
+                    AssignExpr("x0", AppExpr("/users.conversations_GET", [("user", VarExpr("user_id"))]), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
+                    AssignExpr("x2", AppExpr("/conversations.info_GET", [("channel", ProjectionExpr(VarExpr("x1"), "id"))]), False),
+                    AssignExpr("x3", AppExpr("/conversations.history_GET", [("channel", ProjectionExpr(ProjectionExpr(VarExpr("x2"), "channel"), "id")), ("oldest", ProjectionExpr(ProjectionExpr(VarExpr("x2"), "channel"), "last_read"))]), False),
+                    ProjectionExpr(VarExpr("x3"), "messages")
+                ]
+            ),
+        ],
+    ),
+    Benchmark(
+        "1.4",
+        "Get all messages associated with a user",
+        {
+            "user_id": types.PrimString("defs_user_id"),
+            "ts": types.PrimString("defs_ts"),
+        },
+        types.ArrayType(None, types.SchemaObject("objs_message")),
+        [
+            Program(
+                ["user_id", "ts"],
+                [
+                    AssignExpr("x0", AppExpr("/conversations.list_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
+                    AssignExpr("x2", AppExpr("/conversations.history_GET", [("channel", ProjectionExpr(VarExpr("x1"), "id")), ("oldest", VarExpr("ts"))]), False),
+                    AssignExpr("x3", ProjectionExpr(VarExpr("x2"), "messages"), True),
+                    FilterExpr(VarExpr("x3"), "user", VarExpr("user_id"), False),
+                    VarExpr("x3")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "1.5",
+        "Create a channel and invite users",
+        {
+            "user_ids": types.ArrayType(None, types.PrimString("defs_user_id")),
+            "channel_name": types.PrimString("objs_conversation.name"),
+        },
+        types.ArrayType(None, types.SchemaObject("objs_conversation")),
+        [
+            Program(
+                ["user_ids", "channel_name"],
+                [
+                    AssignExpr("x0", AppExpr("/conversations.create_POST", [("name", VarExpr("channel_name"))]), False),
+                    AssignExpr("x1", VarExpr("user_ids"), True),
+                    AssignExpr("x2", AppExpr("/conversations.invite_POST", [("channel", ProjectionExpr(VarExpr("x0"), "id")), ("users", VarExpr("x1"))]), False),
+                    ProjectionExpr(VarExpr("x2"), "channel")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "1.6",
+        "Send a message, add a reply and update it",
+        {
+            "channel": types.PrimString("defs_channel"),
+        },
+        types.SchemaObject("objs_message"),
+        [
+            Program(
+                ["channel"],
+                [
+                    AssignExpr("x0", AppExpr("/chat.postMessage_POST", [("channel", VarExpr("channel"))]), False),
+                    AssignExpr("x1", AppExpr("/chat.postMessage_POST", [("channel", VarExpr("channel")), ("thread_ts", ProjectionExpr(VarExpr("x0"), "ts"))]), False),
+                    AssignExpr("x2", AppExpr("/chat.update_POST", [("channel", VarExpr("channel")), ("ts", ProjectionExpr(VarExpr("x1"), "ts"))]), False),
+                    ProjectionExpr(VarExpr("x2"), "message")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "1.7",
+        "Send a message to a given channel name",
+        {
+            "channel": types.PrimString("objs_conversation.name"),
+        },
+        types.SchemaObject("objs_message"),
+        [
+            Program(
+                ["channel"],
+                [
+                    AssignExpr("x0", AppExpr("/conversations.list_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
+                    FilterExpr(VarExpr("x1"), "name", VarExpr("channel"), False),
+                    AssignExpr("x2", AppExpr("/chat.postMessage", [("channel", ProjectionExpr(VarExpr("x1"), "id"))]), False),
+                    ProjectionExpr(VarExpr("x2"), "message")
+                ]
+            )
+        ]
+    ),
+]
+
+slack_suite = BenchmarkSuite(
+    "configs/slack_config.json",
+    "Slack",
+    slack_benchmarks
+)
+
+
+################################################################################
+##                                  STRIPE                                    ##
+################################################################################
+
+stripe_benchmarks = [
+    Benchmark(
+        "2.1",
+        "Make a subscription to a product for a customer",
+        {
+            "customer_id": types.PrimString("customer.id"),
+            "product_id": types.PrimString("product.id"),
+        },
+        types.SchemaObject("subscription"),
+        [
+            Program(
+                ["customer_id", "product_id"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/prices_GET", [("product", VarExpr("product_id"))]), False),
+                    AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "data"), True),
+                    AssignExpr("x3", AppExpr("/v1/subscriptions_POST", [("customer", VarExpr("customer_id")), ("items[0][price]", ProjectionExpr(VarExpr("x2"), "id"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "2.2",
+        "Charge a saved card given customer id",
+        {
+            "customer_id": types.PrimString("customer.id"),
+            "cur": types.PrimString("fee.currency"),
+            "amt": types.PrimInt("price.unit_amount"),
+            "pm_type": types.PrimString("source.type"),
+        },
+        types.SchemaObject("payment_intent"),
+        [
+            Program(
+                ["customer_id", "cur", "amt", "pm_type"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/payment_methods_GET", [("customer", VarExpr("customer_id")), ("type", VarExpr("pm_type"))]), False),
+                    AssignExpr("x2", AppExpr("/v1/payment_intents_POST", [("customer", VarExpr("customer_id")), ("payment_method", ProjectionExpr(VarExpr("x1"), "id")), ("currency", VarExpr("cur")), ("amount", VarExpr("amt"))]), False),
+                    AssignExpr("x3", AppExpr("/v1/payment_intents/{intent}/confirm", [("intent", ProjectionExpr(VarExpr("x2"), "id"))]), False),
+                    VarExpr("x3")
+                ]
+            ),
+        ]
+    ),
+    Benchmark(
+        "2.3",
+        "Subscribe to multiple items",
+        {
+            "customer_id": types.PrimString("customer.id"),
+            "product_ids": types.ArrayType(None, types.PrimString("product.id")),
+        },
+        types.ArrayType(None, types.SchemaObject("subscription")),
+        [
+            Program(
+                ["customer_id", "product_ids"],
+                [
+                    AssignExpr("x0", VarExpr("product_ids"), True),
+                    AssignExpr("x1", AppExpr("/v1/prices_GET", [("product", VarExpr("x0"))]), False),
+                    AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "data"), True),
+                    AssignExpr("x3", AppExpr("/v1/subscriptions_POST", [("customer", VarExpr("customer_id")), ("items[0][price]", ProjectionExpr(VarExpr("x2"), "id"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "2.4",
+        "Create a product and invoice a customer",
+        {
+            "product_name": types.PrimString("product.name"),
+            "customer_id": types.PrimString("customer.id"),
+            "currency": types.PrimString("fee.currency"),
+            "unit_amount": types.PrimInt("unit_amount_/v1/prices_POST_unit_amount"),
+        },
+        types.SchemaObject("invoiceitem"),
+        [
+            Program(
+                ["product_name", "customer_id", "currency", "unit_amount"],
+                [
+                    AssignExpr("x0", AppExpr("/v1/products_POST", [("name", VarExpr("product_name"))]), False),
+                    AssignExpr("x1", AppExpr("/v1/prices_POST", [("currency", VarExpr("currency")), ("product", ProjectionExpr(VarExpr("x0"), "id")), ("unit_amount", VarExpr("unit_amount"))]), False),
+                    AssignExpr("x2", AppExpr("/v1/invoiceitems_POST", [("customer", VarExpr("customer_id")), ("price", ProjectionExpr(VarExpr("x1"), "id"))]), False),
+                    VarExpr("x2")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "2.5",
+        "sending invoice",
+        {
+            "customer_id": types.PrimString("customer.id"),
+            "price_id": types.PrimString("plan.id"),
+        },
+        types.SchemaObject("invoice"),
+        [
+            Program(
+                ["customer_id", "price_id"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/invoiceitems_POST", [("customer", VarExpr("customer_id")), ("price", VarExpr("price_id"))]), False),
+                    AssignExpr("x2", AppExpr("/v1/invoices_POST", [("customer", ProjectionExpr(VarExpr("x1"), "customer"))]), False),
+                    AssignExpr("x3", AppExpr("/v1/invoices/{invoice}/send_POST", [("invoice", ProjectionExpr(VarExpr("x2"), "id"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "2.6",
+        "Retrieve customer by email",
+        {
+            "email": types.PrimString("customer.email"),
+        },
+        types.SchemaObject("customer"),
+        [
+            Program(
+                ["email"],
+                [
+                    AssignExpr("x0", AppExpr("/v1/customers_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "data"), True),
+                    FilterExpr(VarExpr("x1"), "email", VarExpr("email"), False),
+                    VarExpr("x1")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "2.7",
+        "Get a list of receipts for a customer",
+        {
+            "customer_id": types.PrimString("customer.id"),
+        },
+        types.ArrayType(None, types.SchemaObject("charge")),
+        [
+            Program(
+                ["customer_id"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/invoices_GET", [("customer", VarExpr("customer_id"))]), False),
+                    AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "data"), True),
+                    AssignExpr("x3", AppExpr("/v1/charges/{charge}_GET", [("charge", ProjectionExpr(VarExpr("x2"), "charge"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "2.8",
+        "Get refund for given subscription",
+        {
+            "subscription": types.PrimString("subscription.id"),
+        },
+        types.SchemaObject("refund"),
+        [
+            Program(
+                ["subscription"],
+                [
+                    AssignExpr("x0", AppExpr("/v1/subscriptions/{subscription_exposed_id}_GET", [("subscription_exposed_id", VarExpr("subscription"))]), False),
+                    AssignExpr("x1", AppExpr("/v1/invoices/{invoice}_GET", [("invoice", ProjectionExpr(VarExpr("x0"), "latest_invoice"))]), False),
+                    AssignExpr("x2", AppExpr("/v1/refunds_POST", [("charge", ProjectionExpr(VarExpr("x1"), "charge"))]), False),
+                    VarExpr("x2")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "2.9",
+        "Get email of all customers",
+        {
+        },
+        types.ArrayType(None, types.PrimString("customer.email")),
+        [
+            Program(
+                [],
+                [
+                    AssignExpr("x0", AppExpr("/v1/customers_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "data"), True),
+                    ProjectionExpr(VarExpr("x1"), "email")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "2.10",
+        "Get email of subscribers to some product",
+        {
+            "product_id": types.PrimString("product.id"),
+        },
+        types.ArrayType(None, types.PrimString("customer.email")),
+        [
+            # [
+            #     "\\product_id -> {",
+            #     "let x1 = /v1/subscriptions_GET()",
+            #     "x2 <- x1.data",
+            #     "x3 <- x2.items",
+            #     "if x3.price.product = product_id",
+            #     "let x4 = /v1/customers/{customer}_GET(customer=x2.customer_id)",
+            #     "return x4",
+            #     "}"
+            # ],
+            # types do not flow in this benchmark
+            Program(
+                ["product_id"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/subscriptions_GET", []), False),
+                    AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "data"), True),
+                    AssignExpr("x3", ProjectionExpr(VarExpr("x2"), "items"), True),
+                    FilterExpr(VarExpr("x3"), "price.product", VarExpr("product_id"), False),
+                    AssignExpr("x4", AppExpr("/v1/customers/{customer}_GET", [("customer", ProjectionExpr(VarExpr("x1"), "customer"))]), False),
+                    VarExpr("x4")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "2.11",
+        "Get last 4 digit of card for a customer",
+        {
+            "customer_id": types.PrimString("customer.id"),
+        },
+        types.PrimString("bank_account.last4"),
+        [
+            Program(
+                ["customer_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v1/customers/{customer}/sources_GET", [("customer", VarExpr("customer_id"))]), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "data"), True),
+                    ProjectionExpr(VarExpr("x1"), "last4")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "2.12",
+        "Delete a card for a customer",
+        {
+            "customer_id": types.SchemaObject("customer.id"),
+        },
+        types.SchemaObject("payment_source"),
+        [
+            Program(
+                ["customer_id"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/customers/{customer}_GET", [("customer", VarExpr("customer_id"))]), False),
+                    AssignExpr("x2", AppExpr("/v1/customers/{customer}/sources/{id}_DELETE", [("customer", VarExpr("customer_id")), ("source", ProjectionExpr(VarExpr("x1"), "default_source"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ]
+    ),
+    Benchmark(
+        "2.13",
+        "Update payment methods for all subscriptions",
+        {
+            "payment_method": types.SchemaObject("payment_method"),
+            "customer_id": types.PrimString("customer.id"),
+        },
+        types.ArrayType(None, types.SchemaObject("subscription")),
+        [
+            Program(
+                ["payment_method", "customer_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v1/subscriptions_GET", [("customer", VarExpr("customer_id"))]), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "data"), True),
+                    AssignExpr("x2", AppExpr("/v1/subscriptions/{subscription_exposed_id}_POST", [("subscription_exposed_id", ProjectionExpr(VarExpr("x1"), "id")), ("default_payment_method", ProjectionExpr(VarExpr("payment_method"), "id"))]), False),
+                    VarExpr("x2")
+                ]
+            )
+        ]
+    ),
+]
+
+stripe_suite = BenchmarkSuite(
+    "configs/stripe_config.json",
+    "Stripe",
+    stripe_benchmarks
+)
+
+################################################################################
+##                                  SQUARE                                    ##
+################################################################################
+
+square_benchmarks = [
+    Benchmark(
+        "3.1",
+        "List invoices that match location id",
+        {
+            "location_id": types.PrimString("Location.id"),
+        },
+        types.ArrayType(None, types.SchemaObject("Invoice")),
+        [
+            Program(
+                ["location_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/invoices_GET", [("location_id", VarExpr("location_id"))]), False),
+                    ProjectionExpr(VarExpr("x0"), "invoices")
+                ]
+            )
+        ],
+    ),
+    Benchmark(
+        "3.2",
+        "Find subscription from location, customer and plan",
+        {
+            "customer_id": types.PrimString("Customer.id"),
+            "location_id": types.PrimString("Location.id"),
+            "plan_id": types.PrimString("CatalogObject.id"),
+        },
+        types.ArrayType(None, types.SchemaObject("Subscription")),
+        [
+            Program(
+                ["customer_id", "location_id", "plan_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/subscriptions/search_POST", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "subscriptions"), True),
+                    FilterExpr(VarExpr("x1"), "customer_id", VarExpr("customer_id"), False),
+                    FilterExpr(VarExpr("x1"), "location_id", VarExpr("location_id"), False),
+                    FilterExpr(VarExpr("x1"), "plan_id", VarExpr("plan_id"), False),
+                    VarExpr("x1")
+                ]
+            ),
+            Program(
+                ["customer_id", "location_id", "plan_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/subscriptions/search_POST", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "subscriptions"), True),
+                    FilterExpr(VarExpr("x1"), "location_id", VarExpr("location_id"), False),
+                    FilterExpr(VarExpr("x1"), "customer_id", VarExpr("customer_id"), False),
+                    FilterExpr(VarExpr("x1"), "plan_id", VarExpr("plan_id"), False),
+                    VarExpr("x1")
+                ]
+            )
+        ],
+    ),
+    Benchmark(
+        "3.3",
+        "Get all items tax applies to",
+        {
+            "tax_id": types.PrimString("CatalogObject.id"),
+        },
+        types.ArrayType(None, types.SchemaObject("CatalogObject")),
+        [
+            Program(
+                ["tax_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/catalog/search_POST", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
+                    AssignExpr("x2", ListExpr(VarExpr("tax_id")), False),
+                    FilterExpr(VarExpr("x1"), "item_data.tax_ids", VarExpr("x2"), False),
+                    VarExpr("x1")
+                ]
+            )
+        ],
+    ),
+    Benchmark(
+        "3.4",
+        "List discounts in catalog",
+        {
+        },
+        types.ArrayType(None, types.PrimString("CatalogDiscount")),
+        [
+            Program(
+                [],
+                [
+                    AssignExpr("x0", AppExpr("/v2/catalog/list_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
+                    ProjectionExpr(VarExpr("x1"), "discount_data")
+                ]
+            )
+        ],
+    ),
+    Benchmark(
+        "3.5",
+        "Delete catalog items with names",
+        {
+            "item_type": types.PrimString("CatalogObject.type"),
+            "names": types.ArrayType(None, types.PrimString("CatalogDiscount.name"))
+        },
+        types.ArrayType(None, types.PrimString("CatalogObject.id")),
+        [
+            Program(
+                ["item_type", "names"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/catalog/list_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
+                    AssignExpr("x2", VarExpr("names"), True),
+                    FilterExpr(VarExpr("x1"), "item_data.name", VarExpr("x2"), False),
+                    AssignExpr("x3", AppExpr("/v2/catalog/batch-delete_DELETE", [("object_ids[0]", VarExpr("x1"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ],
+    ),
+    Benchmark(
+        "3.6",
+        "Delete all catalog items",
+        {
+        },
+        types.ArrayType(None, types.PrimString("CatalogObject.id")),
+        [
+            Program(
+                [],
+                [
+                    AssignExpr("x0", AppExpr("/v2/catalog/batch-retrieve_POST", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
+                    AssignExpr("x2", AppExpr("/v2/catalog/batch-delete_DELETE", [("object_ids[0]", VarExpr("x1"))]), False),
+                    VarExpr("x2")
+                ]
+            )
+        ],
+    ),
+    Benchmark(
+        "3.7",
+        "Add order details to order",
+        {
+            "location_id": types.PrimString("Location.id"),
+            "order_ids": types.ArrayType(None, types.PrimString("Order.id")),
+            "updates": types.SchemaObject("OrderFulfillment"),
+        },
+        types.ArrayType(None, types.SchemaObject("Order")),
+        [
+            Program(
+                ["location_id", "order_ids", "updates"],
+                [
+                    AssignExpr("x0", VarExpr("order_ids"), True),
+                    AssignExpr("x1", AppExpr("/v2/orders/batch-retrieve_POST", [("location_id", VarExpr("location_id")), ("order_ids[0]", VarExpr("x0"))]), False),
+                    AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "orders"), True),
+                    AssignExpr("x3", AppExpr("/v2/orders/{order_id}_PUT", [("order_id", ProjectionExpr(VarExpr("x2"), "id")), ("order[fulfillments]", VarExpr("updates"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ],
+    ),
+    Benchmark(
+        "3.8",
+        "Get payment notes",
+        {
+        },
+        types.ArrayType(None, types.PrimString("Tender.note")),
+        [
+            Program(
+                [],
+                [
+                    AssignExpr("x0", AppExpr("/v2/payments_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "payments"), True),
+                    ProjectionExpr(VarExpr("x1"), "note")
+                ]
+            )
+        ],
+    ),
+    Benchmark(
+        "3.9",
+        "Get order ids associated with your transactions",
+        {
+            "location_id": types.PrimString("Location.id"),
+        },
+        types.ArrayType(None, types.PrimString("Order.id")),
+        [
+            Program(
+                ["location_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/locations/{location_id}/transactions_GET", [("location_id", VarExpr("location_id"))]), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "transactions"), True),
+                    ProjectionExpr(VarExpr("x1"), "order_id"),
+                ]
+            )
+        ],
+    ),
+    Benchmark(
+        "3.10",
+        "Get order names from transaction id",
+        {
+            "location_id": types.PrimString("Location.id"),
+            "transaction_id": types.PrimString("Order.id"),
+        },
+        types.ArrayType(None, types.PrimString("Invoice.title")),
+        [
+            Program(
+                ["location_id", "transaction_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/orders/batch-retrieve_POST", [("location_id", VarExpr("location_id")), ("order_ids[0]", VarExpr("transaction_id"))]), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "orders"), True),
+                    AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "line_items"), True),
+                    ProjectionExpr(VarExpr("x2"), "name"),
+                ]
+            )
+        ],
+    ),
+    Benchmark(
+        "3.11",
+        "Search customers by name",
+        {
+            "name": types.PrimString("Customer.given_name"),
+        },
+        types.SchemaObject("Customer"),
+        [
+            Program(
+                ["name"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/customers_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "customers"), True),
+                    FilterExpr(VarExpr("x1"), "given_name", VarExpr("name"), False),
+                    VarExpr("x1")
+                ]
+            )
+        ],
+    )
+]
+
+square_suite = BenchmarkSuite(
+    "configs/square_config.json",
+    "Square",
+    square_benchmarks
+)
 
 def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
 
-    b = Bencher(args.repeat, args.bench, args.cache, args.filternum, args.filter_sol_only, bias_type_args[args.bias_type])
-    b.run_benches(names=args.names)
-    b.print_table1(args.output)
-    b.print_table2(args.output)
+    config = BenchConfig(
+        args.cache,
+        args.repeat,
+        args.filter_num,
+        args.filter_sol_only,
+        args.synthesis_only,
+        bias_type_args[args.bias_type],
+        args.parallel)
+    b = Bencher(
+        [
+            slack_suite,
+            stripe_suite,
+            square_suite,
+        ],
+        config)
+    random.seed(1314)
+
+    with cProfile.Profile() as pr:
+        
+        b.run(
+            args.names,
+            output=args.output,
+            print_api=True,
+            print_results=True,
+            cached_results=False)
+
+    pr.print_stats()
+
 
 if __name__ == '__main__':
     main()

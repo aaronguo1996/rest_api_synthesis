@@ -69,7 +69,7 @@
         "product_name": "product.name",
         "customer_id": "customer.id",
         "currency": "fee.currency",
-        "unit_amount": "/v1/prices:unit_amount:POST"
+        "unit_amount": "price.unit_amount"
       },
       "output": "invoiceitem",
       "solutions": [[
@@ -191,7 +191,7 @@
       "input_args": {
         "customer_id": "customer.id"
       },
-      "output": "payment_source.last4",
+      "output": "back_account.last4",
       "solutions": [[
         "\\customer_id -> {",
           "let x0 = /v1/customers/{customer}/sources_GET(customer=customer_id)",

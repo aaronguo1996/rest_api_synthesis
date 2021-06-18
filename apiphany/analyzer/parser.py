@@ -66,7 +66,7 @@ class LogParser:
         request_params = []
         request_params += request.get(har_consts.HAR_QUERY, [])
 
-        post_data = request.get(har_consts.HAR_PARAMS, {})
+        post_data = request.get(har_consts.HAR_POSTDATA, {})
         if har_consts.HAR_PARAMS in post_data:
             post_params = post_data.get(har_consts.HAR_PARAMS)
             request_params += post_params
@@ -177,7 +177,7 @@ class LogParser:
 
         response = self._resolve_response(entry, method, endpoint, entry_def)
 
-        return TraceEntry(endpoint, method, parameters, response)
+        return TraceEntry(endpoint, method, None, parameters, response)
 
     def _resolve_entries(self, entries, skips, skip_fields):
         '''

@@ -38,7 +38,7 @@ class SynthesizerTestCase(unittest.TestCase):
         })
         self.assertEqual(projections, {
             "projection(user, id):": TraceEntry(
-                "projection(user, id)", "", [
+                "projection(user, id)", "", None, [
                     Parameter(
                         "", "obj", "projection(user, id)", [],
                         True, None, None, None
@@ -50,7 +50,7 @@ class SynthesizerTestCase(unittest.TestCase):
                 )
             ),
             "projection(user, name):": TraceEntry(
-                "projection(user, name)", "", [
+                "projection(user, name)", "", None, [
                     Parameter(
                         "", "obj", "projection(user, name)", [],
                         True, None, None, None
@@ -62,7 +62,7 @@ class SynthesizerTestCase(unittest.TestCase):
                 )
             ),
             "projection(user, profile):": TraceEntry(
-                "projection(user, profile)", "", [
+                "projection(user, profile)", "", None, [
                     Parameter(
                         "", "obj", "projection(user, profile)", [],
                         True, None, None, None,
@@ -74,7 +74,7 @@ class SynthesizerTestCase(unittest.TestCase):
                 )
             ),
             "projection(user.profile, email):": TraceEntry(
-                "projection(user.profile, email)", "", [
+                "projection(user.profile, email)", "", None, [
                     Parameter(
                         "", "obj", "projection(user.profile, email)", [],
                         True, None, None, None,
@@ -108,7 +108,7 @@ class SynthesizerTestCase(unittest.TestCase):
         })
         self.assertEqual(filters, {
             "filter(user, user.id):": TraceEntry(
-                "filter(user, user.id)", "", [
+                "filter(user, user.id)", "", None, [
                     Parameter(
                         "", "obj", "filter(user, user.id)", [],
                         True, None, None, None
@@ -124,7 +124,7 @@ class SynthesizerTestCase(unittest.TestCase):
                 )
             ),
             "filter(user, user.name):": TraceEntry(
-                "filter(user, user.name)", "", [
+                "filter(user, user.name)", "", None, [
                     Parameter(
                         "", "obj", "filter(user, user.name)", [],
                         True, None, None, None,
@@ -140,7 +140,7 @@ class SynthesizerTestCase(unittest.TestCase):
                 )
             ),
             "filter(user, user.profile.email):": TraceEntry(
-                "filter(user, user.profile.email)", "", [
+                "filter(user, user.profile.email)", "", None, [
                     Parameter(
                         "", "obj", "filter(user, user.profile.email)", [],
                         True, None, None, None
