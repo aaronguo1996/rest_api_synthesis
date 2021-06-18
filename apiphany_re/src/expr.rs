@@ -10,7 +10,8 @@ pub type ExprIx = usize;
 /// references to these indices.
 #[derive(Debug, Clone)]
 pub enum Expr {
-    App(Spur, SmallVec<[ExprIx; 2]>),
+    // TODO: memory ://
+    App(Spur, SmallVec<[(Spur, ExprIx); 2]>),
     Var(Spur),
     Proj(ExprIx, Spur),
     Filter(ExprIx, Spur, ExprIx),

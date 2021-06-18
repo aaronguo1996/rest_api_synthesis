@@ -6,9 +6,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+hashbrown = "0.11.2"
 lasso = { version = "0.5.1", features = ["multi-threaded", "ahasher"] }
-har = "0.7.0"
-regex = "1.5.4"
+rand = "0.8.4"
 serde_json = "1.0.59"
 smallvec = { version = "1.6.1", features = ["union"] }
 soa_derive = "0.10"
