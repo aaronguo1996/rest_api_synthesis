@@ -274,7 +274,8 @@ def main():
                     # "plan_id": types.PrimString("CatalogObject.id"),
                     # "subscription": types.SchemaObject("Subscription")
                     # "user_ids": types.ArrayType(None, types.PrimString("defs_user_id")),
-                    "channel_name": types.PrimString("objs_conversation.name"),
+                    "channel_id": types.PrimString("defs_channel"),
+                    "ts_id": types.PrimString("defs_ts"),
                 },
                 [
                     # types.SchemaObject("objs_message"),

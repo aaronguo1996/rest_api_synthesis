@@ -101,17 +101,16 @@ class Benchmark:
         log_analyzer, solutions):
         all_results = []
         
-        with pebble.ProcessPool() as pool:
+        with pebble.ThreadPool() as pool:
             for i, p in enumerate(solutions):
-                print(f"{i}/{len(solutions)}", flush=True)
-                print(p, flush=True)
+                # print(f"{i}/{len(solutions)}", flush=True)
+                # print(p, flush=True)
 
                 is_target_sol = False
                 for tgt_sol in self.solutions:
                     eq_target = tgt_sol == p
                     is_target_sol = is_target_sol or eq_target
 
-                start = time.time()
                 if is_target_sol or not runtime_config.filter_sol_only:
                     reps = []
                     for j in range(runtime_config.filter_num):
@@ -138,9 +137,6 @@ class Benchmark:
                             group_results.append(future)
 
                         reps.append(group_results)
-
-                    end = time.time()
-                    print("Time for running a program for all reptitions:", end - start, flush=True)
 
                     all_results.append(reps)
 
@@ -191,8 +187,8 @@ class Benchmark:
                     abs(score - consts.MAX_COST) > 1e-2):
                     ranks.append((rank + 1, res_sol, score))
 
-                    for i, r in enumerate(res):
-                        print(i, r[0], r[2], r[1])
+                    # for i, r in enumerate(res):
+                    #     print(i, r[0], r[2], r[1])
 
                     break
 
@@ -315,6 +311,7 @@ class BenchmarkSuite:
                     continue
 
                 print("Running benchmark", benchmark.name)
+
                 places, transitions, solutions = benchmark.run(
                     self._exp_dir, 
                     self._typed_entries, 
@@ -323,7 +320,7 @@ class BenchmarkSuite:
                 )
 
                 if not runtime_config.synthesis_only:
-                    print("RE")
+                    start = time.time()
                     ranks, sol_prog = benchmark.get_rank(
                         entries,
                         self._configuration,
@@ -331,6 +328,8 @@ class BenchmarkSuite:
                         self._log_analyzer,
                         solutions,
                     )
+                    end = time.time()
+                    print("RE time:", end - start)
 
                     latex_entry = benchmark.to_latex_entry(ranks, sol_prog)
                     latex_entries.append(latex_entry)

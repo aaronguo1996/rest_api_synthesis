@@ -1,5 +1,4 @@
 import random
-import json
 
 from synthesizer.utils import make_entry_name
 from analyzer.multiplicity import MUL_ONE_ONE, MUL_ZERO_MORE, MUL_ZERO_ONE
@@ -8,18 +7,14 @@ import program.utils as utils
 import consts
 from analyzer.utils import name_to_path
 from schemas import types
-from program.utils import set_default
 
 class Expression:
     def __init__(self, typ, signature):
         self.type = typ
         self.signature = signature
 
-    def to_json(self):
-        '''
-        convert the instance of this class to json
-        '''
-        return json.dumps(self, indent = 4, default=set_default)
+    def __repr__(self):
+        return self.__str__()
 
     def apply_subst(self):
         raise NotImplementedError
@@ -849,7 +844,7 @@ class Program:
         return hash((tuple(self._inputs), str(self.to_expression({}))))
 
     def __repr__(self):
-        return self.__dict__
+        return self.__str__()
 
     def to_expression(self, subst={}):
         exprs = []

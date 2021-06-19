@@ -54,7 +54,7 @@ class Result:
         return str((self.return_code, self.response_body, self.request_params))
 
     def __repr__(self):
-        return self.__dict__
+        return self.__str__()
 
 
 class BasicGenerator:

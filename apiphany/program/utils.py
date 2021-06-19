@@ -1,5 +1,7 @@
 import collections
 
+from schemas import types
+
 def find_expr(exprs, expr):
     for e, v in exprs:
         if e == expr:
@@ -26,6 +28,9 @@ def set_default(obj):
     if isinstance(obj, set):
         return list(obj)
     else:
-        obj_dict = obj.__dict__
-        obj_dict["object"] = type(obj).__name__
-        return obj_dict
+        if isinstance(obj, types.BaseType):
+            return str(obj)
+        else:
+            obj_dict = obj.__dict__
+            obj_dict["object"] = type(obj).__name__
+            return obj_dict

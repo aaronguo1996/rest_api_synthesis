@@ -268,23 +268,23 @@ class LogAnalyzer:
                 rep = group[0].arg_name
 
             # for debug
-            if rep == "CatalogObject.id":
-                group_params = []
-                for param in group:
-                    if param.type is not None:
-                        group_params.append((
-                            param.func_name, 
-                            param.method, 
-                            param.path, 
-                            param.value, 
-                            param.type,
-                            param.type.aliases
-                        ))
+            # if rep == "CatalogObject.id":
+            #     group_params = []
+            #     for param in group:
+            #         if param.type is not None:
+            #             group_params.append((
+            #                 param.func_name, 
+            #                 param.method, 
+            #                 param.path, 
+            #                 param.value, 
+            #                 param.type,
+            #                 param.type.aliases
+            #             ))
 
-                for p in group_params:
-                    print(p)
+            #     for p in group_params:
+            #         print(p)
 
-                print("==================")
+            #     print("==================")
 
     def to_json(self):
         groups = self.analysis_result()
@@ -405,26 +405,32 @@ class LogAnalyzer:
 
         # values = list(values) + self.type_values.get(str(typ), [])
 
-        return list(self.value_map.get(typ, []))
+        return list(self.value_map.get(str(typ), []))
 
     def index_values_by_type(self):
         value_map = {}
         params = self.dsu._parents.keys()
         for param in params:
             if param.type:
-                typ = str(param.type)
-                if typ not in value_map:
-                    value_map[typ] = set()
+                typs = param.type.aliases
+                typs.add(str(param.type))
+                for typ in typs:
+                    if typ not in value_map:
+                        value_map[typ] = set()
 
-                value_map[typ] = value_map[typ].union(
-                    self.dsu.get_value_bank(param)
-                )
+                    value_map[typ] = value_map[typ].union(
+                        self.dsu.get_value_bank(param)
+                    )
 
         for typ, values in self.type_values.items():
             if typ not in value_map:
                 value_map[typ] = []
+            else:
+                value_map[typ] = list(value_map[typ])
 
-            value_map[typ] = list(value_map[typ]) + values
+            for v in values:
+                if v not in value_map[typ]:
+                    value_map[typ].append(v)
 
         self.value_map = value_map
 
@@ -490,6 +496,11 @@ class LogAnalyzer:
         
         params = self.dsu._parents.keys()
         for p in params:
+            if p.func_name == "/chat.update" and param.func_name == "/chat.update":
+                print("p", p.method, p.arg_name, p.array_level, p.path)
+                print("param", param.method, param.arg_name, param.array_level, param.path)
+                print(p==param)
+
             if p == param:
                 group = self.dsu.get_group(p)
                 rep = get_representative(group)

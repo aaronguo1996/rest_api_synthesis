@@ -59,18 +59,17 @@ class DynamicAnalysis:
             return vals
         else:
             candidates = self._log_analyzer.get_values_by_type(typ)
-            vals = []
-            for v in candidates:
-                if v not in vals:
-                    vals.append(v)
+            vals = candidates
 
             if not vals:
                 # only two cases here
                 if str(typ) == "unit_amount_/v1/prices_POST_unit_amount":
                     vals = [random.randint(1, 10)]
                 else:
-                    x = xeger.Xeger()
-                    vals = [x.xeger("^[a-z0-9]{10,}$")]
+                    print("Not val available for type", typ)
+                    # x = xeger.Xeger()
+                    # vals = [x.xeger("^[a-z0-9]{10,}$")]
+                    vals = ["fuzz_string"]
             
             # print("Sampling by type", typ, "from", vals)
             return random.choice(vals)
@@ -197,8 +196,8 @@ class DynamicAnalysis:
         same_arg_val_calls = []
         for params, v, w in same_args_calls:
             has_all_values = True
-            for x, v in args:
-                if params[x] != v:
+            for x, arg_v in args:
+                if params[x] != arg_v:
                     has_all_values = False
                     break
 
