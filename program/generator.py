@@ -69,8 +69,8 @@ class ProgramGenerator:
                 # print(p, flush=True)
                 p = p.lift(self._name_counters)
                 if p not in programs:
-                    print(p)
-                    print(p.to_expression({}))
+                    # print(p)
+                    # print(p.to_expression({}))
                     programs.append(p)
 
         # raise Exception

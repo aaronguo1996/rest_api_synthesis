@@ -33,7 +33,7 @@
         "block_perms": true,
         "solver_type": "petri net ILP",
         "solver_number": 6,
-        "solution_number": 500,
+        "solution_number": 50,
         "enable_prefilter": false
     },
     "endpoints": [

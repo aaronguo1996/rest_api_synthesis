@@ -15,7 +15,7 @@ class ErrorResponse:
         return f"error: {self._error_msg}"
 
     def __repr__(self):
-        return self.__dict__
+        return self.__str__()
 
     def __eq__(self, other):
         if isinstance(other, ErrorResponse):
@@ -213,23 +213,24 @@ class Parameter:
         if isinstance(self.type, types.ObjectType):
             fields = self.type.object_fields
             for field, field_typ in fields.items():
-                proj_name = f"projection({self.type}, {field})"
                 field_path = self.path + [field]
                 p = Parameter(
-                    "",         # method
+                    self.method,         # method
                     field,      # arg name
-                    proj_name,  # func name
+                    self.func_name,  # func name
                     field_path, # path
                     True,       # is required
                     0,          # array level
                     field_typ,
                     None,
                 )
+                in_param = analyzer.set_type(self)
+                proj_name = f"projection({in_param.type}, {field})"
                 proj_field = TraceEntry(
                     proj_name,
                     "",
                     None,
-                    [analyzer.set_type(self)],
+                    [in_param],
                     analyzer.set_type(p)
                 )
                 projections.append(proj_field)
@@ -283,7 +284,7 @@ class Parameter:
             self.method.upper() + '_' + '.'.join(self.path)
 
     def __repr__(self):
-        return self.__dict__
+        return self.__str__()
 
     def __hash__(self):
         return hash((
@@ -317,7 +318,7 @@ class TraceEntry:
                 ",".join(param_strs) + "\n" + str(self.response))
 
     def __repr__(self):
-        return self.__dict__
+        return self.__str__()
 
     def __eq__(self, other):
         if not isinstance(other, TraceEntry):

@@ -4239,25 +4239,7 @@
                                     "type": "string"
                                 },
                                 "message": {
-                                    "properties": {
-                                        "attachments": {
-                                            "items": {
-                                                "type": "object"
-                                            },
-                                            "type": "array"
-                                        },
-                                        "blocks": {
-                                            "type": "object"
-                                        },
-                                        "text": {
-                                            "type": "string"
-                                        }
-                                    },
-                                    "required": [
-                                        "text"
-                                    ],
-                                    "title": "Message object",
-                                    "type": "object"
+                                    "$ref": "#/definitions/objs_message"
                                 },
                                 "ok": {
                                     "$ref": "#/definitions/defs_ok_true"

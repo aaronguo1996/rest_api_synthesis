@@ -18,11 +18,8 @@ class BaseType:
     def __str__(self):
         return self.name
 
-    def to_json(self):
-        '''
-        convert the instance of this class to json
-        '''
-        return json.dumps(self, indent = 4, default=set_default)
+    def __repr__(self):
+        return self.__str__()
 
     @staticmethod
     def to_python_type(typ):

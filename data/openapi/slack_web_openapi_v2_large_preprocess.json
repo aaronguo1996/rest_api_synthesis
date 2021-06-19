@@ -1695,27 +1695,7 @@
                                             "type": "string"
                                         },
                                         "message": {
-                                            "title": "Message object",
-                                            "required": [
-                                                "text"
-                                            ],
-                                            "type": "object",
-                                            "properties": {
-                                                "attachments": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {}
-                                                    }
-                                                },
-                                                "blocks": {
-                                                    "type": "object",
-                                                    "properties": {}
-                                                },
-                                                "text": {
-                                                    "type": "string"
-                                                }
-                                            }
+                                            "$ref": "#/components/schemas/objs_message"
                                         },
                                         "ok": {
                                             "$ref": "#/components/schemas/defs_ok_true"

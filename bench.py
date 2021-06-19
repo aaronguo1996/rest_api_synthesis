@@ -88,7 +88,7 @@ slack_benchmarks = [
         "1.2",
         "Send a message to some user given the email address",
         {
-            "email": types.PrimString("objs_user_profile.email")
+            "email": types.PrimString("objs_user.profile.email")
         },
         types.SchemaObject("objs_message"),
         [
@@ -159,7 +159,7 @@ slack_benchmarks = [
                 [
                     AssignExpr("x0", AppExpr("/conversations.create_POST", [("name", VarExpr("channel_name"))]), False),
                     AssignExpr("x1", VarExpr("user_ids"), True),
-                    AssignExpr("x2", AppExpr("/conversations.invite_POST", [("channel", ProjectionExpr(VarExpr("x0"), "id")), ("users", VarExpr("x1"))]), False),
+                    AssignExpr("x2", AppExpr("/conversations.invite_POST", [("channel", ProjectionExpr(ProjectionExpr(VarExpr("x0"), "channel"), "id")), ("users", VarExpr("x1"))]), False),
                     ProjectionExpr(VarExpr("x2"), "channel")
                 ]
             )
@@ -167,17 +167,17 @@ slack_benchmarks = [
     ),
     Benchmark(
         "1.6",
-        "Send a message, add a reply and update it",
+        "Given a message, add a reply and then update it",
         {
             "channel": types.PrimString("defs_channel"),
+            "ts": types.PrimString("defs_ts"),
         },
         types.SchemaObject("objs_message"),
         [
             Program(
-                ["channel"],
+                ["channel", "ts"],
                 [
-                    AssignExpr("x0", AppExpr("/chat.postMessage_POST", [("channel", VarExpr("channel"))]), False),
-                    AssignExpr("x1", AppExpr("/chat.postMessage_POST", [("channel", VarExpr("channel")), ("thread_ts", ProjectionExpr(VarExpr("x0"), "ts"))]), False),
+                    AssignExpr("x1", AppExpr("/chat.postMessage_POST", [("channel", VarExpr("channel")), ("thread_ts", VarExpr("ts"))]), False),
                     AssignExpr("x2", AppExpr("/chat.update_POST", [("channel", VarExpr("channel")), ("ts", ProjectionExpr(VarExpr("x1"), "ts"))]), False),
                     ProjectionExpr(VarExpr("x2"), "message")
                 ]
@@ -198,7 +198,7 @@ slack_benchmarks = [
                     AssignExpr("x0", AppExpr("/conversations.list_GET", []), False),
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
                     FilterExpr(VarExpr("x1"), "name", VarExpr("channel"), False),
-                    AssignExpr("x2", AppExpr("/chat.postMessage", [("channel", ProjectionExpr(VarExpr("x1"), "id"))]), False),
+                    AssignExpr("x2", AppExpr("/chat.postMessage_POST", [("channel", ProjectionExpr(VarExpr("x1"), "id"))]), False),
                     ProjectionExpr(VarExpr("x2"), "message")
                 ]
             )
@@ -435,7 +435,7 @@ stripe_benchmarks = [
         {
             "customer_id": types.PrimString("customer.id"),
         },
-        types.PrimString("bank_account.last4"),
+        types.PrimString("source.card.last4"),
         [
             Program(
                 ["customer_id"],
@@ -443,6 +443,7 @@ stripe_benchmarks = [
                     AssignExpr("x0", AppExpr("/v1/customers/{customer}/sources_GET", [("customer", VarExpr("customer_id"))]), False),
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "data"), True),
                     ProjectionExpr(VarExpr("x1"), "last4")
+                    # ProjectionExpr(ProjectionExpr(VarExpr("x1"), "card"), "last4")
                 ]
             )
         ]
@@ -749,18 +750,17 @@ def main():
             square_suite,
         ],
         config)
-    random.seed(1314)
 
-    with cProfile.Profile() as pr:
+    # with cProfile.Profile() as pr:
         
-        b.run(
-            args.names,
-            output=args.output,
-            print_api=True,
-            print_results=True,
-            cached_results=False)
+    b.run(
+        args.names,
+        output=args.output,
+        print_api=True,
+        print_results=True,
+        cached_results=False)
 
-    pr.print_stats()
+    # pr.print_stats()
 
 
 if __name__ == '__main__':
