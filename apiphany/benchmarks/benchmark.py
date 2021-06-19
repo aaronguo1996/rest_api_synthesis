@@ -323,6 +323,7 @@ class BenchmarkSuite:
                 )
 
                 if not runtime_config.synthesis_only:
+                    print("RE")
                     ranks, sol_prog = benchmark.get_rank(
                         entries,
                         self._configuration,
@@ -335,6 +336,7 @@ class BenchmarkSuite:
                     latex_entries.append(latex_entry)
 
 
+            print("dumping")
             with open(cache_path, "wb") as f:
                 pickle.dump({
                     "places": places,

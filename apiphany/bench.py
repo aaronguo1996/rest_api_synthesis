@@ -497,6 +497,26 @@ stripe_suite = BenchmarkSuite(
 ##                                  SQUARE                                    ##
 ################################################################################
 
+square_minimal = [
+    Benchmark(
+        "3.1",
+        "List invoices that match location id",
+        {
+            "location_id": types.PrimString("Location.id"),
+        },
+        types.ArrayType(None, types.SchemaObject("Invoice")),
+        [
+            Program(
+                ["location_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/invoices_GET", [("location_id", VarExpr("location_id"))]), False),
+                    ProjectionExpr(VarExpr("x0"), "invoices")
+                ]
+            )
+        ],
+    ),
+]
+
 square_benchmarks = [
     Benchmark(
         "3.1",
@@ -727,7 +747,7 @@ square_benchmarks = [
 square_suite = BenchmarkSuite(
     "configs/square_config.json",
     "Square",
-    square_benchmarks
+    square_minimal
 )
 
 def main():
@@ -744,8 +764,8 @@ def main():
         args.parallel)
     b = Bencher(
         [
-            slack_suite,
-            stripe_suite,
+            # slack_suite,
+            # stripe_suite,
             square_suite,
         ],
         config)
@@ -760,7 +780,7 @@ def main():
             print_results=True,
             cached_results=False)
 
-    pr.print_stats()
+        pr.print_stats()
 
 
 if __name__ == '__main__':
