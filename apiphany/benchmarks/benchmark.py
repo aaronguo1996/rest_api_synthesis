@@ -18,6 +18,8 @@ from synthesizer.filtering import retrospective_execute, check_results
 from program.program import ProjectionExpr, AppExpr, FilterExpr
 from synthesizer import parallel
 
+from apiphany import rust_re
+
 class BenchConfig:
     def __init__(
         self, cache=False, repeat=5, filter_num=3,
@@ -73,6 +75,7 @@ class Benchmark:
         if not cached or not runtime_config.cache:
             synthesizer = Synthesizer(configuration, entries, bm_dir)
             synthesizer.init()
+            print("inputs", self.inputs)
             parallel.spawn_encoders(
                 synthesizer,
                 self.inputs, [self.output],
@@ -310,8 +313,6 @@ class BenchmarkSuite:
                 if names is not None and benchmark.name not in names:
                     continue
 
-                print("Running benchmark", benchmark.name)
-
                 places, transitions, solutions = benchmark.run(
                     self._exp_dir, 
                     self._typed_entries, 
@@ -321,13 +322,17 @@ class BenchmarkSuite:
 
                 if not runtime_config.synthesis_only:
                     start = time.time()
-                    ranks, sol_prog = benchmark.get_rank(
-                        entries,
-                        self._configuration,
-                        runtime_config,
-                        self._log_analyzer,
-                        solutions,
-                    )
+                    # for now, just try to run rust_re
+                    # todo: use indexed entries for performance?
+                    print(solutions[0])
+                    rust_re(self._log_analyzer, solutions, self._entries, list(benchmark.inputs.items()))
+                    # ranks, sol_prog = benchmark.get_rank(
+                    #     entries,
+                    #     self._configuration,
+                    #     runtime_config,
+                    #     self._log_analyzer,
+                    #     solutions,
+                    # )
                     end = time.time()
                     print("RE time:", end - start)
 

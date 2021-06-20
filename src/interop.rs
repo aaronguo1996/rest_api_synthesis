@@ -11,7 +11,6 @@ pub struct Imports<'p> {
     pub var_expr: &'p PyAny,
     pub projection_expr: &'p PyAny,
     pub filter_expr: &'p PyAny,
-    pub map_expr: &'p PyAny,
     pub assign_expr: &'p PyAny,
 
     pub dumps: &'p PyAny,
@@ -19,8 +18,8 @@ pub struct Imports<'p> {
 
 #[pymodule]
 pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
-    #[pyfn(m, "run")]
-    fn run_re(
+    #[pyfn(m, "rust_re")]
+    fn rust_re(
         py: Python,
         log_analyzer: &PyAny,
         progs: Vec<&PyAny>,
@@ -34,7 +33,6 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         let var_expr = program.get("VarExpr")?;
         let projection_expr = program.get("ProjectionExpr")?;
         let filter_expr = program.get("FilterExpr")?;
-        let map_expr = program.get("MapExpr")?;
         let assign_expr = program.get("AssignExpr")?;
 
         let json = PyModule::import(py, "json")?;
@@ -45,7 +43,6 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
             var_expr,
             projection_expr,
             filter_expr,
-            map_expr,
             assign_expr,
 
             dumps,
