@@ -125,6 +125,12 @@ impl<'a> ExecEnv<'a> {
         // TODO: yikes! cloning!
         match &self.arena.exprs[expr] {
             // At this point, assume is_bind = false
+            Expr::Singleton(i) => {
+                // Execute inner item
+                // Then wrap in vector and return that value
+                let (v, cost) = self.exec_expr(*i)?;
+                Some((Some(vec![v?].into()), cost))
+            },
             Expr::Assign(x, e, _) => {
                 // Evaluate rhs
                 let (rhs, cost) = self.exec_expr(*e)?;

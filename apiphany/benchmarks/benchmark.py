@@ -79,7 +79,7 @@ class Benchmark:
             parallel.spawn_encoders(
                 synthesizer,
                 self.inputs, [self.output],
-                configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
+                1 # configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
             )
             
         solutions = {}

@@ -16,6 +16,8 @@ pub enum Expr {
     Proj(ExprIx, Spur),
     Filter(ExprIx, Spur, ExprIx),
     Assign(Spur, ExprIx, bool),
+    // ListExpr but it only has one elem lol
+    Singleton(ExprIx),
 }
 
 /// An index to access a `Prog` in an allocated vector.
