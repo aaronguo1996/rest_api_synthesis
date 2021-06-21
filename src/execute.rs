@@ -1,7 +1,7 @@
-use crate::{Expr, ExprIx, Prog, ProgIx, Trace, TraceVec};
+use crate::{Expr, ExprIx, Prog, ProgIx, Traces};
 use hashbrown::HashMap;
 use lasso::{Rodeo, RodeoResolver, Spur};
-use rand::{distributions::WeightedIndex, seq::SliceRandom, prelude::*};
+use rand::{distributions::WeightedIndex, prelude::*, seq::SliceRandom};
 use serde_json::Value;
 
 /// A `Runner` is responsible for coordinating the whole RE process.
@@ -26,7 +26,7 @@ impl Runner {
     /// values for that input.
     pub fn run(self, inputs: &[(Spur, Vec<Value>)]) -> Vec<(ProgIx, usize)> {
         let mut res = vec![];
-        
+
         // TODO: profile loop order
         // For each program, generate a few random vals and execute
         for prog in &self.progs {
@@ -130,7 +130,7 @@ impl<'a> ExecEnv<'a> {
                 // Then wrap in vector and return that value
                 let (v, cost) = self.exec_expr(*i)?;
                 Some((Some(vec![v?].into()), cost))
-            },
+            }
             Expr::Assign(x, e, _) => {
                 // Evaluate rhs
                 let (rhs, cost) = self.exec_expr(*e)?;
@@ -159,11 +159,11 @@ impl<'a> ExecEnv<'a> {
                     .map(|(_, arg)| self.exec_expr(*arg))
                     .collect::<Option<Vec<_>>>()?;
                 let scores: usize = argvs.iter().map(|x| x.1).sum();
-                let argvals = argvs.into_iter().map(|x| x.0).collect::<Option<Vec<_>>>()?;
-                let args: HashMap<Spur, Value> =
-                    args.iter().map(|x| x.0).zip(argvals.into_iter()).collect();
+                let vals = argvs.into_iter().map(|x| x.0).collect::<Option<Vec<_>>>()?;
+                let args: Vec<Spur> =
+                    args.iter().map(|x| x.0).collect();
 
-                let val = self.arena.get_trace(*f, &args)?;
+                let val = self.arena.get_trace(*f, args, vals)?;
 
                 Some((Some(val), 1 + scores))
             }
@@ -211,8 +211,8 @@ enum RWRodeo<T> {
 #[derive(Debug)]
 pub struct Arena {
     exprs: Vec<Expr>,
+    traces: Traces,
     progs: Vec<Prog>,
-    traces: TraceVec,
     strs: RWRodeo<Spur>,
 }
 
@@ -220,8 +220,8 @@ impl Default for Arena {
     fn default() -> Self {
         Self {
             exprs: vec![],
+            traces: Traces::new(),
             progs: vec![],
-            traces: TraceVec::new(),
             strs: RWRodeo::Write(Rodeo::default()),
         }
     }
@@ -242,73 +242,25 @@ impl Arena {
         self.progs.len() - 1
     }
 
-    pub fn push_trace(&mut self, trace: Trace) {
-        self.traces.push(trace);
+    pub fn push_trace(&mut self, f: Spur, args: Vec<Spur>, vals: Vec<(Vec<Value>, Value, usize)>) {
+        self.traces.insert((f, args), vals);
     }
 
-    fn get_trace(&self, f: Spur, args: &HashMap<Spur, Value>) -> Option<Value> {
-        // To get a trace, we iteratively increase the specificity of our constraints.
-        // We first check that the method and endpoint matches before moving to
-        // argument names and values, then finally to response values.
+    fn get_trace(&self, f: Spur, args: Vec<Spur>, vals: Vec<Value>) -> Option<Value> {
+        // To get a trace, we just get it from our traces map
+        let possibles = self.traces.get(&(f, args))?;
 
-        let mut buf = vec![];
-
-        // First, get all traces with matching method/endpoint
-        for (i, (method, endpoint)) in
-            soa_derive::soa_zip!(&self.traces, [method, endpoint]).enumerate()
-        {
-            let e = self.get_str(endpoint);
-            if self.get_str(&f) == format!("{}_{}", e, method) {
-                buf.push(i);
-            }
-        }
-
-        // Then, filter remaining traces by if their arg names and values match up
-        buf.retain(|x| {
-            // Get the arg names of this trace.
-            self.traces.params.get(*x).unwrap().iter().all(|x| {
-                args.get(&x.arg_name)
-                    .map(|a| a == &x.value)
-                    .unwrap_or(false)
-            })
-        });
-
-        // Finally, get the traces that have responses and pick one at random
-        // Weight responses by object size
-        let responses: Vec<&Value> = buf.into_iter().filter_map(|x| {
-            self.traces.response.get(x).unwrap().as_ref()
-        }).collect();
+        let (responses, weights): (Vec<&Value>, Vec<usize>) = possibles
+            .iter()
+            .filter_map(|x| if vals == x.0 { Some((&x.1, x.2)) } else { None })
+            .unzip();
 
         if !responses.is_empty() {
-            let weights = responses.iter().map(|x| self.get_obj_weight(x)).collect::<Vec<_>>();
-
             let dist = WeightedIndex::new(&weights).unwrap();
             let mut rng = thread_rng();
             Some(responses[dist.sample(&mut rng)].clone())
         } else {
             None
-        }
-    }
-
-    fn get_obj_weight(&self, obj: &Value) -> usize {
-        if obj.is_array() {
-            let mut total = 1;
-
-            for child in obj.as_array().unwrap().iter() {
-                total += self.get_obj_weight(child);
-            }
-
-            total
-        } else if obj.is_object() {
-            let mut total = 1;
-
-            for child in obj.as_object().unwrap().values() {
-                total += self.get_obj_weight(child);
-            }
-
-            total
-        } else {
-            1
         }
     }
 

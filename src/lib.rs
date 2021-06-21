@@ -1,3 +1,4 @@
+#![feature(proc_macro_hygiene)]
 //! Retrospective execution, reimplemented in Rust.
 //!
 //! This library implements the retrospective execution portion of apiphany in
@@ -10,6 +11,6 @@ mod trace;
 
 pub use execute::{Runner, Arena};
 pub use expr::{Expr, ExprIx, Prog, ProgIx};
-pub use trace::{Param, ParamVec, Trace, TraceVec, Method};
+pub use trace::Traces;
 
 pub use interop::apiphany;

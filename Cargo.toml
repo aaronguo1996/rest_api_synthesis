@@ -14,6 +14,10 @@ serde_json = "1.0.59"
 smallvec = { version = "1.6.1", features = ["union"] }
 soa_derive = "0.10"
 
+# fuck
+flame = "0.2.2"
+flamer = "0.3"
+
 [dependencies.pyo3]
 version = "0.13.2"
 features = ["extension-module"]

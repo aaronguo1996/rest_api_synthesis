@@ -1,6 +1,10 @@
-use crate::{Arena, Expr, ExprIx, Method, Param, ParamVec, Prog, ProgIx, Runner, Trace};
+use crate::{Arena, Expr, ExprIx, Prog, ProgIx, Runner};
+use std::collections::HashMap;
 use lasso::Spur;
-use pyo3::{prelude::*, types::{PyList, PyType}};
+use pyo3::{
+    prelude::*,
+    types::{PyList, PyType},
+};
 use serde_json::{from_str, Value};
 use smallvec::SmallVec;
 
@@ -24,7 +28,8 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         py: Python,
         log_analyzer: &PyAny,
         progs: Vec<&PyAny>,
-        traces: Vec<&PyAny>,
+        // traces: fun -> param_names -> param_val map, response, weight
+        traces: HashMap<String, HashMap<Vec<String>, Vec<(HashMap<String, &PyAny>, &PyAny, usize)>>>,
         inputs: Vec<(&str, &PyAny)>,
     ) -> PyResult<Vec<(ProgIx, usize)>> {
         // First, our imports!
@@ -57,20 +62,20 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         // Then, translate our programs and traces
         let t = std::time::Instant::now();
         let progs = translate_progs(&imports, &progs, &mut arena)?;
-        translate_traces(&imports, &traces, &mut arena)?;
-        println!("py to rs time: {}", t.elapsed().as_millis());
+        translate_traces(&imports, traces, &mut arena);
+        println!("py to rs time: {}", t.elapsed().as_micros());
 
         // Then, using the log analyzer, create our inputs
         let mut new_inputs = Vec::new();
 
         for (input_name, input_type) in inputs {
-            let vals: Vec<&PyAny> = log_analyzer.call_method("get_values_by_type", (input_type,), None)?.extract()?;
-            let vals: Vec<Value> = vals.into_iter().map(|x| {
-                let json = dumps.call1((x,))?.extract()?;
-                let val = from_str(json).unwrap();
-
-                Ok(val)
-            }).collect::<PyResult<Vec<_>>>()?;
+            let vals: Vec<&PyAny> = log_analyzer
+                .call_method("get_values_by_type", (input_type,), None)?
+                .extract()?;
+            let vals: Vec<Value> = vals
+                .into_iter()
+                .map(|x| jsonify(dumps, x))
+                .collect::<PyResult<Vec<_>>>()?;
 
             new_inputs.push((arena.intern_str(input_name), vals));
         }
@@ -81,7 +86,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         let t = std::time::Instant::now();
         // And run it on our inputs
         let res = r.run(&new_inputs);
-        println!("interpret time: {}", t.elapsed().as_millis());
+        println!("interpret time: {}", t.elapsed().as_micros());
 
         Ok(res)
     }
@@ -89,17 +94,42 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
     Ok(())
 }
 
-// TODO: translation might be slow af?
-// better to parse traces ourselves...
-fn translate_traces<'p>(imports: &Imports, py_expr: &[&'p PyAny], arena: &mut Arena) -> PyResult<()> {
-    for t in py_expr.iter() {
-        let ts = translate_trace(imports, t, arena)?;
-        if ts.method != Method::Unsupported {
-            arena.push_trace(ts);
+fn jsonify(dumps: &PyAny, x: &PyAny) -> PyResult<Value> {
+    let json = dumps.call1((x,))?.extract()?;
+    let val = from_str(json).unwrap();
+
+    Ok(val)
+}
+
+fn translate_traces<'p>(
+    imports: &Imports<'p>,
+    traces: HashMap<String, HashMap<Vec<String>, Vec<(HashMap<String, &PyAny>, &PyAny, usize)>>>,
+    arena: &mut Arena,
+) {
+    for (fun, rest) in traces.into_iter() {
+        for (mut param_names, old_vals) in rest.into_iter() {
+            let fun = arena.intern_str(&fun);
+            param_names.sort();
+            let param_names = param_names.into_iter().map(|x| arena.intern_str(&x)).collect::<SmallVec<_>>();
+            let mut vals = Vec::new();
+            for (param_nvs, response, weight) in old_vals {
+                let param_values = {
+                    let mut i = param_nvs
+                        .into_iter()
+                        .map(|(n, v)| (n, jsonify(imports.dumps, v).unwrap()))
+                        .collect::<Vec<_>>();
+                    i.sort_by(|x, y| x.0.cmp(&y.0));
+
+                    i.into_iter().map(|x| x.1).collect()
+                };
+
+                let response = jsonify(imports.dumps, response).unwrap();
+
+                vals.push((param_values, response, weight));
+            }
+            arena.push_trace(fun, param_names, vals)
         }
     }
-
-    Ok(())
 }
 
 fn translate_progs<'p>(
@@ -115,45 +145,6 @@ fn translate_progs<'p>(
     }
 
     Ok(res)
-}
-
-fn translate_trace<'p>(imports: &Imports, py_expr: &'p PyAny, arena: &mut Arena) -> PyResult<Trace> {
-    let endpoint = arena.intern_str(py_expr.getattr("endpoint")?.extract()?);
-    let method = match py_expr.getattr("method")?.extract()? {
-        "GET" => Method::Get,
-        "POST" => Method::Post,
-        _ => Method::Unsupported,
-    };
-
-    // Translate parameters
-    let mut params = ParamVec::new();
-    for p in py_expr.getattr("parameters")?.cast_as::<PyList>()?.iter() {
-        let arg_name = arena.intern_str(p.getattr("arg_name")?.extract()?);
-        let required = p.getattr("is_required")?.extract()?;
-
-        // Since the values are JSON values, but they're currently stored as Python dicts,
-        // we have to dump as JSON, then turn into a JSON value with serde.
-        // This isn't super performant, but since we only do this once, it should be fine
-        let value: Value = from_str(imports.dumps.call1((p.getattr("value")?,))?.extract()?).unwrap();
-        params.push(Param {
-            arg_name,
-            value,
-            required,
-        });
-    }
-
-    // Translate response
-    let response = match py_expr.getattr("response")?.getattr("value") {
-        Ok(v) => Some(from_str(imports.dumps.call1((v,))?.extract()?).unwrap()),
-        Err(_) => None,
-    };
-
-    Ok(Trace {
-        endpoint,
-        method,
-        params,
-        response,
-    })
 }
 
 fn translate_prog<'p>(
@@ -182,7 +173,12 @@ fn translate_expr<'p>(
     py_expr: &'p PyAny,
     arena: &mut Arena,
 ) -> PyResult<ExprIx> {
-    if imports.app_expr.cast_as::<pyo3::types::PyType>().unwrap().is_instance(py_expr)? {
+    if imports
+        .app_expr
+        .cast_as::<pyo3::types::PyType>()
+        .unwrap()
+        .is_instance(py_expr)?
+    {
         // First, intern function
         let fun = arena.intern_str(py_expr.getattr("_fun")?.extract()?);
         // Then, translate args.
@@ -198,31 +194,56 @@ fn translate_expr<'p>(
             })
             .collect::<PyResult<SmallVec<[(Spur, ExprIx); 2]>>>()?;
         Ok(arena.alloc_expr(Expr::App(fun, args)))
-    } else if imports.var_expr.cast_as::<PyType>().unwrap().is_instance(py_expr)? {
+    } else if imports
+        .var_expr
+        .cast_as::<PyType>()
+        .unwrap()
+        .is_instance(py_expr)?
+    {
         // Intern the variable and alloc the expr
         let v = arena.intern_str(py_expr.getattr("_var")?.extract()?);
         Ok(arena.alloc_expr(Expr::Var(v)))
-    } else if imports.projection_expr.cast_as::<PyType>().unwrap().is_instance(py_expr)? {
+    } else if imports
+        .projection_expr
+        .cast_as::<PyType>()
+        .unwrap()
+        .is_instance(py_expr)?
+    {
         // First, translate the base expression
         let obj = translate_expr(imports, py_expr.getattr("_obj")?, arena)?;
         // Then, intern the field
         let field = arena.intern_str(py_expr.getattr("_field")?.extract()?);
         // Finally, alloc expr
         Ok(arena.alloc_expr(Expr::Proj(obj, field)))
-    } else if imports.filter_expr.cast_as::<PyType>().unwrap().is_instance(py_expr)? {
+    } else if imports
+        .filter_expr
+        .cast_as::<PyType>()
+        .unwrap()
+        .is_instance(py_expr)?
+    {
         // Translate the base object and the value
         let obj = translate_expr(imports, py_expr.getattr("_obj")?, arena)?;
         let val = translate_expr(imports, py_expr.getattr("_val")?, arena)?;
         // Then intern the field and alloc expr
         let field = arena.intern_str(py_expr.getattr("_field")?.extract()?);
         Ok(arena.alloc_expr(Expr::Filter(obj, field, val)))
-    } else if imports.assign_expr.cast_as::<PyType>().unwrap().is_instance(py_expr)? {
+    } else if imports
+        .assign_expr
+        .cast_as::<PyType>()
+        .unwrap()
+        .is_instance(py_expr)?
+    {
         // Intern the lhs, evaluate the rhs, push instr
         let lhs = arena.intern_str(py_expr.getattr("_lhs")?.extract()?);
         let rhs = translate_expr(imports, py_expr.getattr("_rhs")?, arena)?;
         let bind = py_expr.getattr("_is_bind")?.extract()?;
         Ok(arena.alloc_expr(Expr::Assign(lhs, rhs, bind)))
-    } else if imports.list_expr.cast_as::<PyType>().unwrap().is_instance(py_expr)? {
+    } else if imports
+        .list_expr
+        .cast_as::<PyType>()
+        .unwrap()
+        .is_instance(py_expr)?
+    {
         // Intern the lhs, evaluate the rhs, push instr
         let item = translate_expr(imports, py_expr.getattr("_item")?, arena)?;
         Ok(arena.alloc_expr(Expr::Singleton(item)))

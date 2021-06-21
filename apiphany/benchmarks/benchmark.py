@@ -323,9 +323,7 @@ class BenchmarkSuite:
                 if not runtime_config.synthesis_only:
                     start = time.time()
                     # for now, just try to run rust_re
-                    # todo: use indexed entries for performance?
-                    print(solutions[0])
-                    rust_re(self._log_analyzer, solutions, self._entries, list(benchmark.inputs.items()))
+                    rust_re(self._log_analyzer, solutions, entries, list(benchmark.inputs.items()))
                     # ranks, sol_prog = benchmark.get_rank(
                     #     entries,
                     #     self._configuration,
