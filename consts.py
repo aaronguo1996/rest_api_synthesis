@@ -1,7 +1,7 @@
 OBJ_MATCH_THRESHOLD = 0.6
 REF_PREFIX = "#/components/schemas/"
 CUSTOM_PREFIX = "x-"
-DEFAULT_LENGTH_LIMIT = 12
+DEFAULT_LENGTH_LIMIT = 10
 JSON_TYPE = "application/json"
 HOSTNAME_PREFIX = "https://"
 HOSTNAME_PREFIX_LEN = len(HOSTNAME_PREFIX)
@@ -34,6 +34,10 @@ KEY_VALUE_DICT = "value_dict"
 KEY_WITNESS = "witness"
 KEY_MAX_OPT = "max_opt_params"
 KEY_SOL_NUM = "solution_number"
+KEY_EXPAND_GROUP = "expand_group"
+KEY_BLOCK_PERM = "block_perms"
+KEY_EXECUTION = "execution"
+KEY_BIAS = "bias_type"
 
 SOLVER_PN_SMT = "petri net SMT"
 SOLVER_HYPER = "hypergraph"
@@ -44,4 +48,4 @@ FILE_ENTRIES = "entries.pkl"
 FILE_GRAPH = "graph.pkl"
 
 SPACE = '    '
-MAX_COST = 9999
+MAX_COST = 99999.9

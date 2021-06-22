@@ -1,6 +1,7 @@
 import re
 
 from openapi import defs
+from openapi.utils import blacklist
 import consts
 
 def get_representative(group):
@@ -19,6 +20,7 @@ def get_representative(group):
 
         candidates = candidates.union(param.type.aliases)
 
+    candidates = [n for n in candidates if not blacklist(n)]
     if candidates:
         rep = min(candidates, key=lambda x: (len(x), x))
         return rep
@@ -78,8 +80,9 @@ def same_type_name(param1, param2):
     )
 
 def ignore_arg_name(skip_fields, arg_name):
-    return (arg_name in skip_fields or
-        consts.CUSTOM_PREFIX == arg_name[:2])
+    return (arg_name is not None and
+        (arg_name in skip_fields or
+        consts.CUSTOM_PREFIX == arg_name[:2]))
 
 def make_response_name(endpoint, method):
     return f"{endpoint}_{method.upper()}_response"

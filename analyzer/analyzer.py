@@ -1,7 +1,7 @@
 import re
 import logging
 
-from analyzer.entry import ErrorResponse
+from analyzer.entry import ErrorResponse, Parameter
 from analyzer.utils import get_representative, same_type_name
 from openapi import defs
 from synthesizer.utils import make_entry_name
@@ -46,6 +46,8 @@ class DSU:
             return
 
         xr, yr = self.find(x), self.find(y)
+        self._values[xr].add(x.value)
+        self._values[yr].add(y.value)
 
         if self._sizes[xr] < self._sizes[yr]:
             self._parents[yr] = xr
@@ -90,6 +92,7 @@ class DSU:
 class LogAnalyzer:
     def __init__(self):
         self.value_to_param = {}
+        self.type_to_param = {}
         self.dsu = DSU()
         self.type_fields = {}
         self.type_partitions = {}
@@ -163,8 +166,8 @@ class LogAnalyzer:
                 p.value = int(p.value)
             elif isinstance(p.type, types.PrimBool):
                 p.value = bool(p.value)
-            elif isinstance(p.type, types.PrimNum):
-                p.value = float(p.value)
+            # elif isinstance(p.type, types.PrimNum):
+            #     p.value = float(p.value)
 
         for param in params:
             flatten_params, values = param.flatten(path_to_defs, skip_fields)
@@ -190,7 +193,9 @@ class LogAnalyzer:
         for entry in entries:
             # do not add error responses to DSU
             if (isinstance(entry.response, ErrorResponse) or
-                entry.endpoint not in paths):
+                entry.endpoint not in paths or
+                entry.endpoint in blacklist or
+                not entry.response.value):
                 continue
 
             self._analyze_params(
@@ -221,16 +226,32 @@ class LogAnalyzer:
         
         # integers and booleans for merge 
         # but add them as separate nodes, they are meaningless
-        if ((isinstance(param.value, int) and param.value > 2) or
-            isinstance(param.value, bool)):
+        if ((isinstance(param.value, int)) or
+            isinstance(param.value, bool) or
+            "balance_transaction.source" in str(param.type)):
             self.dsu.union(param, param)
             return
 
+        # merge by value
         if param.value not in self.value_to_param:
             self.value_to_param[param.value] = param
 
         root = self.value_to_param[param.value]
+        self.dsu.union(root, param)
 
+        # merge by type
+        param_typ = str(param.type)
+        if (param_typ == defs.TYPE_BOOL or
+            param_typ == defs.TYPE_INT or
+            param_typ == defs.TYPE_STRING or
+            param_typ == defs.TYPE_NUM or
+            param_typ == defs.TYPE_OBJECT):
+            return
+            
+        if param_typ not in self.type_to_param:
+            self.type_to_param[param_typ] = param
+
+        root = self.type_to_param[param_typ]
         self.dsu.union(root, param)
 
     def analysis_result(self):
@@ -258,7 +279,7 @@ class LogAnalyzer:
                 rep = group[0].arg_name
 
             # for debug
-            if rep == "plan.id":
+            if rep == "customer":
                 group_params = []
                 for param in group:
                     if param.type is not None:
@@ -387,26 +408,71 @@ class LogAnalyzer:
         return descendants
 
     def get_values_by_type(self, typ):
-        params = self.dsu._parents.keys()
-        values = []
-        for param in params:
-            if param.type and param.type.name == typ.name:
-                group = self.dsu.get_group(param)
-                for p in group:
-                    if p.value is not None:
-                        values.append(p.value)
+        return list(self.value_map.get(str(typ), []))
 
-        return values
+    def index_values_by_type(self):
+        value_map = {}
+        params = self.dsu._parents.keys()
+        for param in params:
+            if param.type:
+                typs = param.type.aliases
+                typs = typs.union(set([str(param.type)]))
+                for typ in typs:
+                    if typ not in value_map:
+                        value_map[typ] = set()
+
+                    value_map[typ] = value_map[typ].union(
+                        self.dsu.get_value_bank(param)
+                    )
+
+        for typ, values in self.type_values.items():
+            if typ not in value_map:
+                value_map[typ] = []
+            else:
+                value_map[typ] = list(value_map[typ])
+
+            for v in values:
+                if v not in value_map[typ]:
+                    value_map[typ].append(v)
+
+        self.value_map = value_map
 
     def find_same_type(self, param):
+        if isinstance(param.type, types.UnionType):
+            items = param.type.items
+        elif isinstance(param.type, types.ArrayType):
+            items = [param.type.item]
+        else:
+            items = [param.type]
+
         params = self.dsu._parents.keys()
         for p in params:
-            if p == param or same_type_name(p, param):
+            has_same_name = False
+            for item in items:
+                tmp_param = Parameter(
+                    param.method,
+                    param.arg_name,
+                    param.func_name,
+                    param.path,
+                    param.is_required,
+                    param.array_level,
+                    item, param.value)
+                if same_type_name(p, tmp_param):
+                    has_same_name = True
+
+            if p == param or has_same_name:
                 group = self.dsu.get_group(p)
                 rep = get_representative(group)
 
                 if rep is not None:
+                    # if param.type.name is not None:
+                    #     param.type.aliases.add(param.type.name)
                     param.type.name = rep
+
+                    if isinstance(param.type, types.ArrayType):
+                        # if param.type.item.name is not None:
+                        #     param.type.item.aliases.add(param.type.item.name)
+                        param.type.item.name = rep
 
                 break
 
@@ -420,25 +486,43 @@ class LogAnalyzer:
         Args:
             param: the request/response parameter to be splitted
         """
-        # if (param.type and param.type.name is not None and
-        #     re.search(r'^/.*_response$', param.type.name)):
-        #     return param
-        
-        params = self.dsu._parents.keys()
-        for p in params:
-            if p == param:
-                group = self.dsu.get_group(p)
-                rep = get_representative(group)
-                if rep is not None:
-                    param.type.name = rep
-                break
-        
-        if (param.type.name == defs.TYPE_BOOL or
-            param.type.name == defs.TYPE_INT or
-            param.type.name == defs.TYPE_STRING or
-            param.type.name == defs.TYPE_NUM or
-            param.type.name == defs.TYPE_OBJECT):
-            param.type.name = str(param) # defs.TYPE_UNK
+        # if param.func_name == "/conversations.members":
+        #     print("finding type for parameter", param)
+        param_typ = param.type
+        if isinstance(param_typ, types.ArrayType):
+            param_item = Parameter(
+                param.method,
+                defs.INDEX_ANY,
+                param.func_name,
+                param.path + [defs.INDEX_ANY],
+                param.is_required,
+                param.array_level + 1,
+                param_typ.get_item(),
+                None)
+            param_item = self.set_type(param_item)
+            param.type.item = param_item.type
+        else:
+            params = self.dsu._parents.keys()
+            for p in params:
+                if p == param:
+                    # if param.func_name == "/conversations.members":
+                    #     print("found parameter", p)
+                    group = self.dsu.get_group(p)
+                    rep = get_representative(group)
+                    if rep is not None:
+                        # if param.type.name is not None:
+                        #     param.type.aliases.add(param.type.name)
+                        param.type.name = rep
+                        # if param.func_name == "/conversations.members":
+                        #     print("found parameter type", rep)
+                    break
+            
+            if (param.type.name == defs.TYPE_BOOL or
+                param.type.name == defs.TYPE_INT or
+                param.type.name == defs.TYPE_STRING or
+                param.type.name == defs.TYPE_NUM or
+                param.type.name == defs.TYPE_OBJECT):
+                param.type.name = str(param) # defs.TYPE_UNK
 
         return param
 

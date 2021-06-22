@@ -6,7 +6,7 @@
       "desc": "Retrieve all member emails from channel name",
       "landmarks": [],
       "input_args": {
-        "channel_name": "objs_conversation.name"
+        "channel_name": "objs_message.name"
       },
       "output": "[objs_user_profile.email]",
       "solutions": [[

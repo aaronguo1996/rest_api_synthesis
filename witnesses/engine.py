@@ -109,12 +109,15 @@ class BasicGenerator:
 
         try:
             params = self._generate_params(
+                entry.content_type,
                 entry.parameters,
                 self._opt_param_indices)
             code, response = self._conn.send_and_recv(
                 entry.endpoint,
                 entry.method.upper(),
+                entry.content_type,
                 {
+                    defs.HEADER_CONTENT: entry.content_type,
                     defs.HEADER_AUTH: f"{defs.HEADER_BEARER} {self._token}",
                 },
                 params,
@@ -159,8 +162,10 @@ class SaturationThread(BasicGenerator):
             )
             bank = self._analyzer.dsu.get_value_bank(resp)
             if bank:
+                self._logger.debug(f"Find a value from the producer {producer.endpoint} with path {producer.path}")
                 return random.choice(list(bank))
             else:
+                self._logger.debug(f"Didn't find a value from the producer {producer.endpoint} with path {producer.path}")
                 return None
         else:
             self._logger.debug(f"Trying the parameter value {producer}")
@@ -170,27 +175,31 @@ class SaturationThread(BasicGenerator):
         param_type = param.type
 
         self._logger.debug(f"Generating string values for {param.arg_name} with path {param.path}")
+        if param.arg_name == defs.INDEX_ANY:
+            arg_name = param.path[-2]
+        else:
+            arg_name = param.arg_name
 
-        if self._analyzer.dsu.find(param) and param.arg_name != defs.DOC_NAME:
+        if self._analyzer.dsu.find(param) and arg_name != defs.DOC_NAME and arg_name != defs.DOC_TYPE:
             self._logger.debug(
-                f"Trying fill parameter {param.arg_name} by real dependencies")
+                f"Trying fill parameter {arg_name} by real dependencies")
             # if we already have the value bank for this variable
             param_value_bank = self._analyzer.dsu.get_value_bank(param)
             param_val = random.choice(list(param_value_bank))
         elif (param_type.name in self._analyzer.type_values and
-            param.arg_name != defs.DOC_NAME):
+            arg_name != defs.DOC_NAME):
             self._logger.debug(
-                f"Trying fill parameter {param.arg_name} with object values of type {param_type.name}")
+                f"Trying fill parameter {arg_name} with object values of type {param_type.name}")
             param_value_bank = self._analyzer.type_values[param_type.name]
             param_val = random.choice(list(param_value_bank))
-        elif ((self._entry.endpoint, param.arg_name) in self._annotations and
-            param.arg_name != defs.DOC_NAME):
+        elif ((self._entry.endpoint, arg_name) in self._annotations and
+           arg_name != defs.DOC_NAME):
             self._logger.debug(
-                f"Trying fill parameter {param.arg_name}"
+                f"Trying fill parameter {arg_name}"
                 f" by annotated dependencies")
             # try inferred dependencies but do not create new values
             producers = self._annotations.get(
-                (self._entry.endpoint, param.arg_name), [])
+                (self._entry.endpoint, arg_name), [])
             param_value_bank = set()
             for producer in producers:
                 v = self._try_producer(producer)
@@ -206,14 +215,14 @@ class SaturationThread(BasicGenerator):
 
         if not param_val:
             self._logger.debug(
-                f"No dependency found for {(self._entry.endpoint, param.arg_name)}. "
+                f"No dependency found for {(self._entry.endpoint, arg_name)}. "
                 f"Trying random values.")
-            param_val = self._random_from_type(param.arg_name, param_type)
+            param_val = self._random_from_type(arg_name, param_type)
 
         return param_val
 
     # get params from bank
-    def _generate_params(self, params, opt_indices):
+    def _generate_params(self, content_type, params, opt_indices):
         param_dict = {}
 
         req_params, opt_params = utils.filter_optional(params)
@@ -228,8 +237,11 @@ class SaturationThread(BasicGenerator):
             # if we cannot find a value for an arg, skip it
             if param_val is not None:
                 key = path_to_name(param.path)
-                param_dict[key] = param_val
-                # param_dict = add_as_object(param_dict, param.path, param_val)
+                if content_type == defs.HEADER_JSON:
+                    param_dict = utils.add_as_object(
+                        param_dict, param.path, param_val)
+                else:
+                    param_dict[key] = param_val
             else:
                 print("cannot find a value for param", param)
 
@@ -278,29 +290,49 @@ class WitnessGenerator:
     def _add_new_result(self, entries, result: Result):
         params = []
         entry = self._doc_entries[result.entry.endpoint][result.entry.method]
-        for name, val in result.request_params.items():
-            # find the corresponding param type
-            match_param = None
-            for param in entry.parameters:
-                if param.arg_name == name:
-                    match_param = param
-                    break
-
-            if match_param is None:
-                raise Exception(name, val, "does not have a matching param from params", [p.arg_name for p in entry.parameters])
-
+        if len(entry.parameters) == 1 and entry.parameters[0].arg_name is None:
+            match_param = entry.parameters[0]
             request = Parameter(
-                entry.method, name, entry.endpoint, [name],
-                match_param.is_required, None, match_param.type, val)
+                entry.method, None, entry.endpoint, [],
+                match_param.is_required, None, 
+                match_param.type, result.response_body)
             params.append(request)
             requests, values = request.flatten(
                 self._path_to_defs,
                 self._skip_fields
             )
-            self._analyzer.insert_value(values)
-            if not result.has_error:
+            
+            if not result.has_error and result.response_body:
+                self._analyzer.insert_value(values)
                 for request in requests:
                     self._analyzer.insert(request)
+        else:
+            for name, val in result.request_params.items():
+                # find the corresponding param type
+                match_param = None
+                for param in entry.parameters:
+                    if param.arg_name == name:
+                        match_param = param
+                        break
+
+                if match_param is None:
+                    raise Exception(name, val, "does not have a matching param from params", 
+                        [p.arg_name for p in entry.parameters],
+                        result.entry.endpoint,
+                        result.entry.method)
+
+                request = Parameter(
+                    entry.method, name, entry.endpoint, [name],
+                    match_param.is_required, None, match_param.type, val)
+                params.append(request)
+                requests, values = request.flatten(
+                    self._path_to_defs,
+                    self._skip_fields
+                )
+                if not result.has_error and result.response_body:
+                    self._analyzer.insert_value(values)
+                    for request in requests:
+                        self._analyzer.insert(request)
 
         if result.has_error:
             response = ErrorResponse(result.response_body)
@@ -309,7 +341,7 @@ class WitnessGenerator:
                 entry.method, "", entry.endpoint, [],
                 True, 0, entry.response.type, result.response_body)
         
-        if not result.has_error:
+        if not result.has_error and result.response_body:
             responses, values = response.flatten(
                 self._path_to_defs,
                 self._skip_fields
@@ -319,8 +351,12 @@ class WitnessGenerator:
                 self._analyzer.insert(r)
 
         entries.append(
-            TraceEntry(entry.endpoint, entry.method, params, response,)
-        )
+            TraceEntry(
+                entry.endpoint, 
+                entry.method, 
+                entry.content_type,
+                params, response
+            ))
         return entries
 
     def _run_all(self, generate_type, endpoints, iterations, timeout, max_opt_params):

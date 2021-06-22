@@ -1,9 +1,11 @@
 import re
+import json
 
 from openapi import defs
 import schemas.utils as utils
 from openapi.utils import blacklist
 import consts
+from program.utils import set_default
 
 class BaseType:
     object_lib = {}
@@ -51,18 +53,22 @@ class BaseType:
 
 class PrimInt(BaseType):
     def __init__(self, name=defs.TYPE_INT):
+        name = defs.TYPE_INT if name is None else name
         super().__init__(name, None)
 
 class PrimBool(BaseType):
     def __init__(self, name=defs.TYPE_BOOL):
+        name = defs.TYPE_BOOL if name is None else name
         super().__init__(name, None)
 
 class PrimNum(BaseType):
     def __init__(self, name=defs.TYPE_NUM):
+        name = defs.TYPE_NUM if name is None else name
         super().__init__(name, None)
 
 class PrimString(BaseType):
     def __init__(self, name=defs.TYPE_STRING, pattern=None):
+        name = defs.TYPE_STRING if name is None else name
         super().__init__(name, None)
         self._pattern = pattern
 
@@ -78,6 +84,7 @@ class PrimString(BaseType):
 
 class PrimEnum(BaseType):
     def __init__(self, name=defs.TYPE_STRING, enums=[]):
+        name = defs.TYPE_STRING if name is None else name
         super().__init__(name, None)
         self.enums = enums
 
@@ -101,12 +108,26 @@ class SchemaObject(BaseType):
 
     def get_object_field(self, field):
         schema = BaseType.object_lib.get(self.name)
-        # print("SchemaObject: get_object_field from", self.name, "field", field, "type", type(schema))
+        schema.aliases = schema.aliases.union(self.aliases)
+        schema.aliases.add(self.name)
         if schema is None:
             raise Exception("Unknown object definition", self.name)
 
         return schema.get_object_field(field)
 
+    def get_fields(self):
+        schema = BaseType.object_lib.get(self.name)
+        if schema is None:
+            raise Exception("Unknown object definition", self.name)
+
+        return schema.get_fields()
+
+    def get_requires(self):
+        schema = BaseType.object_lib.get(self.name)
+        if schema is None:
+            raise Exception("Unknown object definition", self.name)
+
+        return schema.get_requires()
     
 class ObjectType(BaseType):
     """Ad-hoc objects
@@ -168,10 +189,20 @@ class ObjectType(BaseType):
     def get_object_field(self, field):
         # print("get_object_field from", self.name, "field name", field, "with fields", self.object_fields.keys())
         field_type = self.object_fields.get(field)
-        if field_type is not None and self.name is not None:
-            field_type.aliases.add(f"{self.name}.{field}")
+        if field_type is not None:
+            if self.name is not None:
+                field_type.aliases.add(f"{self.name}.{field}")
+            
+            for alias in self.aliases:
+                field_type.aliases.add(f"{alias}.{field}")
 
         return field_type, (field in self.required_fields)
+
+    def get_fields(self):
+        return self.object_fields
+
+    def get_requires(self):
+        return self.required_fields
 
 class ArrayType(BaseType):
     def __init__(self, name, item_typ, parent=None):
@@ -179,7 +210,7 @@ class ArrayType(BaseType):
         self.item = item_typ
 
     def __str__(self):
-        return f"[{self.item.name}]"
+        return f"[{self.item}]"
 
     @staticmethod
     def is_array_type(expected_type):
@@ -212,6 +243,9 @@ class ArrayType(BaseType):
         return None
 
     def get_item(self):
+        for alias in self.aliases:
+            self.item.aliases.add(f"{alias}.{defs.INDEX_ANY}")
+
         return self.item
 
     def ignore_array(self):
@@ -221,9 +255,14 @@ class UnionType(BaseType):
     def __init__(self, name, items, parent=None):
         super().__init__(name, parent)
         self.items = items
+        # for item in self.items:
+        #     self.aliases.add(str(item))
 
     def __str__(self):
-        return ', '.join([str(item) for item in self.items])
+        if self.name is not None:
+            return self.name
+        else:
+            return str(self.items[0])
 
     @staticmethod
     def is_union_type(expected_type):
@@ -253,6 +292,9 @@ class UnionType(BaseType):
                     if self.name is not None:
                         field_type.aliases.add(f"{self.name}.{field}")
 
+                    for alias in self.aliases:
+                        field_type.aliases.add(f"{alias}.{field}")
+
                     return field_type, is_required
 
         return None, False
@@ -273,27 +315,27 @@ class UnionType(BaseType):
 
         return UnionType(self.name, items)
 
-def construct_prim_type(schema):
+def construct_prim_type(name, schema):
     typ = schema.get(defs.DOC_TYPE)
     ref = schema.get(defs.DOC_REF)
     if ref is not None:
         obj_name = ref[len(consts.REF_PREFIX):]
         return SchemaObject(obj_name)
     elif typ == defs.TYPE_INT:
-        return PrimInt()
+        return PrimInt(name=name)
     elif typ == defs.TYPE_BOOL:
-        return PrimBool()
+        return PrimBool(name=name)
     elif typ == defs.TYPE_STRING:
         if defs.DOC_ENUM in schema:
             enums = schema.get(defs.DOC_ENUM)
-            return PrimEnum(enums=enums)
+            return PrimEnum(name=name, enums=enums)
 
         pattern = schema.get(defs.DOC_PATTERN)
-        return PrimString(pattern=pattern)
+        return PrimString(name=name, pattern=pattern)
     elif typ == defs.TYPE_NUM:
-        return PrimNum()
+        return PrimNum(name=name)
     elif typ == defs.TYPE_OBJECT:
-        return ObjectType(None, {})
+        return ObjectType(name, {})
     else:
         raise Exception("Unknown primitive type", schema)
 
@@ -303,17 +345,18 @@ def construct_type(name, schema):
     array_schema = ArrayType.is_array_type(schema)
     if array_schema is not None:
         item_schema = array_schema.get(defs.DOC_ITEMS)
-        item_type = construct_type(name, item_schema)
+        item_type = construct_type(f"{name}.{defs.INDEX_ANY}", item_schema)
         ret_type = ArrayType(name, item_type)
 
     if ret_type is None:
         union_schema = UnionType.is_union_type(schema)
         if union_schema is not None:
             item_types = []
-            ret_type = UnionType(name, item_types)
             for item_schema in union_schema:
                 item_type = construct_type(name, item_schema)
                 item_types.append(item_type)
+
+            ret_type = UnionType(name, item_types)
 
     if ret_type is None:
         object_schema = ObjectType.is_schema_type(schema)
@@ -327,7 +370,7 @@ def construct_type(name, schema):
 
             ret_type = ObjectType(name, fields, required_fields)
         else:
-            ret_type = construct_prim_type(schema)
+            ret_type = construct_prim_type(name, schema)
 
     return ret_type
 
@@ -354,3 +397,7 @@ def infer_type_for(path_to_defs, skip_fields, value):
         return obj_candidates[-1][0]
     else:
         return None
+
+def get_ref_type(doc, name):
+    schemas = doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS)
+    return schemas.get(name)

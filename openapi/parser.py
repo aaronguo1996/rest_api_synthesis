@@ -29,7 +29,8 @@ class OpenAPIParser:
             entries[path] = {}
             for method, path_method_def in path_def.items():
                 method = method.upper()
-                entry = TraceEntry.from_openapi(path, method, path_method_def)
+                entry = TraceEntry.from_openapi(
+                    self._doc, path, method, path_method_def)
                 entries[path][method] = entry
 
         return entries

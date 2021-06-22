@@ -18,6 +18,7 @@ class Ascription:
         results.append(TraceEntry(
             entry.endpoint,
             entry.method,
+            entry.content_type,
             parameters,
             response,
         ))

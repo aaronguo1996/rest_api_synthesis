@@ -2,13 +2,13 @@ import os
 
 from synthesizer.synthesizer import Synthesizer
 
-def init_synthesizer(doc, configuration, entries, exp_dir):
-    synthesizer = Synthesizer(doc, configuration, entries, exp_dir)
+def init_synthesizer(configuration, entries, exp_dir):
+    synthesizer = Synthesizer(configuration, entries, exp_dir)
     synthesizer.init()
     return synthesizer
 
-def get_petri_net_data(synthesizer):
-    encoder_path = os.path.join(synthesizer._exp_dir, "../encoder.txt")
+def get_petri_net_data(exp_dir):
+    encoder_path = os.path.join(exp_dir, "encoder.txt")
     with open(encoder_path, "r") as f:
         numbers = []
         line = f.readline()
