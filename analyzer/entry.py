@@ -225,22 +225,23 @@ class Parameter:
                     None,
                 )
                 in_param = analyzer.set_type(self)
+                out_param = analyzer.set_type(p)
                 proj_name = f"projection({in_param.type}, {field})"
                 proj_field = TraceEntry(
                     proj_name,
                     "",
                     None,
                     [in_param],
-                    analyzer.set_type(p)
+                    out_param
                 )
                 projections.append(proj_field)
                 projections += p.project_ad_hoc(analyzer)
         elif isinstance(self.type, types.ArrayType):
             p = Parameter(
-                "",
+                self.method,
                 self.arg_name, 
                 self.func_name,
-                self.path,
+                self.path + [defs.INDEX_ANY],
                 True,
                 self.array_level + 1,
                 self.type.item,
@@ -250,7 +251,7 @@ class Parameter:
         elif isinstance(self.type, types.UnionType):
             for t in self.type.items:
                 p = Parameter(
-                    "",
+                    self.method,
                     self.arg_name,
                     self.func_name,
                     self.path,

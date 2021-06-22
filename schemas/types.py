@@ -243,7 +243,9 @@ class ArrayType(BaseType):
         return None
 
     def get_item(self):
-        self.item.aliases = self.item.aliases.union(self.aliases)
+        for alias in self.aliases:
+            self.item.aliases.add(f"{alias}.{defs.INDEX_ANY}")
+
         return self.item
 
     def ignore_array(self):
@@ -253,8 +255,8 @@ class UnionType(BaseType):
     def __init__(self, name, items, parent=None):
         super().__init__(name, parent)
         self.items = items
-        for item in self.items:
-            self.aliases.add(str(item))
+        # for item in self.items:
+        #     self.aliases.add(str(item))
 
     def __str__(self):
         if self.name is not None:
@@ -333,7 +335,7 @@ def construct_prim_type(name, schema):
     elif typ == defs.TYPE_NUM:
         return PrimNum(name=name)
     elif typ == defs.TYPE_OBJECT:
-        return ObjectType(None, {})
+        return ObjectType(name, {})
     else:
         raise Exception("Unknown primitive type", schema)
 
@@ -343,17 +345,18 @@ def construct_type(name, schema):
     array_schema = ArrayType.is_array_type(schema)
     if array_schema is not None:
         item_schema = array_schema.get(defs.DOC_ITEMS)
-        item_type = construct_type(name, item_schema)
+        item_type = construct_type(f"{name}.{defs.INDEX_ANY}", item_schema)
         ret_type = ArrayType(name, item_type)
 
     if ret_type is None:
         union_schema = UnionType.is_union_type(schema)
         if union_schema is not None:
             item_types = []
-            ret_type = UnionType(name, item_types)
             for item_schema in union_schema:
                 item_type = construct_type(name, item_schema)
                 item_types.append(item_type)
+
+            ret_type = UnionType(name, item_types)
 
     if ret_type is None:
         object_schema = ObjectType.is_schema_type(schema)

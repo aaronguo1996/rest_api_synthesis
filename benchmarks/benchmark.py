@@ -5,6 +5,7 @@ import os
 import shutil
 import pebble
 import time
+import random
 
 import consts
 from openapi import defs
@@ -15,7 +16,7 @@ import benchmarks.utils as utils
 from schemas import types
 from analyzer import dynamic
 from synthesizer.filtering import retrospective_execute, check_results
-from program.program import ProjectionExpr, AppExpr, FilterExpr
+from program.program import EquiExpr, ProjectionExpr, AppExpr
 from synthesizer import parallel
 
 class BenchConfig:
@@ -101,6 +102,7 @@ class Benchmark:
         log_analyzer, solutions):
         all_results = []
         
+        random.seed(229)
         with pebble.ThreadPool() as pool:
             for i, p in enumerate(solutions):
                 # print(f"{i}/{len(solutions)}", flush=True)
@@ -116,7 +118,7 @@ class Benchmark:
                     for j in range(runtime_config.filter_num):
                         group_results = []
                         for k in range(runtime_config.repeat):
-                            if runtime_config.use_parallel:
+                            if runtime_config.use_parallel and len(solutions) > 10000:
                                 future = pool.schedule(
                                     retrospective_execute,
                                     args=(
@@ -151,7 +153,7 @@ class Benchmark:
             for tgt_sol in self.solutions:
                 if tgt_sol == res_sol:
                     found = True
-                    self.latex_entry.rank_no_re = rank
+                    self.latex_entry.rank_no_re = rank + 1
                     break
 
             if found:
@@ -164,7 +166,7 @@ class Benchmark:
         program_ranks = [[] for _ in range(runtime_config.repeat)]
         for i, reps in enumerate(all_results):
             for j, rep in enumerate(reps):
-                if runtime_config.use_parallel:
+                if runtime_config.use_parallel and len(solutions) > 10000:
                     results = [x.result() for x in rep]
                 else:
                     results = [x for x in rep]
@@ -187,8 +189,8 @@ class Benchmark:
                     abs(score - consts.MAX_COST) > 1e-2):
                     ranks.append((rank + 1, res_sol, score))
 
-                    # for i, r in enumerate(res):
-                    #     print(i, r[0], r[2], r[1])
+                    for i, r in enumerate(res):
+                        print(i, r[0], r[2], r[1])
 
                     break
 
@@ -210,7 +212,7 @@ class Benchmark:
             self.latex_entry.projects = len(
                 list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
             self.latex_entry.filters = len(
-                list(filter(lambda x: isinstance(x, FilterExpr), ns)))
+                list(filter(lambda x: isinstance(x, EquiExpr), ns)))
             self.latex_entry.endpoint_calls = len(
                 list(filter(lambda x: isinstance(x, AppExpr), ns)))
 
@@ -335,12 +337,12 @@ class BenchmarkSuite:
                     latex_entries.append(latex_entry)
 
 
-            with open(cache_path, "wb") as f:
-                pickle.dump({
-                    "places": places,
-                    "transitions": transitions,
-                    "results": latex_entries,
-                }, f)
+            # with open(cache_path, "wb") as f:
+            #     pickle.dump({
+            #         "places": places,
+            #         "transitions": transitions,
+            #         "results": latex_entries,
+            #     }, f)
 
         return latex_entries, places, transitions
 
@@ -429,7 +431,7 @@ class Bencher:
                     f"& {utils.pretty_none(r.projects)} "
                     f"& {utils.pretty_none(r.filters)} "
                     f"& {utils.pretty_none(r.rank_no_re)} "
-                    f"& {utils.pretty_none(r.mean_rank)} ")
+                    f"& {utils.pretty_none(r.median_rank)} ")
                 res += r" \\"
                 res += "\n"
             if i < len(self._suites) - 1:

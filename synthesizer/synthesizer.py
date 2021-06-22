@@ -43,8 +43,6 @@ class Synthesizer:
             f.write(f"time: {t: .2f}")
             f.write("\n")
             f.write(f"time breakdown:\n{TimeStats._timing}\n")
-            f.write(str(p))
-            f.write("\n")
             f.write(p.pretty(0))
             f.write("\n")
 
@@ -262,6 +260,11 @@ class Synthesizer:
             # "/v1/invoices/{invoice}/send_POST"
             # "/v1/customers/{customer}/sources_GET",
             # 'filter(status_transitions, status_transitions.returned)_',
+            # "filter(subscription, subscription.items.data.[?].price.product)_",
+            # "projection(subscription, customer)_"
+            # "projection(customer, subscriptions)_",
+            # "projection(customer, id)_"
+            # "projection(payment_source, type)_"
 
             # "/conversations.list_GET",
             # "/users.profile.get_GET",
@@ -281,6 +284,19 @@ class Synthesizer:
             # "/conversations.invite_POST",
             # "/chat.update_POST",
             # "/chat.postMessage_POST"
+            # "filter(objs_user_profile, objs_user_profile.bot_id)_",
+            # "filter(objs_user, objs_user.profile.bot_id)_",
+            # "filter(objs_conversation, objs_conversation.latest.reply_users.[?])_",
+            # "projection(objs_message, reply_users)_",
+            # "projection(objs_conversation, last_read)_",
+            # "projection(objs_conversation, id)_",
+            # "projection(objs_comment, pinned_info)_",
+            # "projection(objs_user_profile, fields)_",
+            # "filter(objs_message, objs_message.comment.pinned_info)_",
+            # "projection({'members': [defs_bot_id], 'ok': defs_ok_true, 'response_metadata': {'next_cursor': next_cursor_/conversations.members_GET_response_metadata.next_cursor}}, members)_"
+            # "projection(objs_conversation, version)_",
+            # "filter(objs_conversation, objs_conversation.version)_",
+            # "projection({'channels': [objs_conversation], 'ok': defs_ok_true, 'response_metadata': {'next_cursor': next_cursor_/conversations.list_GET_response_metadata.next_cursor}}, channels)_",
 
             # "projection(ListInvoicesResponse, invoices)_",
             # "projection(Invoice, id)_",
@@ -311,7 +327,7 @@ class Synthesizer:
             # "filter(Subscription, Subscription.location_id)_",
             # "/v2/catalog/search_POST",
             # "projection(SearchCatalogObjectsResponse, objects)_",
-            # "filter(CatalogObject, CatalogObject.item_data.tax_ids)_"
+            # "filter(CatalogObject, CatalogObject.item_data.tax_ids.[?])_"
         ]
 
         for name in lst:

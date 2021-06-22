@@ -61,20 +61,21 @@ def run_encoder(synthesizer, inputs, outputs, path_len):
     print("Finished encoder running for path length", path_len, 
         "after time", time.time() - start, flush=True)
 
-def spawn_encoders(synthesizer, inputs, outputs, solver_num, timeout=120):
-    with pebble.ProcessPool(max_workers=solver_num) as pool:
+def spawn_encoders(synthesizer, inputs, outputs, solver_num, timeout=100):
+    with pebble.ProcessPool() as pool:
         futures = []
         for i in range(consts.DEFAULT_LENGTH_LIMIT + 1):
             future = pool.schedule(
                 run_encoder, 
                 args=(synthesizer, inputs, outputs, i),
-                timeout=timeout)
+                timeout=timeout,
+                )
             futures.append(future)
         
-        for i, future in enumerate(futures):
-            try:
-                future.result()
-                # print(f"Completed for path length {i}")
-            except cf.TimeoutError:
-                pass
-                # print(f"Killed path length {i} due to timeout")
+    for i, future in enumerate(futures):
+        try:
+            future.result(timeout=timeout)
+            # print(f"Completed for path length {i}")
+        except cf.TimeoutError:
+            pass
+            # print(f"Killed path length {i} due to timeout")
