@@ -234,13 +234,15 @@ impl<'a> ExecEnv<'a> {
                         };
                         let val = self.data.pop()?;
 
-                        names.push(name);
-                        vals.push(val);
+                        // Insert in sorted order of the param name
+                        match names.binary_search(&name) {
+                            Ok(_pos) => unreachable!(),
+                            Err(pos) => {
+                                names.insert(pos, name);
+                                vals.insert(pos, val);
+                            },
+                        };
                     }
-
-                    // TODO: more efficient insertion into reverse
-                    names.reverse();
-                    vals.reverse();
 
                     // Finally, actually call function :)
                     if let Some(t) = self.arena.get_trace(fun, names, vals) {
