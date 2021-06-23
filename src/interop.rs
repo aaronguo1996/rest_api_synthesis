@@ -1,11 +1,11 @@
-use crate::{Arena, Expr, ExprIx, Prog, Runner, ProgIx};
-use std::{convert::TryInto, collections::HashMap};
+use crate::{Arena, Expr, ExprIx, Prog, ProgIx, Runner};
 use pyo3::{
     prelude::*,
     types::{PyList, PyType},
 };
 use serde_json::{from_str, Value};
 use smallvec::SmallVec;
+use std::{collections::HashMap, convert::TryInto};
 
 /// `Imports` are the set of classes we need in order to translate from Python
 /// to Rust.
@@ -28,7 +28,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         log_analyzer: &PyAny,
         progs: Vec<&PyAny>,
         // traces: fun -> param_names -> param_val map, response, weight
-        traces: HashMap<String, HashMap<Vec<String>, Vec<(HashMap<String, &PyAny>, &PyAny, usize)>>>,
+        traces: HashMap<&str, HashMap<Vec<&str>, Vec<(HashMap<&str, &PyAny>, &PyAny, usize)>>>,
         inputs: Vec<(&str, &PyAny)>,
     ) -> PyResult<Vec<(ProgIx, usize)>> {
         // First, our imports!
@@ -102,25 +102,23 @@ fn jsonify(dumps: &PyAny, x: &PyAny) -> PyResult<Value> {
 
 fn translate_traces<'p>(
     imports: &Imports<'p>,
-    traces: HashMap<String, HashMap<Vec<String>, Vec<(HashMap<String, &PyAny>, &PyAny, usize)>>>,
+    traces: HashMap<&str, HashMap<Vec<&str>, Vec<(HashMap<&str, &PyAny>, &PyAny, usize)>>>,
     arena: &mut Arena,
 ) {
     for (fun, rest) in traces.into_iter() {
         for (mut param_names, old_vals) in rest.into_iter() {
             let fun = arena.intern_str(&fun);
             param_names.sort();
-            let param_names = param_names.into_iter().map(|x| arena.intern_str(&x)).collect::<SmallVec<_>>();
+            let param_names = param_names
+                .into_iter()
+                .map(|x| arena.intern_str(&x))
+                .collect::<SmallVec<_>>();
             let mut vals = Vec::new();
             for (param_nvs, response, weight) in old_vals {
-                let param_values = {
-                    let mut i = param_nvs
-                        .into_iter()
-                        .map(|(n, v)| (n, jsonify(imports.dumps, v).unwrap()))
-                        .collect::<Vec<_>>();
-                    i.sort_by(|x, y| x.0.cmp(&y.0));
-
-                    i.into_iter().map(|x| x.1).collect()
-                };
+                let param_values = param_nvs
+                    .into_iter()
+                    .map(|(n, v)| (arena.intern_str(n), jsonify(imports.dumps, v).unwrap()))
+                    .collect::<hashbrown::HashMap<_, _>>();
 
                 let response = jsonify(imports.dumps, response).unwrap();
 
@@ -185,9 +183,7 @@ fn translate_expr<'p>(
         // First, intern function
         let fun = arena.intern_str(py_expr.getattr("_fun")?.extract()?);
         // Then, translate args.
-        let args = py_expr
-            .getattr("_args")?
-            .cast_as::<PyList>()?;
+        let args = py_expr.getattr("_args")?.cast_as::<PyList>()?;
 
         for x in args.iter() {
             let tup = x.cast_as::<pyo3::types::PyTuple>()?;

@@ -1,6 +1,6 @@
 use crate::{Expr, ExprIx, Prog, ProgIx, Traces};
 use hashbrown::HashMap;
-use lasso::{Key, Rodeo, RodeoResolver, MiniSpur};
+use lasso::{Key, MiniSpur, Rodeo, RodeoResolver};
 use rand::{distributions::WeightedIndex, prelude::*, seq::SliceRandom};
 use rayon::prelude::*;
 use serde_json::Value;
@@ -35,31 +35,37 @@ impl Runner {
 
         // TODO: profile loop order
         // For each program, generate a few random vals and execute
-        self.progs.par_iter().enumerate().map(|(ix, prog)| {
-        // res = self.progs.iter().enumerate().map(|(ix, prog)| {
-            let costs: Vec<Cost> = (0..5).map(|_i| {
-            // (0..5).into_par_iter().map(|_i| {
-                let mut env = HashMap::new();
+        self.progs
+            .par_iter()
+            .enumerate()
+            .map(|(ix, prog)| {
+                // res = self.progs.iter().enumerate().map(|(ix, prog)| {
+                let costs: Vec<Cost> = (0..5)
+                    .map(|_i| {
+                        // (0..5).into_par_iter().map(|_i| {
+                        let mut env = HashMap::new();
 
-                // Choose random values for our inputs
-                let mut rng = thread_rng();
-                for (input_name, input_vals) in inputs {
-                    env.insert(*input_name, input_vals.choose(&mut rng).unwrap().clone());
-                }
+                        // Choose random values for our inputs
+                        let mut rng = thread_rng();
+                        for (input_name, input_vals) in inputs {
+                            env.insert(*input_name, input_vals.choose(&mut rng).unwrap().clone());
+                        }
 
-                // Make a new execution environment
-                let mut ex = ExecEnv::new(&self.arena, prog.start, prog.end, env);
+                        // Make a new execution environment
+                        let mut ex = ExecEnv::new(&self.arena, prog.start, prog.end, env);
 
-                // TODO: do analysis on result value
-                let out = ex.run();
-                // TODO
-                let (_res, cost) = out.unwrap_or_else(|| (None, 99999));
-                cost
-            }).collect();
-            // }).collect_into_vec(&mut costs);
+                        // TODO: do analysis on result value
+                        let out = ex.run();
+                        // TODO
+                        let (_res, cost) = out.unwrap_or_else(|| (None, 99999));
+                        cost
+                    })
+                    .collect();
+                // }).collect_into_vec(&mut costs);
 
-            (ix, costs.iter().sum::<Cost>() / costs.len())
-        }).collect_into_vec(&mut res);
+                (ix, costs.iter().sum::<Cost>() / costs.len())
+            })
+            .collect_into_vec(&mut res);
         // }).collect();
 
         res
@@ -102,7 +108,12 @@ pub struct ExecEnv<'a> {
 }
 
 impl<'a> ExecEnv<'a> {
-    pub fn new(arena: &'a Arena, start: ExprIx, ret: ExprIx, env: HashMap<MiniSpur, Value>) -> Self {
+    pub fn new(
+        arena: &'a Arena,
+        start: ExprIx,
+        ret: ExprIx,
+        env: HashMap<MiniSpur, Value>,
+    ) -> Self {
         Self {
             arena,
             ret,
@@ -220,7 +231,7 @@ impl<'a> ExecEnv<'a> {
                     let n = (*n).try_into().unwrap();
                     let fun = {
                         let num: usize = self.data.pop()?.as_i64()?.try_into().ok()?;
-                        
+
                         MiniSpur::try_from_usize(num)?
                     };
                     let mut names: SmallVec<[MiniSpur; 8]> = SmallVec::with_capacity(n);
@@ -229,7 +240,7 @@ impl<'a> ExecEnv<'a> {
                     for _i in 0..n {
                         let name = {
                             let num: usize = self.data.pop()?.as_i64()?.try_into().ok()?;
-                            
+
                             MiniSpur::try_from_usize(num)?
                         };
                         let val = self.data.pop()?;
@@ -240,7 +251,7 @@ impl<'a> ExecEnv<'a> {
                             Err(pos) => {
                                 names.insert(pos, name);
                                 vals.insert(pos, val);
-                            },
+                            }
                         };
                     }
 
@@ -287,7 +298,7 @@ impl<'a> ExecEnv<'a> {
 
                             // println!("pushed data and cost");
                         }
-                        
+
                         // If third and fourth elements aren't equal, jump back to
                         // jump, reset tip, and try again.
                         if cur < len {
@@ -296,11 +307,26 @@ impl<'a> ExecEnv<'a> {
 
                             // Also, reset bound var.
                             // println!("{} {} {:?}", cur, len, self.data.len());
-                            self.push_var(bound, self.data[stack_ix].as_array().unwrap().get(cur).unwrap().clone());
+                            self.push_var(
+                                bound,
+                                self.data[stack_ix]
+                                    .as_array()
+                                    .unwrap()
+                                    .get(cur)
+                                    .unwrap()
+                                    .clone(),
+                            );
 
                             // TODO: try using last_mut instead of popping and repushing
                             // Repush to the call stack
-                            self.call.push(Frame { stack_ix, jump, cur, len, bound, cost });
+                            self.call.push(Frame {
+                                stack_ix,
+                                jump,
+                                cur,
+                                len,
+                                bound,
+                                cost,
+                            });
                             break;
                         } else {
                             // println!("stack_ix {}", stack_ix);
@@ -324,7 +350,10 @@ impl<'a> ExecEnv<'a> {
                                 // pairs will be in the form:
                                 // expr1 cost1 .. exprn costn
                                 // println!("{:?}", &pairs);
-                                let costs = pairs.drain_filter(|x| x.is_number()).map(|x| x.as_i64().unwrap().try_into().unwrap()).collect::<Vec<Cost>>();
+                                let costs = pairs
+                                    .drain_filter(|x| x.is_number())
+                                    .map(|x| x.as_i64().unwrap().try_into().unwrap())
+                                    .collect::<Vec<Cost>>();
                                 let res = pairs;
 
                                 // Then pop the next element off - it's the vector that we
@@ -334,7 +363,7 @@ impl<'a> ExecEnv<'a> {
                                 // Set cost
                                 let bind_cost: Cost = costs.iter().sum::<Cost>() / costs.len();
                                 self.cost = cost + bind_cost;
-                                
+
                                 // Push list to stack and loop again!
                                 self.data.push(res.into());
                             }
@@ -416,17 +445,38 @@ impl Arena {
         self.exprs.len() - 1
     }
 
-    pub fn push_trace(&mut self, f: MiniSpur, args: SmallVec<[MiniSpur; 8]>, vals: Vec<(SmallVec<[Value; 8]>, Value, usize)>) {
+    pub fn push_trace(
+        &mut self,
+        f: MiniSpur,
+        args: SmallVec<[MiniSpur; 8]>,
+        vals: Vec<(HashMap<MiniSpur, Value>, Value, usize)>,
+    ) {
         self.traces.insert((f, args), vals);
     }
 
-    fn get_trace(&self, f: MiniSpur, args: SmallVec<[MiniSpur; 8]>, vals: SmallVec<[Value; 8]>) -> Option<Value> {
+    fn get_trace(
+        &self,
+        f: MiniSpur,
+        args: SmallVec<[MiniSpur; 8]>,
+        vals: SmallVec<[Value; 8]>,
+    ) -> Option<Value> {
+        // TODO: clone :/
         // To get a trace, we just get it from our traces map
-        let possibles = self.traces.get(&(f, args))?;
+        let possibles = self.traces.get(&(f, args.clone()))?;
 
         let (responses, weights): (Vec<&Value>, Vec<usize>) = possibles
             .iter()
-            .filter_map(|x| if vals == x.0 { Some((&x.1, x.2)) } else { None })
+            .filter_map(|x| {
+                if args
+                    .iter()
+                    .enumerate()
+                    .all(|(i, a)| x.0.get(a) == Some(vals.get(i).unwrap()))
+                {
+                    Some((&x.1, x.2))
+                } else {
+                    None
+                }
+            })
             .unzip();
 
         if !responses.is_empty() {
