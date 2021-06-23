@@ -1,6 +1,6 @@
 use crate::{Expr, ExprIx, Prog, ProgIx, Traces};
 use hashbrown::HashMap;
-use lasso::{Key, Rodeo, RodeoResolver, Spur};
+use lasso::{Key, Rodeo, RodeoResolver, MiniSpur};
 use rand::{distributions::WeightedIndex, prelude::*, seq::SliceRandom};
 use rayon::prelude::*;
 use serde_json::Value;
@@ -29,7 +29,7 @@ impl Runner {
     /// Runs retrospective execution over a set of inputs.
     /// inputs is a map from an input argument name to a list of possible
     /// values for that input.
-    pub fn run(self, inputs: &[(Spur, Vec<Value>)]) -> Vec<(ProgIx, Cost)> {
+    pub fn run(self, inputs: &[(MiniSpur, Vec<Value>)]) -> Vec<(ProgIx, Cost)> {
         let mut res = Vec::with_capacity(self.progs.len());
         // let res;
 
@@ -62,8 +62,6 @@ impl Runner {
         }).collect_into_vec(&mut res);
         // }).collect();
 
-        println!("result: {}", res.iter().filter(|x| x.1 < 99998).collect::<Vec<_>>().len());
-
         res
     }
 }
@@ -79,7 +77,7 @@ pub struct Frame {
     /// The loop length.
     pub len: usize,
     /// The bound variable for this loop.
-    pub bound: Spur,
+    pub bound: MiniSpur,
     /// The cost before this loop began.
     pub cost: Cost,
 }
@@ -98,13 +96,13 @@ pub struct ExecEnv<'a> {
     tip: ExprIx,
     cost: usize,
     error: bool,
-    env: HashMap<Spur, Value>,
+    env: HashMap<MiniSpur, Value>,
     data: Vec<Value>,
     call: Vec<Frame>,
 }
 
 impl<'a> ExecEnv<'a> {
-    pub fn new(arena: &'a Arena, start: ExprIx, ret: ExprIx, env: HashMap<Spur, Value>) -> Self {
+    pub fn new(arena: &'a Arena, start: ExprIx, ret: ExprIx, env: HashMap<MiniSpur, Value>) -> Self {
         Self {
             arena,
             ret,
@@ -223,16 +221,16 @@ impl<'a> ExecEnv<'a> {
                     let fun = {
                         let num: usize = self.data.pop()?.as_i64()?.try_into().ok()?;
                         
-                        Spur::try_from_usize(num)?
+                        MiniSpur::try_from_usize(num)?
                     };
-                    let mut names: SmallVec<[Spur; 8]> = SmallVec::with_capacity(n);
+                    let mut names: SmallVec<[MiniSpur; 8]> = SmallVec::with_capacity(n);
                     let mut vals: SmallVec<[Value; 8]> = SmallVec::with_capacity(n);
 
                     for _i in 0..n {
                         let name = {
                             let num: usize = self.data.pop()?.as_i64()?.try_into().ok()?;
                             
-                            Spur::try_from_usize(num)?
+                            MiniSpur::try_from_usize(num)?
                         };
                         let val = self.data.pop()?;
 
@@ -253,7 +251,7 @@ impl<'a> ExecEnv<'a> {
                     }
                 }
                 Expr::Push(s) => {
-                    // We push a spur by pushing a usize number to the stack
+                    // We push a MiniSpur by pushing a usize number to the stack
                     self.data.push(s.into_usize().into());
 
                     self.ip += 1;
@@ -365,11 +363,11 @@ impl<'a> ExecEnv<'a> {
         self.error = false;
     }
 
-    fn push_var(&mut self, x: Spur, v: Value) {
+    fn push_var(&mut self, x: MiniSpur, v: Value) {
         self.env.insert(x, v);
     }
 
-    fn pop_var(&mut self, x: Spur) {
+    fn pop_var(&mut self, x: MiniSpur) {
         self.env.remove(&x);
     }
 }
@@ -389,7 +387,7 @@ enum RWRodeo<T> {
 pub struct Arena {
     exprs: Vec<Expr>,
     traces: Traces,
-    strs: RWRodeo<Spur>,
+    strs: RWRodeo<MiniSpur>,
 }
 
 impl Default for Arena {
@@ -397,7 +395,7 @@ impl Default for Arena {
         Self {
             exprs: vec![],
             traces: Traces::new(),
-            strs: RWRodeo::Write(Rodeo::default()),
+            strs: RWRodeo::Write(Rodeo::new()),
         }
     }
 }
@@ -416,11 +414,11 @@ impl Arena {
         self.exprs.len() - 1
     }
 
-    pub fn push_trace(&mut self, f: Spur, args: SmallVec<[Spur; 8]>, vals: Vec<(SmallVec<[Value; 8]>, Value, usize)>) {
+    pub fn push_trace(&mut self, f: MiniSpur, args: SmallVec<[MiniSpur; 8]>, vals: Vec<(SmallVec<[Value; 8]>, Value, usize)>) {
         self.traces.insert((f, args), vals);
     }
 
-    fn get_trace(&self, f: Spur, args: SmallVec<[Spur; 8]>, vals: SmallVec<[Value; 8]>) -> Option<Value> {
+    fn get_trace(&self, f: MiniSpur, args: SmallVec<[MiniSpur; 8]>, vals: SmallVec<[Value; 8]>) -> Option<Value> {
         // To get a trace, we just get it from our traces map
         let possibles = self.traces.get(&(f, args))?;
 
@@ -438,14 +436,14 @@ impl Arena {
         }
     }
 
-    pub fn intern_str(&mut self, s: &str) -> Spur {
+    pub fn intern_str(&mut self, s: &str) -> MiniSpur {
         match &mut self.strs {
             RWRodeo::Write(r) => r.get_or_intern(s),
             RWRodeo::Read(_) => panic!("can't write, haven't switched rodeos!"),
         }
     }
 
-    pub fn get_str(&self, s: &Spur) -> &str {
+    pub fn get_str(&self, s: &MiniSpur) -> &str {
         match &self.strs {
             RWRodeo::Read(r) => r.resolve(s),
             RWRodeo::Write(_) => panic!("can't read, haven't switched rodeos!"),
