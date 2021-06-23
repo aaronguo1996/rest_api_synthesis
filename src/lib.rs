@@ -1,4 +1,4 @@
-#![feature(proc_macro_hygiene)]
+#![feature(drain_filter)]
 //! Retrospective execution, reimplemented in Rust.
 //!
 //! This library implements the retrospective execution portion of apiphany in

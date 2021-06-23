@@ -1,20 +1,25 @@
 use crate::{Expr, ExprIx, Prog, ProgIx, Traces};
 use hashbrown::HashMap;
-use lasso::{Rodeo, RodeoResolver, Spur};
+use lasso::{Key, Rodeo, RodeoResolver, Spur};
 use rand::{distributions::WeightedIndex, prelude::*, seq::SliceRandom};
+use rayon::prelude::*;
 use serde_json::Value;
+use smallvec::SmallVec;
+use std::convert::TryInto;
+
+pub type Cost = usize;
 
 /// A `Runner` is responsible for coordinating the whole RE process.
 /// It first loads all of the traces and translates all of the expressions.
 /// It then runs RE in a multithreaded fashion.
 pub struct Runner {
     arena: Arena,
-    /// A list of root programs stored in the `arena`.
-    progs: Vec<ProgIx>,
+    /// A list of programs stored in the `arena`.
+    progs: Vec<Prog>,
 }
 
 impl Runner {
-    pub fn new(mut arena: Arena, progs: Vec<ProgIx>) -> Self {
+    pub fn new(mut arena: Arena, progs: Vec<Prog>) -> Self {
         // Swap arena into read-only mode
         arena = arena.swap_rodeo();
 
@@ -24,168 +29,340 @@ impl Runner {
     /// Runs retrospective execution over a set of inputs.
     /// inputs is a map from an input argument name to a list of possible
     /// values for that input.
-    pub fn run(self, inputs: &[(Spur, Vec<Value>)]) -> Vec<(ProgIx, usize)> {
-        let mut res = vec![];
+    pub fn run(self, inputs: &[(Spur, Vec<Value>)]) -> Vec<(ProgIx, Cost)> {
+        let mut res = Vec::with_capacity(self.progs.len());
+        // let res;
 
         // TODO: profile loop order
         // For each program, generate a few random vals and execute
-        for prog in &self.progs {
-            // TODO: repeat
-            let mut env = HashMap::new();
+        self.progs.par_iter().enumerate().map(|(ix, prog)| {
+        // res = self.progs.iter().enumerate().map(|(ix, prog)| {
+            let costs: Vec<Cost> = (0..5).map(|_i| {
+            // (0..5).into_par_iter().map(|_i| {
+                let mut env = HashMap::new();
 
-            // Choose random values for our inputs
-            let mut rng = thread_rng();
-            for (input_name, input_vals) in inputs {
-                env.insert(*input_name, input_vals.choose(&mut rng).unwrap().clone());
-            }
+                // Choose random values for our inputs
+                let mut rng = thread_rng();
+                for (input_name, input_vals) in inputs {
+                    env.insert(*input_name, input_vals.choose(&mut rng).unwrap().clone());
+                }
 
-            // Make a new execution environment
-            let mut ex = ExecEnv::new(&self.arena, *prog, env);
+                // Make a new execution environment
+                let mut ex = ExecEnv::new(&self.arena, prog.start, prog.end, env);
 
-            // TODO: do analysis on result value
-            let out = ex.run(0);
-            let (_res, cost) = out.unwrap_or_else(|| (None, 99999));
-            res.push((*prog, cost));
-        }
+                // TODO: do analysis on result value
+                let out = ex.run();
+                // TODO
+                let (_res, cost) = out.unwrap_or_else(|| (None, 99999));
+                cost
+            }).collect();
+            // }).collect_into_vec(&mut costs);
+
+            (ix, costs.iter().sum::<Cost>() / costs.len())
+        }).collect_into_vec(&mut res);
+        // }).collect();
+
+        println!("result: {}", res.iter().filter(|x| x.1 < 99998).collect::<Vec<_>>().len());
 
         res
     }
 }
 
-// TODO: separate out the environment from the execution invocation?
-// struct and execution is immutable, execute takes param to mutable env
+#[derive(Debug, Copy, Clone)]
+pub struct Frame {
+    /// The index of the vector on the stack.
+    pub stack_ix: usize,
+    /// The instruction to jump to in order to get to the start of the loop.
+    pub jump: usize,
+    /// The current loop index.
+    pub cur: usize,
+    /// The loop length.
+    pub len: usize,
+    /// The bound variable for this loop.
+    pub bound: Spur,
+    /// The cost before this loop began.
+    pub cost: Cost,
+}
+
 /// An `ExecEnv` is an execution environment, holding all the information
 /// needed for the execution of one expression on one input.
+///
+/// Execution is implemented as a state machine which interprets the program.
 pub struct ExecEnv<'a> {
     // invocation params
     arena: &'a Arena,
-    prog: ProgIx,
+    ret: ExprIx,
 
     // mutating state
+    ip: ExprIx,
+    tip: ExprIx,
+    cost: usize,
+    error: bool,
     env: HashMap<Spur, Value>,
+    data: Vec<Value>,
+    call: Vec<Frame>,
 }
 
 impl<'a> ExecEnv<'a> {
-    pub fn new(arena: &'a Arena, prog: ProgIx, env: HashMap<Spur, Value>) -> Self {
-        Self { arena, prog, env }
+    pub fn new(arena: &'a Arena, start: ExprIx, ret: ExprIx, env: HashMap<Spur, Value>) -> Self {
+        Self {
+            arena,
+            ret,
+
+            ip: start,
+            tip: 0,
+            error: false,
+            env,
+            cost: 0,
+            data: vec![],
+            call: vec![],
+        }
     }
 
-    pub fn run(&mut self, ip: usize) -> Option<(Option<Value>, usize)> {
-        // Do some initialization for the program
-        let p = &self.arena.progs[self.prog].exprs;
-        if ip == p.len() - 1 {
-            // If we're on the last instruction, just execute it and return its results.
-            return self.exec_expr(p[ip]);
-        } else {
-            // Otherwise, we match against the expression ip points to.
-            let e = &self.arena.exprs[p[ip]];
-            match e {
-                Expr::Assign(x, e, true) => {
-                    // Short-circuiting behavior for binds
-                    let (rhs, cost) = self.exec_expr(*e)?;
+    // TODO: deal with clones. probably some Cow stuff
+    pub fn run(&mut self) -> Option<(Option<Value>, Cost)> {
+        loop {
+            // println!("{} {:?} {} tip: {}", self.ip, &self.arena.exprs[self.ip], self.data.len(), self.tip);
+            // Get the current instruction
+            match &self.arena.exprs[self.ip] {
+                // At this point, assume is_bind = false
+                Expr::Singleton => {
+                    // Set top element of stack to list.
+                    let l = self.data.last_mut()?;
+                    *l = Value::Array(vec![l.clone()]);
 
-                    let mut bind_cost = 0;
-                    let mut vals = vec![];
+                    self.ip += 1;
+                }
+                Expr::Var(v) => {
+                    // Get var out of heap and push to stack.
+                    self.data.push(self.env.get(v)?.clone());
 
-                    // For each item in the result array
-                    for v in rhs?.as_array()? {
-                        // Insert the binding var into the env
-                        self.push_var(*x, v.clone());
+                    self.cost += 1;
+                    self.ip += 1;
+                }
+                Expr::Assign(v) => {
+                    let top = self.data.pop()?;
+                    self.env.insert(*v, top);
 
-                        if let Some((sub_val, sub_cost)) = self.run(ip + 1) {
-                            if let Some(sub_val) = sub_val {
-                                vals.push(sub_val);
-                                bind_cost += sub_cost;
-                            }
+                    self.ip += 1;
+                }
+                Expr::Filter(f) => {
+                    // filter(lhs.f == rhs)
+                    // Pop rhs and lhs off the stack.
+                    let rhs = self.data.pop()?;
+                    let lhs = self.data.pop()?;
+
+                    // Filter. if lhs.v == rhs, we good.
+                    let mut tmp = &lhs;
+                    for path in self.arena.get_str(f).split('.') {
+                        if let Some(p) = tmp.get(path) {
+                            tmp = p;
+                        } else {
+                            self.set_error();
                         }
-
-                        // Then remove the binding var from the env
-                        self.pop_var(*x);
                     }
 
-                    if vals.len() == 0 {
-                        None
+                    if tmp == &rhs {
+                        // TODO: variables??
+                        // Filter doesn't push anything to the stack
+
+                        self.cost += 1;
+                        self.ip += 1;
                     } else {
-                        let cost = cost + bind_cost / vals.len();
-                        Some((Some(vals.into()), cost))
+                        self.set_error();
                     }
                 }
-                _ => {
-                    let (_val, cost) = self.exec_expr(p[ip])?;
-                    let (val, ncost) = self.run(ip + 1)?;
+                Expr::Proj(f) => {
+                    // Pop from top of stack, project into it, push.
+                    let x = self.data.pop()?;
+                    let mut tmp = &x;
+                    for path in self.arena.get_str(f).split('.') {
+                        tmp = tmp.get(path)?;
+                        self.cost += 1;
+                    }
+                    self.data.push(tmp.clone());
 
-                    Some((val, cost + ncost))
+                    self.ip += 1;
                 }
+                Expr::Bind(v) => {
+                    // First, peek at top of stack.
+                    let x = self.data.last()?.as_array()?;
+
+                    // If x is empty, error.
+                    if x.is_empty() {
+                        self.set_error();
+                    } else {
+                        // Push to call stack.
+                        self.call.push(Frame {
+                            stack_ix: self.data.len() - 1,
+                            jump: self.ip + 1,
+                            cur: 0,
+                            len: x.len(),
+                            bound: *v,
+                            cost: self.cost,
+                        });
+
+                        // Reset cost for loop.
+                        self.cost = 0;
+
+                        // Push x[0] to env.
+                        self.env.insert(*v, x.get(0).unwrap().clone());
+
+                        // Set tip to error recovery spot; the last place with
+                        // a valid data val.
+                        self.tip = self.data.len() - 1;
+
+                        self.ip += 1;
+                    }
+                }
+                Expr::App(n) => {
+                    // When we call App, the stack will look like this:
+                    // arg_1 name_1 ... arg_n name_n fun_name
+                    //                               ^ top
+                    let n = (*n).try_into().unwrap();
+                    let fun = {
+                        let num: usize = self.data.pop()?.as_i64()?.try_into().ok()?;
+                        
+                        Spur::try_from_usize(num)?
+                    };
+                    let mut names: SmallVec<[Spur; 8]> = SmallVec::with_capacity(n);
+                    let mut vals: SmallVec<[Value; 8]> = SmallVec::with_capacity(n);
+
+                    for _i in 0..n {
+                        let name = {
+                            let num: usize = self.data.pop()?.as_i64()?.try_into().ok()?;
+                            
+                            Spur::try_from_usize(num)?
+                        };
+                        let val = self.data.pop()?;
+
+                        names.push(name);
+                        vals.push(val);
+                    }
+
+                    // TODO: more efficient insertion into reverse
+                    names.reverse();
+                    vals.reverse();
+
+                    // Finally, actually call function :)
+                    if let Some(t) = self.arena.get_trace(fun, names, vals) {
+                        self.data.push(t);
+                        self.ip += 1;
+                    } else {
+                        self.set_error();
+                    }
+                }
+                Expr::Push(s) => {
+                    // We push a spur by pushing a usize number to the stack
+                    self.data.push(s.into_usize().into());
+
+                    self.ip += 1;
+                }
+                Expr::Ret => loop {
+                    // h o o h b o y
+                    // First, we try to peek at the top of the call stack.
+                    if let Some(Frame {
+                        stack_ix,
+                        jump,
+                        mut cur,
+                        len,
+                        bound,
+                        cost,
+                    }) = self.call.pop()
+                    {
+                        // Increment cur.
+                        cur += 1;
+
+                        // println!("{} {}", self.error, self.tip);
+
+                        // If error, clear stack until tip element and unset error state.
+                        if self.error {
+                            self.data.truncate(self.tip + 1);
+                            self.unset_error();
+                        } else {
+                            // Otherwise, push the current cost to the top of the stack, then
+                            // reset.
+                            self.data.push(self.cost.into());
+                            self.cost = 0;
+
+                            // println!("pushed data and cost");
+                        }
+                        
+                        // If third and fourth elements aren't equal, jump back to
+                        // jump, reset tip, and try again.
+                        if cur < len {
+                            self.ip = jump;
+                            self.tip = self.data.len() - 1;
+
+                            // Also, reset bound var.
+                            // println!("{} {} {:?}", cur, len, self.data.len());
+                            self.push_var(bound, self.data[stack_ix].as_array().unwrap().get(cur).unwrap().clone());
+
+                            // TODO: try using last_mut instead of popping and repushing
+                            // Repush to the call stack
+                            self.call.push(Frame { stack_ix, jump, cur, len, bound, cost });
+                            break;
+                        } else {
+                            // println!("stack_ix {}", stack_ix);
+                            // Unset bound var.
+                            self.pop_var(bound);
+
+                            // TODO: doing this "throw everything on the stack until
+                            // stack_ix" method won't work if we move env items also
+                            // to the stack.
+                            let mut pairs = self.data.drain(stack_ix + 1..).collect::<Vec<_>>();
+
+                            if pairs.is_empty() {
+                                // If we have an empty vector, pop the top element off (it's the
+                                // vector that we bound and left on the stack) and set the error flag.
+                                self.data.pop()?;
+                                self.set_error();
+                            } else {
+                                // Otherwise, push the vec to the stack. In the next iter
+                                // of the loop, we try again :)
+
+                                // pairs will be in the form:
+                                // expr1 cost1 .. exprn costn
+                                // println!("{:?}", &pairs);
+                                let costs = pairs.drain_filter(|x| x.is_number()).map(|x| x.as_i64().unwrap().try_into().unwrap()).collect::<Vec<Cost>>();
+                                let res = pairs;
+
+                                // Then pop the next element off - it's the vector that we
+                                // left on the stack so we could reference.
+                                self.data.pop()?;
+
+                                // Set cost
+                                let bind_cost: Cost = costs.iter().sum::<Cost>() / costs.len();
+                                self.cost = cost + bind_cost;
+                                
+                                // Push list to stack and loop again!
+                                self.data.push(res.into());
+                            }
+
+                            // Set tip to top of stack
+                            self.tip = self.data.len() - 1;
+                        }
+                    } else {
+                        if self.error {
+                            // In the error case, return None.
+                            return None;
+                        } else {
+                            // Otherwise, return the top of the data stack.
+                            return Some((self.data.pop(), self.cost));
+                        }
+                    }
+                },
             }
         }
     }
 
-    /// Executes an expression.
-    fn exec_expr(&mut self, expr: ExprIx) -> Option<(Option<Value>, usize)> {
-        // TODO: yikes! cloning!
-        match &self.arena.exprs[expr] {
-            // At this point, assume is_bind = false
-            Expr::Singleton(i) => {
-                // Execute inner item
-                // Then wrap in vector and return that value
-                let (v, cost) = self.exec_expr(*i)?;
-                Some((Some(vec![v?].into()), cost))
-            }
-            Expr::Assign(x, e, _) => {
-                // Evaluate rhs
-                let (rhs, cost) = self.exec_expr(*e)?;
+    pub fn set_error(&mut self) {
+        self.error = true;
+        self.ip = self.ret;
+    }
 
-                // Push assignment.
-                self.push_var(*x, rhs?);
-                Some((None, cost))
-            }
-            Expr::Var(v) => {
-                // Get var
-                self.env.get(&v).map(|x| (Some(x.clone()), 1))
-            }
-            Expr::Proj(x, v) => {
-                let (x, mut cost) = self.exec_expr(*x)?;
-                let mut x = x?;
-                for path in self.arena.get_str(v).split('.') {
-                    x = x.get(path)?.clone();
-                    cost += 1;
-                }
-
-                Some((Some(x), cost))
-            }
-            Expr::App(f, args) => {
-                let argvs = args
-                    .iter()
-                    .map(|(_, arg)| self.exec_expr(*arg))
-                    .collect::<Option<Vec<_>>>()?;
-                let scores: usize = argvs.iter().map(|x| x.1).sum();
-                let vals = argvs.into_iter().map(|x| x.0).collect::<Option<Vec<_>>>()?;
-                let args: Vec<Spur> =
-                    args.iter().map(|x| x.0).collect();
-
-                let val = self.arena.get_trace(*f, args, vals)?;
-
-                Some((Some(val), 1 + scores))
-            }
-            Expr::Filter(obj, f, val) => {
-                // Execute obj and val.
-                let (obj, score1) = self.exec_expr(*obj)?;
-                let (val, score2) = self.exec_expr(*val)?;
-
-                let mut tmp = obj.clone()?;
-
-                for path in self.arena.get_str(f).split('.') {
-                    tmp = tmp.get(path)?.clone();
-                }
-
-                if tmp == val? {
-                    // TODO: variables??
-                    Some((obj, score1 + score2 + 1))
-                } else {
-                    None
-                }
-            }
-        }
+    pub fn unset_error(&mut self) {
+        self.error = false;
     }
 
     fn push_var(&mut self, x: Spur, v: Value) {
@@ -212,7 +389,6 @@ enum RWRodeo<T> {
 pub struct Arena {
     exprs: Vec<Expr>,
     traces: Traces,
-    progs: Vec<Prog>,
     strs: RWRodeo<Spur>,
 }
 
@@ -221,7 +397,6 @@ impl Default for Arena {
         Self {
             exprs: vec![],
             traces: Traces::new(),
-            progs: vec![],
             strs: RWRodeo::Write(Rodeo::default()),
         }
     }
@@ -232,21 +407,20 @@ impl Arena {
         Self::default()
     }
 
+    pub fn get_next_prog_ix(&self) -> ExprIx {
+        self.exprs.len()
+    }
+
     pub fn alloc_expr(&mut self, e: Expr) -> ExprIx {
         self.exprs.push(e);
         self.exprs.len() - 1
     }
 
-    pub fn push_prog(&mut self, prog: Prog) -> ProgIx {
-        self.progs.push(prog);
-        self.progs.len() - 1
-    }
-
-    pub fn push_trace(&mut self, f: Spur, args: Vec<Spur>, vals: Vec<(Vec<Value>, Value, usize)>) {
+    pub fn push_trace(&mut self, f: Spur, args: SmallVec<[Spur; 8]>, vals: Vec<(SmallVec<[Value; 8]>, Value, usize)>) {
         self.traces.insert((f, args), vals);
     }
 
-    fn get_trace(&self, f: Spur, args: Vec<Spur>, vals: Vec<Value>) -> Option<Value> {
+    fn get_trace(&self, f: Spur, args: SmallVec<[Spur; 8]>, vals: SmallVec<[Value; 8]>) -> Option<Value> {
         // To get a trace, we just get it from our traces map
         let possibles = self.traces.get(&(f, args))?;
 
@@ -289,5 +463,12 @@ impl Arena {
         };
 
         self
+    }
+
+    pub fn rodeo_len(&self) -> usize {
+        match &self.strs {
+            RWRodeo::Read(r) => r.len(),
+            RWRodeo::Write(w) => w.len(),
+        }
     }
 }

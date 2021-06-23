@@ -1,6 +1,5 @@
-use crate::{Arena, Expr, ExprIx, Prog, ProgIx, Runner};
-use std::collections::HashMap;
-use lasso::Spur;
+use crate::{Arena, Expr, ExprIx, Prog, Runner, ProgIx};
+use std::{convert::TryInto, collections::HashMap};
 use pyo3::{
     prelude::*,
     types::{PyList, PyType},
@@ -136,12 +135,12 @@ fn translate_progs<'p>(
     imports: &Imports<'p>,
     py_expr: &[&'p PyAny],
     arena: &mut Arena,
-) -> PyResult<Vec<ProgIx>> {
+) -> PyResult<Vec<Prog>> {
     let mut res = Vec::new();
 
     for p in py_expr.iter() {
-        let pix = translate_prog(imports, p, arena)?;
-        res.push(pix);
+        let p = translate_prog(imports, p, arena)?;
+        res.push(p);
     }
 
     Ok(res)
@@ -151,21 +150,25 @@ fn translate_prog<'p>(
     imports: &Imports<'p>,
     py_expr: &'p PyAny,
     arena: &mut Arena,
-) -> PyResult<ProgIx> {
+) -> PyResult<Prog> {
     // Simplify program first before translating!
     py_expr.call_method0("simplify")?;
 
     let mut inputs = SmallVec::new();
-    let mut exprs = SmallVec::new();
     for i in py_expr.getattr("_inputs")?.cast_as::<PyList>()?.iter() {
         inputs.push(arena.intern_str(i.extract()?));
     }
 
+    let start = arena.get_next_prog_ix();
+
     for x in py_expr.getattr("_expressions")?.cast_as::<PyList>()?.iter() {
-        exprs.push(translate_expr(imports, x, arena)?);
+        translate_expr(imports, x, arena)?;
     }
 
-    Ok(arena.push_prog(Prog { inputs, exprs }))
+    // Push Ret instr at end
+    let end = arena.alloc_expr(Expr::Ret);
+
+    Ok(Prog { inputs, start, end })
 }
 
 fn translate_expr<'p>(
@@ -184,16 +187,20 @@ fn translate_expr<'p>(
         // Then, translate args.
         let args = py_expr
             .getattr("_args")?
-            .cast_as::<PyList>()?
-            .iter()
-            .map(|x| {
-                let tup = x.cast_as::<pyo3::types::PyTuple>()?;
-                let name = tup.get_item(0).extract()?;
-                let val = tup.get_item(1);
-                Ok((arena.intern_str(name), translate_expr(imports, val, arena)?))
-            })
-            .collect::<PyResult<SmallVec<[(Spur, ExprIx); 2]>>>()?;
-        Ok(arena.alloc_expr(Expr::App(fun, args)))
+            .cast_as::<PyList>()?;
+
+        for x in args.iter() {
+            let tup = x.cast_as::<pyo3::types::PyTuple>()?;
+            let name = tup.get_item(0).extract()?;
+            let val = tup.get_item(1);
+            translate_expr(imports, val, arena)?;
+            let s = arena.intern_str(name);
+            arena.alloc_expr(Expr::Push(s));
+        }
+
+        arena.alloc_expr(Expr::Push(fun));
+
+        Ok(arena.alloc_expr(Expr::App(args.len().try_into().unwrap())))
     } else if imports
         .var_expr
         .cast_as::<PyType>()
@@ -210,11 +217,11 @@ fn translate_expr<'p>(
         .is_instance(py_expr)?
     {
         // First, translate the base expression
-        let obj = translate_expr(imports, py_expr.getattr("_obj")?, arena)?;
+        translate_expr(imports, py_expr.getattr("_obj")?, arena)?;
         // Then, intern the field
         let field = arena.intern_str(py_expr.getattr("_field")?.extract()?);
         // Finally, alloc expr
-        Ok(arena.alloc_expr(Expr::Proj(obj, field)))
+        Ok(arena.alloc_expr(Expr::Proj(field)))
     } else if imports
         .filter_expr
         .cast_as::<PyType>()
@@ -222,11 +229,11 @@ fn translate_expr<'p>(
         .is_instance(py_expr)?
     {
         // Translate the base object and the value
-        let obj = translate_expr(imports, py_expr.getattr("_obj")?, arena)?;
-        let val = translate_expr(imports, py_expr.getattr("_val")?, arena)?;
+        translate_expr(imports, py_expr.getattr("_obj")?, arena)?;
+        translate_expr(imports, py_expr.getattr("_val")?, arena)?;
         // Then intern the field and alloc expr
         let field = arena.intern_str(py_expr.getattr("_field")?.extract()?);
-        Ok(arena.alloc_expr(Expr::Filter(obj, field, val)))
+        Ok(arena.alloc_expr(Expr::Filter(field)))
     } else if imports
         .assign_expr
         .cast_as::<PyType>()
@@ -235,9 +242,13 @@ fn translate_expr<'p>(
     {
         // Intern the lhs, evaluate the rhs, push instr
         let lhs = arena.intern_str(py_expr.getattr("_lhs")?.extract()?);
-        let rhs = translate_expr(imports, py_expr.getattr("_rhs")?, arena)?;
+        translate_expr(imports, py_expr.getattr("_rhs")?, arena)?;
         let bind = py_expr.getattr("_is_bind")?.extract()?;
-        Ok(arena.alloc_expr(Expr::Assign(lhs, rhs, bind)))
+        if bind {
+            Ok(arena.alloc_expr(Expr::Bind(lhs)))
+        } else {
+            Ok(arena.alloc_expr(Expr::Assign(lhs)))
+        }
     } else if imports
         .list_expr
         .cast_as::<PyType>()
@@ -245,8 +256,8 @@ fn translate_expr<'p>(
         .is_instance(py_expr)?
     {
         // Intern the lhs, evaluate the rhs, push instr
-        let item = translate_expr(imports, py_expr.getattr("_item")?, arena)?;
-        Ok(arena.alloc_expr(Expr::Singleton(item)))
+        translate_expr(imports, py_expr.getattr("_item")?, arena)?;
+        Ok(arena.alloc_expr(Expr::Singleton))
     } else {
         Err(pyo3::exceptions::PyTypeError::new_err(
             "expr not subclass of Expression",
