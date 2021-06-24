@@ -63,6 +63,10 @@ impl Runner {
                     .collect();
                 // }).collect_into_vec(&mut costs);
 
+                if costs.iter().any(|c| *c < 99999) {
+                    println!("{} {:?}", ix, &costs);
+                }
+
                 (ix, costs.iter().sum::<Cost>() / costs.len())
             })
             .collect_into_vec(&mut res);
@@ -131,7 +135,7 @@ impl<'a> ExecEnv<'a> {
     // TODO: deal with clones. probably some Cow stuff
     pub fn run(&mut self) -> Option<(Option<Value>, Cost)> {
         loop {
-            // println!("{} {:?} {} tip: {}", self.ip, &self.arena.exprs[self.ip], self.data.len(), self.tip);
+            // println!("{} {:?} err: {} stack: {} tip: {} cost: {}", self.ip, &self.arena.exprs[self.ip], self.error, self.data.len(), self.tip, self.cost);
             // Get the current instruction
             match &self.arena.exprs[self.ip] {
                 // At this point, assume is_bind = false
@@ -258,6 +262,8 @@ impl<'a> ExecEnv<'a> {
                     // Finally, actually call function :)
                     if let Some(t) = self.arena.get_trace(fun, names, vals) {
                         self.data.push(t);
+
+                        self.cost += 1;
                         self.ip += 1;
                     } else {
                         self.set_error();

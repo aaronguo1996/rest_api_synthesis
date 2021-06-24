@@ -164,6 +164,14 @@ class Benchmark:
             entries, configuration, runtime_config,
             log_analyzer, solutions)
 
+        tot = 0
+        for i, reses in enumerate(all_results):
+            if any([c < 99999 for x in reses for _, c in x]):
+                print(i, [c for x in reses for _, c in x])
+                tot += 1
+
+        print(tot)
+
         program_ranks = [[] for _ in range(runtime_config.repeat)]
         for i, reps in enumerate(all_results):
             for j, rep in enumerate(reps):
@@ -324,18 +332,18 @@ class BenchmarkSuite:
                 if not runtime_config.synthesis_only:
                     start = time.time()
                     # for now, just try to run rust_re
-                    res = rust_re(self._log_analyzer, solutions, entries, list(benchmark.inputs.items()))
+                    # res = rust_re(self._log_analyzer, solutions, entries, list(benchmark.inputs.items()))
                     # print program and cost, if success
                     # for pix, cost in res:
                     #     if cost < 99998:
                     #         print(solutions[pix], cost)
-                    # ranks, sol_prog = benchmark.get_rank(
-                    #     entries,
-                    #     self._configuration,
-                    #     runtime_config,
-                    #     self._log_analyzer,
-                    #     solutions,
-                    # )
+                    ranks, sol_prog = benchmark.get_rank(
+                        entries,
+                        self._configuration,
+                        runtime_config,
+                        self._log_analyzer,
+                        solutions,
+                    )
                     end = time.time()
                     print("RE time:", end - start)
 

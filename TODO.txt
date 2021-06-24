@@ -144,6 +144,8 @@ If the stack machine needs to "error out," just pretend like you hit a =Ret= ins
 implementation wise, we can just have an =error= boolean flag on =ExecEnv=, make "erroring out" just jumping to the =Ret= instruction and setting the flag (we know where the =Ret= instr is since we know how long the program is - we don't store subprograms, so the start of the next program - 1 is our =Ret=.). Then in the impl for =Ret=, just have it do diff things if the =error= flag is set.
 ** create a new state struct for instruction translation
 Instead of having disparate functions =translate_expr=, =translate_prog=, etc., they should all be methods of a struct in charge of translation that keeps state: =Compiler= or something. since we now need to be able to keep track of state to have instructions reference other instructions added after itself, we can use the =Compiler= struct to store this state.
+* TODO add =filter_num= stuff
+run repeats to get rank, run =filter_nums= to get multiple ranks
 * TODO add scores to stack machine
 * TODO finish complete re pipeline - hook up into rest of program
 * TODO verify correctness
