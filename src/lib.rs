@@ -14,3 +14,6 @@ pub use expr::{Expr, ExprIx, Prog, ProgIx};
 pub use trace::Traces;
 
 pub use interop::apiphany;
+
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;

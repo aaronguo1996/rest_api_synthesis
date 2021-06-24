@@ -790,9 +790,9 @@ def main():
         args.parallel)
     b = Bencher(
         [
-            slack_suite,
+            # slack_suite,
             # stripe_suite,
-            # square_suite,
+            square_suite,
         ],
         config)
 

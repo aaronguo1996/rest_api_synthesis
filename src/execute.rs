@@ -286,10 +286,11 @@ impl<'a> ExecEnv<'a> {
 
                         // println!("{} {}", self.error, self.tip);
 
-                        // If error, clear stack until tip element and unset error state.
+                        // If error, clear stack until tip element, reset cost, and unset error state.
                         if self.error {
                             self.data.truncate(self.tip + 1);
                             self.unset_error();
+                            self.cost = 0;
                         } else {
                             // Otherwise, push the current cost to the top of the stack, then
                             // reset.

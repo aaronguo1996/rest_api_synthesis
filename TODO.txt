@@ -1,0 +1,322 @@
+#+title: apiphany re (rust reimpl) todo
+
+* bench results
+reminders:
+- remember to pass =--release= to =maturin=!
+- can use =--cache= to get cached sols for bench script
+** 3.1
+*** limit 6, 1 worker
+synthesis settings:
+| =DEFAULT_LENGTH_LIMIT= |  6 |
+| parallel             | no |
+| workers              |  1 |
+| repeat               |  1 |
+
+results (measured in ms):
+| bench                         |  py2rs | interpret |  total |
+|-------------------------------+--------+-----------+--------|
+| python w/ entries opt (div 5) |  0.000 |    17.448 | 17.448 |
+| rust w/ entries opt           | 21.390 |    20.335 | 56.195 |
+| rust w/ stack machine         | 20.224 |    15.677 | 38.526 |
+*** limit 10, parallel
+synthesis settings:
+| =DEFAULT_LENGTH_LIMIT= |  10 |
+| parallel             | yes |
+| workers              |   6 |
+| repeat               |   5 |
+
+results (measured in ms):
+| bench                      |  py2rs | interpret |    total |
+|----------------------------+--------+-----------+----------|
+| python w/ entries opt      |  0.000 |  1616.859 | 1616.859 |
+| rust w/ stack machine      | 76.656 |   167.860 |  255.582 |
+| rust w/ nested parallelism | 81.590 |   156.659 |  249.801 |
+| rust w/ jemalloc           | 81.148 |    53.768 |  151.104 |
+** 1.4
+*** limit 6, 1 worker
+synthesis settings:
+| =DEFAULT_LENGTH_LIMIT= |  6 |
+| parallel             | no |
+| workers              |  1 |
+| repeat               |  1 |
+
+results (measured in ms):
+| bench                         |   py2rs | interpret |   total |
+|-------------------------------+---------+-----------+---------|
+| python w/ entries opt (div 5) |   0.000 |   975.245 | 975.245 |
+| rust w/ entries opt           | 146.884 |   356.660 | 519.508 |
+*** limit 7, 1 worker
+synthesis settings:
+| =DEFAULT_LENGTH_LIMIT= |  7 |
+| parallel             | no |
+| workers              |  1 |
+| repeat               |  1 |
+
+results (measured in s):
+| bench                         | py2rs | interpret | total |
+|-------------------------------+-------+-----------+-------|
+| python w/ entries opt (div 5) | 0.000 |     4.958 | 4.958 |
+| rust w/ entries opt           | 0.244 |     1.057 | 1.332 |
+*** limit 10, 1 worker
+synthesis settings:
+| =DEFAULT_LENGTH_LIMIT= | 10 |
+| parallel             | no |
+| workers              |  1 |
+| repeat               |  1 |
+
+results (measured in s):
+| bench                         | py2rs | interpret |  total |
+|-------------------------------+-------+-----------+--------|
+| python w/ entries opt (div 5) | 0.000 |    64.426 | 64.426 |
+| rust w/ entries opt           | 0.586 |     2.355 |  3.084 |
+| rust w/ stack machine         | 0.588 |     2.203 |  2.922 |
+*** limit 10, parallel
+synthesis settings:
+| =DEFAULT_LENGTH_LIMIT= |  10 |
+| parallel             | yes |
+| workers              |   6 |
+| repeat               |   5 |
+
+(both have repeats!)
+
+results (measured in s):
+| bench                      | py2rs | interpret |  total |
+|----------------------------+-------+-----------+--------|
+| python w/ entries opt      | 0.000 |    99.413 | 99.413 |
+| rust w/ stack machine      | 0.557 |     2.628 |  3.322 |
+| rust w/ nested parallelism | 0.553 |     2.630 |  3.313 |
+| rust w/ minispur           | 0.567 |     2.563 |  3.266 |
+| rust w/ jemalloc           | 0.578 |     1.014 |  1.733 |
+* DONE get it working lol - test baseline perf!
+CLOSED: [2021-06-20 Sun 15:30]
+fast RE example - 3.1. slow RE example - 1.4
+* DONE low-hanging fruit: rust command-line args
+CLOSED: [2021-06-20 Sun 15:45]
+https://deterministic.space/high-performance-rust.html
+doesn't seem to do much lol
+* DONE simplify programs before translation
+CLOSED: [2021-06-20 Sun 15:30]
+make sure all programs are simplified
+* DONE structure of entries?
+CLOSED: [2021-06-20 Sun 22:14]
+see new =DynamicAnalyzer.get_trace= code
+=entries= in the code is an indexed version of the parsed entries, built by =index_entries=, in which entries are transformed from a =[TraceEntry]= to a =HashMap<endpoint + method, HashMap<arg_names, (HashMap<arg_name, arg_value>, response, weight)>>= - this is presumably for performance purposes, added in the recent fix-benchmarks stuff
+we may want to use this instead of our own SoA stuff, since it's probably more performant tbfh (i.e. we're no longer doing multiple =O(n)= passes over the traces to find matching ones)
+
+we don't care about granularity level though (or at least right now we don't), so we can do even better: =HashMap<(endpoint, method, arg_names, arg_values), Response=. This would only require one access instead of 4! but we'd have to implement some more preprocessing stuff
+
+soa stuff prolly won't be necessary tbh.
+** TODO small optimizations on top of new traces structure
+- [X] spur
+- [ ] smallvec
+* DONE implement stack machine-based interpreter
+CLOSED: [2021-06-21 Mon 12:47]
+right now, when executing, we basically use this AST walker lookin thing. it's okay, but it seems pretty unperformant. instead, we should translate our Expressions, we should translate them into what are basically stack VM operations which will be much more simple to evaluate. instead of keeping track of an instruction pointer into program expressions along with dealing with nested recursive function calls and all that, each =ExecEnv= will just have a single instruction pointer. it starts at the beginning of the program, and stops at either an error (returning =None=) or when it sees a =Return= instruction (returns the value and cost). This will need changes to a few parts of the system atm:
+** the state ExecEnv needs to store
+=ExecEnv= should have two stacks: a =data= stack with =Value= values on it, and a =call= stack which will be explained below.
+=ExecEnv= should also keep track of cost as we go along.
+And finally, =ExecEnv= should have a few "registers" which will also be explained below:
+- =tip=: the index of the top of the branch after the last successful loop iteration.
+** how expressions themselves are translated
+expressions should be translated as follows:
+- =VarExpr(v)= becomes =Var(v)=. Reads =v= from env and pushes it to stack.
+- =Proj(v, f)= becomes =Proj(f)=. Pops =v= off stack and projects =f= into it. Pushes result back onto stack.
+- =App(e, args)= becomes =Arg(name)= and =App(n)=. =Arg(name)= pushes an argument name to the stack. =App(n)= pops off the last =n * 2= values: the last =n= values are used as the argument names, while the next =n= values are used as the argument values.
+- =Filter(o, f, v)= becomes =Filter(f)=. Pops =o= and =v= off the stack. Projects =f= into =o=, then errors out if value isn't equal to =v=.
+  - Can be broken down into =Proj(o, f)= and =Guard(v)=; =Guard(v)= pops item off stack and errors out if not equal.
+- =Assign(x, v, false)= becomes =Assign(x)=. Pops =v= off stack, assigns it to =x= in env.
+- =Assign(x, v, true)= becomes =Bind(x)=. =Bind(x)= first pops =v= off the stack. If =x= is empty, error out. Otherwise, add a tuple with four values to the top of the call stack: the index of =x= on the stack, the ip of the next instruction, 0 (the starting loop index), and the length of the list. It also sets =tip= to the current top of the stack.
+- =Ret= is a new instruction that indicates the end of a program. Its behavior changes depending on the contents of the call stack.
+  - If the call stack is empty, pop the top value off the stack and return it along with the cost.
+  - If the call stack is not empty:
+    - Peek at the top of the call stack and increment the third element of the tuple.
+    - If the third and fourth elements are not equal, jump back to the ip value given by the second element of the tuple. Set =tip= to the index of the current top of the stack.
+    - Otherwise, if the third and fourth elements are equal, we've reached the end of the list. Pop the tuple off the call stack. Pop all elements from the top element of the stack until 1 plus the first element of the tuple (which denotes the stack index of the og list), inserting them into a new array =v=. Then pop the og list off the stack and push =v= to the stack.
+      - If =v= is empty, don't bother pushing it to the stack and error out.
+      - Otherwise, check the call stack again to see if it's empty (i.e. repeat the logic of =Ret=)
+      - In either case, set =tip= to the index of the current top of the stack
+*** error behavior
+If the stack machine needs to "error out," just pretend like you hit a =Ret= instruction, with the following caveats:
+
+- If the call stack is empty, give up now and return =None=
+- Otherwise, do the call stack jumping stuff as dictated by =Ret= semantics above, unsetting the error flag while also removing everything on the stack up until (but not including =tip=)
+
+implementation wise, we can just have an =error= boolean flag on =ExecEnv=, make "erroring out" just jumping to the =Ret= instruction and setting the flag (we know where the =Ret= instr is since we know how long the program is - we don't store subprograms, so the start of the next program - 1 is our =Ret=.). Then in the impl for =Ret=, just have it do diff things if the =error= flag is set.
+** create a new state struct for instruction translation
+Instead of having disparate functions =translate_expr=, =translate_prog=, etc., they should all be methods of a struct in charge of translation that keeps state: =Compiler= or something. since we now need to be able to keep track of state to have instructions reference other instructions added after itself, we can use the =Compiler= struct to store this state.
+* TODO add scores to stack machine
+* TODO finish complete re pipeline - hook up into rest of program
+* TODO verify correctness
+* TODO profile perf
+* TODO traces structure - move value vec to left side
+this removes the last linear search and means getting traces is just get in a hashmap.
+this requires rolling our own hash impl for Value. we can do that p easy.
+or just call =value.as_str()= and hash that lmao
+* TODO additional stack machine opts
+** TODO remove need for "env"? during translation, compile env access into stack access
+basically, we know at "compile-time" how many pushes and pops we're gonna have at every point. so during compile-time, instead of having a heap var, just have an offset from the top of the stack.
+
+#+begin_example
+stack starts at 0
+Assume there exists one value on the stack: [x]
+
+                 the stack is knowable at compile-/translate-time!
+Assign("x")      Treat this as a dup; x at stack positions 0 and 1
+Proj(".a.b.c")   stack: [x x.a.b.c]
+Assign("y")      stack: [x x.a.b.c x.a.b.c]
+..
+..
+..
+..               stack: [x x.a.b.c x.a.b.c .. ..] (assume two more items pushed)
+Var("y")         at compile-time, we know og y at stack offset -3 (ix of top elem - 3). So this can just be Dup(-3)
+                 stack: [x x.a.b.c x.a.b.c .. .. x.a.b.c]
+Var("x")         at compile-time, we know og x at stack offset -6 (ix of top elem - 6). So this can just be Dup(-6)
+                 stack: [x x.a.b.c x.a.b.c .. .. x.a.b.c x]
+#+end_example
+
+Trade-off: more time to compile and translate, less to interpret. I say it's a win!
+This also makes things more JITable; amenable to lower-level vm
+*** alternatively: compile to no-assign form
+strictly speaking, assigns aren't necessary. we can just subst and simplify them away.
+so in our evaluator, we can just only evaluate simplified programs with no vars
+jk this is the same thing as above lol
+** TODO simplify to just one stack?
+** TODO even lower-level vm?
+- something cranelift-jitable even
+  - lots of Bit Twiddling
+- represent json as raw bytes - don't use the enum and all this indirection
+- env stuff? extern rust fns?
+  - https://github.com/bytecodealliance/cranelift/issues/675
+  - https://github.com/bytecodealliance/cranelift/issues/860
+*** TODO look at jq for inspiration
+=compile.c/h=, =opcode_list.h=, =exec_stack.h=, =execute.c=
+=exec_stack.h= for memory model
+
+execute.c greps of interest:
+=LOADK= - loading constants (jv - json value - arrays)
+object - dealing with objets
+=jq_get_attr= - gettin attribute from jv. filter??
+=jv.h/c= - [j]son [v]alue representation
+
+in jv.h:
+all json objects are represented by struct =jv=.
+their "kind" determines if they're array, number, string, etc.
+
+in jv.c:
+=jvp_object_new= - creates a new object. how does this work?
+#+begin_src c
+struct object_slot {
+  int next; /* next slot with same hash, for collisions */
+  uint32_t hash;
+  jv string;
+  jv value;
+};
+
+typedef struct {
+  jv_refcnt refcnt;
+  int next_free;
+  struct object_slot elements[];
+} jvp_object;
+#+end_src
+basically, =jvp_object= just stores a list of =object_slots=, which is a map from string to value. surprise!
+* TODO try using smallvec for traces?
+* TODO parallelism with rayon
+* TODO what the hell happened to how things were executed before?
+- the whole "randomly get input value" thing. Huh???
+* legacy
+right now, the structure of RE is like this:
+
+- Each type of =Expression= is represented as a subclass of =Expression= - memory allocation is all over the place lol
+- during program execution, the only time we modify env is pushing/popping vars. the only other time we even look at analyzer state is to get traces.
+
+in =DynamicAnalyzer.get_trace=, the code loops through the traces multiple times, progressively filtering down traces which match progressively tighter abstraction levels, up to the desired abstraction level. idk if this is performant? or maybe it'll be even more performant for us with our soa approach.
+
+Ideas for us that we can use:
+
+- Represent an =Expression= as an Enum instead of a bunch of subclasses of a root class - in this way,
+  - Additionally, when we are parsing expressions, we should allocate all of our expressions into a single arena vector, where the children are allocated before the current expression. (Recursive calls etc)
+  - This would allow us to be v cache efficient with exprs!
+  - Alternatively: don't even bother with translating, just execute directly (from Python classes?)
+- Instead of =DynamicAnalysis=, we now have a struct for an execution context which holds the environment and all that
+  - Execution takes one input and one expr
+  - We'll have an execution runner responsible for coordinating running between everything - this would also handle multithreaded/tiled runs and all that
+  - Execution runner should hold Vec/Slab with exprs and traces
+    - or references to those things
+    - some root struct translates everything, responsible for running everything
+- Multithreaded execution - we have a bunch of programs. We have a bunch of inputs we want to check against outputs. This should be TRIVIALLY parallelizable.
+  - Prolly would be aided with tiling, so we don't thrash the cache badly
+  - This indicates that translating Python classes to Rust =Expr= enums, stored in a cache-friendly way in one =Vec=, might be good for performance - if we're repeatedly interpreting a program, might be good to keep the program in cache and keep mem use down.
+  - Might want to pad expr things to 64 bytes to avoid false sharing?
+    - But we're not writing to exprs, just reading. So it shouldn't matter lol
+
+Future things:
+- Bytecode/JIT compilation, if this is still too slow
+
+concrete actions:
+- [X] finish data structure stuff
+  - incl minimal subset of datatypes needed for RE
+    - need less info than for synthesis, which uses LogAnalyzer
+    - we use DynamicAnalyzer
+  - [X] expr
+  - [X] program - list of expr!
+  - [X] trace
+- [X] finish translation logic
+  - [X] expr
+  - [X] trace
+    - we don't even need to translate this?
+    - just read straight from file - reimplement =parse_entries=
+      - [ ] reimpl =analyzer/parser.py=?
+        could just use a har parser (e.g. =har-rs=, etc.)
+      - parse minimal subset of har/TraceEntry needed for RE
+        - see above
+  - [X] program
+- [-] impl re algorithm
+  - [X] start with simple tree walker
+    - impl bind: iterator map!
+  - [ ] proceed to stack machine with code and data stacks
+    - which would be more amenable to parallelism?
+    - but we're alr doin parallelism on a program execution level
+
+*extra parallelism*:
+when evaluating after binding assigns, we can ||ize!
+
+*improvement for expr*:
+have a stack machine as our executor! executing instuctions which modify a stack and a persistent environment
+Var(v): get v from env and push v.
+App(f, n): pop n vars. push f(n) - vector result?
+- Named args?
+  - for each arg, pop off stack, push smth else
+  - new instruction: Arg(Spur), which pushes a spur to the stack
+  - application pops n var names and then n vars
+Proj(x): pop v, push p.v
+Filter(x): pop 2
+- only retain elems in vector that match filter.
+- push result back onto stack
+Assign(x, bool): pop v, assign/bind x = v in env
+- how do we handle binds? answer:
+  - don't actually pop v off stack!
+  - on assign(x, true), get top v
+  - somehow do jumps and all that
+  - instead, a bind is two instructions:
+    - Push index 0 to stack
+    - access and incr
+  - add new instruction: conditional jump
+    - Jump(ip, =arr_len=)
+    - if top of stack < arr len, incr and jump back?
+    - this is a do while loop
+- for each value in popped v:
+  - execute until end
+  - go (jump) back to assign, set value to next item in list.
+  - or, if we have a "code" stack along with our data stack, we could push a "goto ix" to the code stack, and at the end of executing program, pop first elem off code stack, and go there (if not and end of array)
+  - or somehow integrate this with a regular map?
+Probably should have other control instructions: jump and return
+
+the stack machine approach could be better for performance and cache locality and all that:
+https://news.ycombinator.com/item?id=18822369
+https://www.reddit.com/r/learnprogramming/comments/w6i0p/bytecode_execution_vs_ast_walking_speed/c5ax1dw/
+
+stack machine instructions: max 16 bytes. 4 bytes per L1 cache
+
+somehow - connection between this and state machines?
+
+this lets us just execute all instructions of a top-level program in a row.

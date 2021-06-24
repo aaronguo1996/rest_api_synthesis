@@ -8,6 +8,7 @@ authors = ["David Cao <david@cao.sh>"]
 
 [dependencies]
 hashbrown = "0.11.2"
+jemallocator = "0.3.2"
 lasso = { version = "0.5.1", features = ["multi-threaded", "ahasher"] }
 rand = "0.8.4"
 rayon = "1.5.1"
