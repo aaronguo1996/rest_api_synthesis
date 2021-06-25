@@ -88,7 +88,7 @@ results (measured in s):
 | rust w/ minispur                   | 0.567 |     2.563 |  3.266 |
 | rust w/ jemalloc                   | 0.578 |     1.014 |  1.733 |
 | rust w/ bugfixes (simple choice)   | 0.578 |     3.300 |  4.000 |
-| rust w/ bugfixes (weighted choice) | 0.547 |    20.266 | 21.016 |
+| rust w/ bugfixes (weighted choice) | 0.547 |     9.086 |  9.794 |
 * DONE get it working lol - test baseline perf!
 CLOSED: [2021-06-20 Sun 15:30]
 fast RE example - 3.1. slow RE example - 1.4

@@ -75,6 +75,8 @@ impl Runner {
             .collect_into_vec(&mut res);
         // }).collect();
 
+        println!("{}", res.iter().map(|x| x.1 < 99999).count());
+
         res
     }
 }
@@ -634,11 +636,13 @@ fn weighted_choice(weights: &[usize]) -> usize {
 
     // Actually choose!
     let mut rng = tls_rng();
-    let r1 = rng.generate_range(0, n);
     let r2 = rng.generate_range(0, avg);
+    let r1 = r2 * n / avg;
+    // let r1 = rng.generate_range(0, n);
 
     let (lim, other) = aliases[r1];
-    if r2 < lim {
+    if r1 < lim {
+    // if r2 < lim {
         r1
     } else {
         other
