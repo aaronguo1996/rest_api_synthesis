@@ -80,13 +80,15 @@ synthesis settings:
 (both have repeats!)
 
 results (measured in s):
-| bench                      | py2rs | interpret |  total |
-|----------------------------+-------+-----------+--------|
-| python w/ entries opt      | 0.000 |    99.413 | 99.413 |
-| rust w/ stack machine      | 0.557 |     2.628 |  3.322 |
-| rust w/ nested parallelism | 0.553 |     2.630 |  3.313 |
-| rust w/ minispur           | 0.567 |     2.563 |  3.266 |
-| rust w/ jemalloc           | 0.578 |     1.014 |  1.733 |
+| bench                              | py2rs | interpret |  total |
+|------------------------------------+-------+-----------+--------|
+| python w/ entries opt              | 0.000 |    99.413 | 99.413 |
+| rust w/ stack machine              | 0.557 |     2.628 |  3.322 |
+| rust w/ nested parallelism         | 0.553 |     2.630 |  3.313 |
+| rust w/ minispur                   | 0.567 |     2.563 |  3.266 |
+| rust w/ jemalloc                   | 0.578 |     1.014 |  1.733 |
+| rust w/ bugfixes (simple choice)   | 0.578 |     3.300 |  4.000 |
+| rust w/ bugfixes (weighted choice) | 0.547 |    20.266 | 21.016 |
 * DONE get it working lol - test baseline perf!
 CLOSED: [2021-06-20 Sun 15:30]
 fast RE example - 3.1. slow RE example - 1.4
@@ -144,11 +146,13 @@ If the stack machine needs to "error out," just pretend like you hit a =Ret= ins
 implementation wise, we can just have an =error= boolean flag on =ExecEnv=, make "erroring out" just jumping to the =Ret= instruction and setting the flag (we know where the =Ret= instr is since we know how long the program is - we don't store subprograms, so the start of the next program - 1 is our =Ret=.). Then in the impl for =Ret=, just have it do diff things if the =error= flag is set.
 ** create a new state struct for instruction translation
 Instead of having disparate functions =translate_expr=, =translate_prog=, etc., they should all be methods of a struct in charge of translation that keeps state: =Compiler= or something. since we now need to be able to keep track of state to have instructions reference other instructions added after itself, we can use the =Compiler= struct to store this state.
+* DONE add scores to stack machine
+CLOSED: [2021-06-24 Thu 17:26]
+* DONE verify correctness
+CLOSED: [2021-06-24 Thu 17:26]
 * TODO add =filter_num= stuff
 run repeats to get rank, run =filter_nums= to get multiple ranks
-* TODO add scores to stack machine
 * TODO finish complete re pipeline - hook up into rest of program
-* TODO verify correctness
 * TODO profile perf
 * TODO traces structure - move value vec to left side
 this removes the last linear search and means getting traces is just get in a hashmap.

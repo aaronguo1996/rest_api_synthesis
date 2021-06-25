@@ -106,13 +106,13 @@ fn translate_traces<'p>(
     arena: &mut Arena,
 ) {
     for (fun, rest) in traces.into_iter() {
-        for (mut param_names, old_vals) in rest.into_iter() {
+        for (param_names, old_vals) in rest.into_iter() {
             let fun = arena.intern_str(&fun);
-            param_names.sort();
-            let param_names = param_names
+            let mut param_names = param_names
                 .into_iter()
                 .map(|x| arena.intern_str(&x))
                 .collect::<SmallVec<_>>();
+            param_names.sort();
             let mut vals = Vec::new();
             for (param_nvs, response, weight) in old_vals {
                 let param_values = param_nvs

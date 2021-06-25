@@ -90,7 +90,10 @@ class AppExpr(Expression):
         return set().union(*arg_vars)
 
     def execute(self, analyzer, _):
+        # print("call:", self._fun)
+        # print("names:", [x for x, _ in self._args])
         args = [arg.execute(analyzer, []) for _, arg in self._args]
+        # print("vals:", args)
 
         # if any of the argument fails, the whole term fails
         for arg, _ in args:
@@ -264,7 +267,7 @@ class VarExpr(Expression):
         val = analyzer.lookup_var(self._var)
         if val is None:
             if candidates:
-                # print("sampling", self.var, "from", candidates)
+                print("sampling", self.var, "from", candidates)
                 val = random.choice(candidates)
             else:
                 # sample a value by type

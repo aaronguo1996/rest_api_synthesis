@@ -1,7 +1,7 @@
 use crate::{Expr, ExprIx, Prog, ProgIx, Traces};
 use hashbrown::HashMap;
 use lasso::{Key, MiniSpur, Rodeo, RodeoResolver};
-use rand::{distributions::WeightedIndex, prelude::*, seq::SliceRandom};
+use nanorand::{tls_rng, RNG};
 use rayon::prelude::*;
 use serde_json::Value;
 use smallvec::SmallVec;
@@ -46,9 +46,12 @@ impl Runner {
                         let mut env = HashMap::new();
 
                         // Choose random values for our inputs
-                        let mut rng = thread_rng();
+                        let mut rng = tls_rng();
                         for (input_name, input_vals) in inputs {
-                            env.insert(*input_name, input_vals.choose(&mut rng).unwrap().clone());
+                            env.insert(
+                                *input_name,
+                                input_vals[rng.generate_range(0, input_vals.len() - 1)].clone(),
+                            );
                         }
 
                         // Make a new execution environment
@@ -63,9 +66,9 @@ impl Runner {
                     .collect();
                 // }).collect_into_vec(&mut costs);
 
-                if costs.iter().any(|c| *c < 99999) {
-                    println!("{} {:?}", ix, &costs);
-                }
+                // if costs.iter().any(|c| *c < 99999) {
+                //     println!("{} {:?}", ix, &costs);
+                // }
 
                 (ix, costs.iter().sum::<Cost>() / costs.len())
             })
@@ -135,7 +138,15 @@ impl<'a> ExecEnv<'a> {
     // TODO: deal with clones. probably some Cow stuff
     pub fn run(&mut self) -> Option<(Option<Value>, Cost)> {
         loop {
-            // println!("{} {:?} err: {} stack: {} tip: {} cost: {}", self.ip, &self.arena.exprs[self.ip], self.error, self.data.len(), self.tip, self.cost);
+            // println!(
+            //     "{} {:?} err: {} stack: {} tip: {} cost: {}",
+            //     self.ip,
+            //     &self.arena.exprs[self.ip],
+            //     self.error,
+            //     self.data.len(),
+            //     self.tip,
+            //     self.cost
+            // );
             // Get the current instruction
             match &self.arena.exprs[self.ip] {
                 // At this point, assume is_bind = false
@@ -260,6 +271,15 @@ impl<'a> ExecEnv<'a> {
                     }
 
                     // Finally, actually call function :)
+                    // println!(
+                    //     "call: {:?}\nnames: {:?}\nvals: {:?}",
+                    //     self.arena.get_str(&fun),
+                    //     names
+                    //         .iter()
+                    //         .map(|x| self.arena.get_str(x))
+                    //         .collect::<Vec<_>>(),
+                    //     vals
+                    // );
                     if let Some(t) = self.arena.get_trace(fun, names, vals) {
                         self.data.push(t);
 
@@ -471,25 +491,38 @@ impl Arena {
         // To get a trace, we just get it from our traces map
         let possibles = self.traces.get(&(f, args.clone()))?;
 
-        let (responses, weights): (Vec<&Value>, Vec<usize>) = possibles
-            .iter()
-            .filter_map(|x| {
-                if args
-                    .iter()
-                    .enumerate()
-                    .all(|(i, a)| x.0.get(a) == Some(vals.get(i).unwrap()))
-                {
-                    Some((&x.1, x.2))
-                } else {
-                    None
-                }
-            })
-            .unzip();
+        let (responses, weights): (Vec<&Value>, Vec<usize>) = {
+            let mut value_filter = possibles
+                .iter()
+                .filter_map(|x| {
+                    if args
+                        .iter()
+                        .enumerate()
+                        .all(|(i, a)| x.0.get(a) == Some(vals.get(i).unwrap()))
+                    {
+                        Some((&x.1, x.2))
+                    } else {
+                        None
+                    }
+                })
+                .peekable();
+
+            // We try to peek at the iterator. If it's None, this means
+            // nothing matches, and we should just use possibles as a
+            // backup.
+            if let Some(_) = value_filter.peek() {
+                value_filter.unzip()
+            } else {
+                possibles.iter().map(|x| (&x.1, x.2)).unzip()
+            }
+        };
 
         if !responses.is_empty() {
-            let dist = WeightedIndex::new(&weights).unwrap();
-            let mut rng = thread_rng();
-            Some(responses[dist.sample(&mut rng)].clone())
+            // let dist = WeightedIndex::new(&weights).unwrap();
+            // let mut rng = thread_rng();
+            // Some(responses[dist.sample(&mut rng)].clone())
+
+            Some(responses[weighted_choice(&weights)].clone())
         } else {
             None
         }
@@ -527,5 +560,87 @@ impl Arena {
             RWRodeo::Read(r) => r.len(),
             RWRodeo::Write(w) => w.len(),
         }
+    }
+}
+
+// fn choice(weights: &[usize]) -> usize {
+//     let mut rng = tls_rng();
+//     rng.generate_range(0, weights.len())
+// }
+
+// fn weighted_choice2(weights: &[usize]) -> usize {
+//     let mut rng = tls_rng();
+//     let cumulative = weights
+//         .iter()
+//         .scan(0, |state, &x| {
+//             *state = *state + x;
+//             Some(*state)
+//         })
+//         .collect::<SmallVec<[usize; 16]>>();
+//     let last = cumulative[cumulative.len() - 1];
+// 
+//     let target = rng.generate_range(0, last);
+// 
+//     match cumulative.binary_search(&target) {
+//         Ok(i) => i,
+//         Err(i) => i,
+//     }
+// }
+
+fn weighted_choice(weights: &[usize]) -> usize {
+    // Precompute
+    let n = weights.len();
+    let avg = weights.iter().sum::<usize>() / n;
+
+    let mut smalls: SmallVec<[(usize, usize); 16]> = weights
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|(_, w)| *w < avg)
+        .collect();
+    let mut larges: SmallVec<[(usize, usize); 16]> = weights
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|(_, w)| *w >= avg)
+        .collect();
+
+    let mut aliases: SmallVec<[(usize, usize); 16]> = smallvec::smallvec![(0, 0); n];
+
+    let mut small = smalls.pop();
+    let mut large = larges.pop();
+
+    while let (Some(s), Some(mut l)) = (small, large) {
+        aliases[s.0] = (s.1, l.0);
+        l = (l.0, l.1 - (avg - s.1));
+        if l.1 < avg {
+            small = Some(l);
+            large = larges.pop();
+        } else {
+            small = smalls.pop();
+            large = Some(l);
+        }
+    }
+
+    while let Some(s) = small {
+        aliases[s.0] = (avg, 0);
+        small = smalls.pop();
+    }
+
+    while let Some(l) = large {
+        aliases[l.0] = (n, 0);
+        large = larges.pop();
+    }
+
+    // Actually choose!
+    let mut rng = tls_rng();
+    let r1 = rng.generate_range(0, n);
+    let r2 = rng.generate_range(0, avg);
+
+    let (lim, other) = aliases[r1];
+    if r2 < lim {
+        r1
+    } else {
+        other
     }
 }

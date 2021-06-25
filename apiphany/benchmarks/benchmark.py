@@ -332,18 +332,18 @@ class BenchmarkSuite:
                 if not runtime_config.synthesis_only:
                     start = time.time()
                     # for now, just try to run rust_re
-                    # res = rust_re(self._log_analyzer, solutions, entries, list(benchmark.inputs.items()))
+                    res = rust_re(self._log_analyzer, solutions, entries, list(benchmark.inputs.items()))
                     # print program and cost, if success
                     # for pix, cost in res:
                     #     if cost < 99998:
                     #         print(solutions[pix], cost)
-                    ranks, sol_prog = benchmark.get_rank(
-                        entries,
-                        self._configuration,
-                        runtime_config,
-                        self._log_analyzer,
-                        solutions,
-                    )
+                    # ranks, sol_prog = benchmark.get_rank(
+                    #     entries,
+                    #     self._configuration,
+                    #     runtime_config,
+                    #     self._log_analyzer,
+                    #     solutions,
+                    # )
                     end = time.time()
                     print("RE time:", end - start)
 
