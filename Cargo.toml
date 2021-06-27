@@ -7,18 +7,15 @@ authors = ["David Cao <david@cao.sh>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# bumpalo-herd = { path = "../bumpalo-herd" }
 hashbrown = "0.11.2"
-jemallocator = "0.3.2"
+mimalloc = { version = "0.1.26", default-features = false }
 lasso = { version = "0.5.1", features = ["multi-threaded", "ahasher"] }
 nanorand = "0.5.2"
 rayon = "1.5.1"
 serde_json = "1.0.59"
 smallvec = { version = "1.6.1", features = ["union"] }
 soa_derive = "0.10"
-
-# fuck
-flame = "0.2.2"
-flamer = "0.3"
 
 [dependencies.pyo3]
 version = "0.13.2"
@@ -27,3 +24,8 @@ features = ["extension-module"]
 [lib]
 name = "apiphany"
 crate-type = ["cdylib"]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"

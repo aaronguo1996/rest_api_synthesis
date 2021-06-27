@@ -40,7 +40,9 @@ impl Runner {
             .enumerate()
             .map(|(ix, prog)| {
                 // res = self.progs.iter().enumerate().map(|(ix, prog)| {
-                let costs: Vec<Cost> = (0..5)
+                let mut costs = Vec::with_capacity(5);
+                (0..5)
+                    .into_par_iter()
                     .map(|_i| {
                         // (0..5).into_par_iter().map(|_i| {
                         let mut env = HashMap::new();
@@ -63,8 +65,7 @@ impl Runner {
                         let (_res, cost) = out.unwrap_or_else(|| (None, 99999));
                         cost
                     })
-                    .collect();
-                // }).collect_into_vec(&mut costs);
+                    .collect_into_vec(&mut costs);
 
                 // if costs.iter().any(|c| *c < 99999) {
                 //     println!("{} {:?}", ix, &costs);
@@ -132,8 +133,8 @@ impl<'a> ExecEnv<'a> {
             error: false,
             env,
             cost: 0,
-            data: vec![],
-            call: vec![],
+            data: Vec::with_capacity(8),
+            call: Vec::with_capacity(8),
         }
     }
 
@@ -450,19 +451,13 @@ pub struct Arena {
     strs: RWRodeo<MiniSpur>,
 }
 
-impl Default for Arena {
-    fn default() -> Self {
+impl Arena {
+    pub fn new() -> Self {
         Self {
-            exprs: vec![],
+            exprs: Vec::new(),
             traces: Traces::new(),
             strs: RWRodeo::Write(Rodeo::new()),
         }
-    }
-}
-
-impl Arena {
-    pub fn new() -> Self {
-        Self::default()
     }
 
     pub fn get_next_prog_ix(&self) -> ExprIx {
@@ -590,7 +585,6 @@ impl Arena {
 // }
 
 fn weighted_choice(weights: &[usize]) -> usize {
-    // Precompute
     let n = weights.len();
     let avg = weights.iter().sum::<usize>() / n;
 

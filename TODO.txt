@@ -150,10 +150,28 @@ Instead of having disparate functions =translate_expr=, =translate_prog=, etc., 
 CLOSED: [2021-06-24 Thu 17:26]
 * DONE verify correctness
 CLOSED: [2021-06-24 Thu 17:26]
+* TODO fix perf bugs
+** DONE larger objects cause perf, not weighted random algo
+CLOSED: [2021-06-25 Fri 13:40]
+** TODO memory alloc?
+improving the allocator used seems to have a very large impact on performance:
+- system to jemalloc improved by 2.5x
+- jemalloc to mimalloc improved by 1.4x
+thus, it stands to reason that a lot of perf could be gained by minimizing the number of allocations we're doing.
+
+in particular, we do have a lot of those "clone" calls in execution, even though in most circumstances we don't need to allocate our own =Value=. =Proj= can just return a reference into an existing =Value=, owned by the
+
+I want a =Cow<'a, BorrowedValue<'a>>= - where =BorrowedValue= is the borrowed value type from simdjson?
+
+We could also do Slab allocation: store all =Value= allocations on a pre-allocated =Slab= in the =Arena= instead of having owned =Values= floating around everywhere, and just store references/keys into this =Slab=. (see =slab= crate and their keys - stack becomes just a stack of keys!)
+
+Even for Vector operations (i.e. bind) - we can just store a vector to =Cow<'a, Value>=!
+
+also: use Bumpalo arena allocation for even faster?
+** TODO profiling
 * TODO add =filter_num= stuff
 run repeats to get rank, run =filter_nums= to get multiple ranks
 * TODO finish complete re pipeline - hook up into rest of program
-* TODO profile perf
 * TODO traces structure - move value vec to left side
 this removes the last linear search and means getting traces is just get in a hashmap.
 this requires rolling our own hash impl for Value. we can do that p easy.
@@ -225,7 +243,8 @@ typedef struct {
 } jvp_object;
 #+end_src
 basically, =jvp_object= just stores a list of =object_slots=, which is a map from string to value. surprise!
-* TODO try using smallvec for traces?
+* DONE try using smallvec for traces?
+CLOSED: [2021-06-26 Sat 18:13]
 * TODO parallelism with rayon
 * TODO what the hell happened to how things were executed before?
 - the whole "randomly get input value" thing. Huh???

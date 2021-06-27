@@ -1,4 +1,4 @@
-#![feature(drain_filter)]
+#![feature(drain_filter, allocator_api)]
 //! Retrospective execution, reimplemented in Rust.
 //!
 //! This library implements the retrospective execution portion of apiphany in
@@ -16,4 +16,4 @@ pub use trace::Traces;
 pub use interop::apiphany;
 
 #[global_allocator]
-static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
