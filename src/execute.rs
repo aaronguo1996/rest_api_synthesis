@@ -30,6 +30,12 @@ impl Runner {
     /// inputs is a map from an input argument name to a list of possible
     /// values for that input.
     pub fn run(self, inputs: &[(MiniSpur, Vec<Value>)], target_ix: ProgIx, multiple: bool) -> Vec<usize> {
+        // Not sure why the list of input solutions would be empty but
+        // Apparently it happens lol
+        if self.progs.is_empty() {
+            return vec![];
+        }
+
         let mut avgs: Vec<usize> = (0..3).into_par_iter().map(|_exp| {
             let mut res = Vec::with_capacity(self.progs.len());
             // let res;

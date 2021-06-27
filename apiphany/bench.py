@@ -234,7 +234,7 @@ slack_benchmarks = [
 slack_suite = BenchmarkSuite(
     "configs/slack_config.json",
     "Slack",
-    slack_minimal
+    slack_benchmarks
 )
 
 

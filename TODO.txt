@@ -4,8 +4,9 @@
 reminders:
 - remember to pass =--release= to =maturin=!
 - can use =--cache= to get cached sols for bench script
-** 3.1
-*** limit 6, 1 worker
+** preliminary
+*** 3.1
+**** limit 6, 1 worker
 synthesis settings:
 | =DEFAULT_LENGTH_LIMIT= |  6 |
 | parallel             | no |
@@ -18,7 +19,7 @@ results (measured in ms):
 | python w/ entries opt (div 5) |  0.000 |    17.448 | 17.448 |
 | rust w/ entries opt           | 21.390 |    20.335 | 56.195 |
 | rust w/ stack machine         | 20.224 |    15.677 | 38.526 |
-*** limit 10, parallel
+**** limit 10, parallel
 synthesis settings:
 | =DEFAULT_LENGTH_LIMIT= |  10 |
 | parallel             | yes |
@@ -32,8 +33,8 @@ results (measured in ms):
 | rust w/ stack machine      | 76.656 |   167.860 |  255.582 |
 | rust w/ nested parallelism | 81.590 |   156.659 |  249.801 |
 | rust w/ jemalloc           | 81.148 |    53.768 |  151.104 |
-** 1.4
-*** limit 6, 1 worker
+*** 1.4
+**** limit 6, 1 worker
 synthesis settings:
 | =DEFAULT_LENGTH_LIMIT= |  6 |
 | parallel             | no |
@@ -45,7 +46,7 @@ results (measured in ms):
 |-------------------------------+---------+-----------+---------|
 | python w/ entries opt (div 5) |   0.000 |   975.245 | 975.245 |
 | rust w/ entries opt           | 146.884 |   356.660 | 519.508 |
-*** limit 7, 1 worker
+**** limit 7, 1 worker
 synthesis settings:
 | =DEFAULT_LENGTH_LIMIT= |  7 |
 | parallel             | no |
@@ -57,7 +58,7 @@ results (measured in s):
 |-------------------------------+-------+-----------+-------|
 | python w/ entries opt (div 5) | 0.000 |     4.958 | 4.958 |
 | rust w/ entries opt           | 0.244 |     1.057 | 1.332 |
-*** limit 10, 1 worker
+**** limit 10, 1 worker
 synthesis settings:
 | =DEFAULT_LENGTH_LIMIT= | 10 |
 | parallel             | no |
@@ -70,7 +71,7 @@ results (measured in s):
 | python w/ entries opt (div 5) | 0.000 |    64.426 | 64.426 |
 | rust w/ entries opt           | 0.586 |     2.355 |  3.084 |
 | rust w/ stack machine         | 0.588 |     2.203 |  2.922 |
-*** limit 10, parallel
+**** limit 10, parallel
 synthesis settings:
 | =DEFAULT_LENGTH_LIMIT= |  10 |
 | parallel             | yes |

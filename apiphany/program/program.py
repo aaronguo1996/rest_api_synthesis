@@ -267,7 +267,7 @@ class VarExpr(Expression):
         val = analyzer.lookup_var(self._var)
         if val is None:
             if candidates:
-                print("sampling", self.var, "from", candidates)
+                # print("sampling", self.var, "from", candidates)
                 val = random.choice(candidates)
             else:
                 # sample a value by type
