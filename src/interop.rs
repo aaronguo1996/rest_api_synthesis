@@ -30,7 +30,9 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         // traces: fun -> param_names -> param_val map, response, weight
         traces: HashMap<&str, HashMap<Vec<&str>, Vec<(HashMap<&str, &PyAny>, &PyAny, usize)>>>,
         inputs: Vec<(&str, &PyAny)>,
-    ) -> PyResult<Vec<(ProgIx, usize)>> {
+        target_ix: ProgIx,
+        multiple: bool,
+    ) -> PyResult<Vec<usize>> {
         // First, our imports!
         let program = PyModule::import(py, "program.program")?;
 
@@ -84,7 +86,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
 
         let t = std::time::Instant::now();
         // And run it on our inputs
-        let res = r.run(&new_inputs);
+        let res = r.run(&new_inputs, target_ix, multiple);
         println!("interpret time: {}", t.elapsed().as_micros());
 
         Ok(res)

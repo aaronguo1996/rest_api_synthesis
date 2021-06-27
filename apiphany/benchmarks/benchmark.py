@@ -145,6 +145,33 @@ class Benchmark:
 
         return all_results
 
+    def get_rust_rank(
+        self, entries, configuration, runtime_config, 
+        log_analyzer, solutions):
+        found = False
+        target_ix = 0
+        sol_prog = None
+        print("Total solutions:", len(solutions), flush=True)
+        for rank, res_sol in enumerate(solutions):
+            for tgt_sol in self.solutions:
+                if tgt_sol == res_sol:
+                    found = True
+                    self.latex_entry.rank_no_re = rank
+                    target_ix = rank
+                    sol_prog = tgt_sol
+                    break
+
+            if found:
+                break
+
+        ranks = rust_re(
+            log_analyzer, solutions, entries,
+            list(self.inputs.items()), target_ix,
+            isinstance(self.output, types.ArrayType))
+        sol_prog = sol_prog if len(ranks) > 0 else None
+
+        return ranks, sol_prog
+        
     def get_rank(
         self, entries, configuration, runtime_config, 
         log_analyzer, solutions):
@@ -163,14 +190,6 @@ class Benchmark:
         all_results = self._run_re(
             entries, configuration, runtime_config,
             log_analyzer, solutions)
-
-        tot = 0
-        for i, reses in enumerate(all_results):
-            if any([c < 99999 for x in reses for _, c in x]):
-                print(i, [c for x in reses for _, c in x])
-                tot += 1
-
-        print(tot)
 
         program_ranks = [[] for _ in range(runtime_config.repeat)]
         for i, reps in enumerate(all_results):
@@ -331,12 +350,6 @@ class BenchmarkSuite:
 
                 if not runtime_config.synthesis_only:
                     start = time.time()
-                    # for now, just try to run rust_re
-                    res = rust_re(self._log_analyzer, solutions, entries, list(benchmark.inputs.items()))
-                    # print program and cost, if success
-                    # for pix, cost in res:
-                    #     if cost < 99998:
-                    #         print(solutions[pix], cost)
                     # ranks, sol_prog = benchmark.get_rank(
                     #     entries,
                     #     self._configuration,
@@ -344,6 +357,13 @@ class BenchmarkSuite:
                     #     self._log_analyzer,
                     #     solutions,
                     # )
+                    ranks, sol_prog = benchmark.get_rust_rank(
+                        entries,
+                        self._configuration,
+                        runtime_config,
+                        self._log_analyzer,
+                        solutions,
+                    )
                     end = time.time()
                     print("RE time:", end - start)
 

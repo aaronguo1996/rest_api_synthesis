@@ -29,56 +29,104 @@ impl Runner {
     /// Runs retrospective execution over a set of inputs.
     /// inputs is a map from an input argument name to a list of possible
     /// values for that input.
-    pub fn run(self, inputs: &[(MiniSpur, Vec<Value>)]) -> Vec<(ProgIx, Cost)> {
-        let mut res = Vec::with_capacity(self.progs.len());
-        // let res;
+    pub fn run(self, inputs: &[(MiniSpur, Vec<Value>)], target_ix: ProgIx, multiple: bool) -> Vec<usize> {
+        let mut avgs: Vec<usize> = (0..3).into_par_iter().map(|_exp| {
+            let mut res = Vec::with_capacity(self.progs.len());
+            // let res;
 
-        // TODO: profile loop order
-        // For each program, generate a few random vals and execute
-        self.progs
-            .par_iter()
-            .enumerate()
-            .map(|(ix, prog)| {
-                // res = self.progs.iter().enumerate().map(|(ix, prog)| {
-                let mut costs = Vec::with_capacity(5);
-                (0..5)
-                    .into_par_iter()
-                    .map(|_i| {
-                        // (0..5).into_par_iter().map(|_i| {
-                        let mut env = HashMap::new();
+            self.progs
+                .par_iter()
+                .enumerate()
+                .map(|(ix, prog)| {
+                    // res = self.progs.iter().enumerate().map(|(ix, prog)| {
+                    let mut reses = Vec::with_capacity(5);
+                    (0..5)
+                        .into_par_iter()
+                        .map(|_i| {
+                            // (0..5).into_par_iter().map(|_i| {
+                            let mut env = HashMap::new();
 
-                        // Choose random values for our inputs
-                        let mut rng = tls_rng();
-                        for (input_name, input_vals) in inputs {
-                            env.insert(
-                                *input_name,
-                                input_vals[rng.generate_range(0, input_vals.len() - 1)].clone(),
-                            );
+                            // Choose random values for our inputs
+                            let mut rng = tls_rng();
+                            for (input_name, input_vals) in inputs {
+                                env.insert(
+                                    *input_name,
+                                    input_vals[rng.generate_range(0, input_vals.len() - 1)].clone(),
+                                );
+                            }
+
+                            // Make a new execution environment
+                            let mut ex = ExecEnv::new(&self.arena, prog.start, prog.end, env);
+
+                            // Run RE!
+                            let out = ex.run();
+
+                            out.unwrap_or_else(|| (None, 99999))
+                        })
+                        .collect_into_vec(&mut reses);
+
+                    // Then do analysis on the valid solutions we got
+                    // TODO: perf
+                    let mut all_none = true;
+                    let mut all_singleton = true;
+                    let mut all_multiple = true;
+                    let mut all_empty = true;
+
+                    let mut costs = Vec::with_capacity(5);
+
+                    for (result, cost) in reses {
+                        if let Some(r) = result {
+                            if !(r.as_array().map(|x| x.len() == 0).unwrap_or_else(|| false)) {
+                                all_empty = false;
+                            }
+
+                            let mut rr = &r;
+
+                            all_none = false;
+                            while let Some(ra) = rr.as_array() {
+                                if ra.len() == 1 {
+                                    rr = &ra[0];
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            if rr.is_array() {
+                                all_singleton = false;
+                            } else {
+                                all_multiple = false;
+                            }
+                            
+                            costs.push(cost);
                         }
+                    }
 
-                        // Make a new execution environment
-                        let mut ex = ExecEnv::new(&self.arena, prog.start, prog.end, env);
+                    if all_none {
+                        return (ix, 99999);
+                    }
 
-                        // TODO: do analysis on result value
-                        let out = ex.run();
-                        // TODO
-                        let (_res, cost) = out.unwrap_or_else(|| (None, 99999));
-                        cost
-                    })
-                    .collect_into_vec(&mut costs);
+                    let mut cost_avg = costs.iter().sum::<Cost>() / costs.len();
+                    if all_singleton && multiple {
+                        cost_avg += 25;
+                    } else if all_multiple && !multiple {
+                        cost_avg += 50;
+                    }
 
-                // if costs.iter().any(|c| *c < 99999) {
-                //     println!("{} {:?}", ix, &costs);
-                // }
+                    if all_empty {
+                        cost_avg += 10;
+                    }
 
-                (ix, costs.iter().sum::<Cost>() / costs.len())
-            })
-            .collect_into_vec(&mut res);
-        // }).collect();
+                    (ix, cost_avg)
+                })
+                .collect_into_vec(&mut res);
 
-        println!("{}", res.iter().map(|x| x.1 < 99999).count());
+            // Sort the result by cost and get the cost of the target ix
+            res.sort_by_key(|x| x.1);
+            res.iter().position(|x| x.0 == target_ix).unwrap() + 1
+        }).collect();
 
-        res
+        avgs.sort();
+        avgs
     }
 }
 
@@ -155,8 +203,8 @@ impl<'a> ExecEnv<'a> {
                 // At this point, assume is_bind = false
                 Expr::Singleton => {
                     // Set top element of stack to list.
-                    let l = self.data.last_mut()?;
-                    *l = Value::Array(vec![l.clone()]);
+                    let l = self.data.pop()?;
+                    self.data.push(Value::Array(vec![l]));
 
                     self.ip += 1;
                 }
