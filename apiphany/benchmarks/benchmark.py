@@ -18,6 +18,7 @@ from synthesizer.filtering import retrospective_execute, check_results
 from program.program import ProjectionExpr, AppExpr, FilterExpr
 from synthesizer import parallel
 
+from multiprocessing import cpu_count
 from apiphany import rust_re
 
 class BenchConfig:
@@ -104,7 +105,7 @@ class Benchmark:
         log_analyzer, solutions):
         all_results = []
         
-        with pebble.ThreadPool() as pool:
+        with pebble.ThreadPool(max_workers=4) as pool:
             for i, p in enumerate(solutions):
                 # print(f"{i}/{len(solutions)}", flush=True)
                 # print(p, flush=True)
