@@ -773,7 +773,7 @@ square_benchmarks = [
 square_suite = BenchmarkSuite(
     "configs/square_config.json",
     "Square",
-    square_minimal
+    square_benchmarks
 )
 
 def main():
@@ -791,8 +791,8 @@ def main():
     b = Bencher(
         [
             slack_suite,
-            # stripe_suite,
-            # square_suite,
+            stripe_suite,
+            square_suite,
         ],
         config)
 

@@ -350,20 +350,20 @@ class BenchmarkSuite:
 
                 if not runtime_config.synthesis_only:
                     start = time.time()
-                    ranks, sol_prog = benchmark.get_rank(
-                        entries,
-                        self._configuration,
-                        runtime_config,
-                        self._log_analyzer,
-                        solutions,
-                    )
-                    # ranks, sol_prog = benchmark.get_rust_rank(
+                    # ranks, sol_prog = benchmark.get_rank(
                     #     entries,
                     #     self._configuration,
                     #     runtime_config,
                     #     self._log_analyzer,
                     #     solutions,
                     # )
+                    ranks, sol_prog = benchmark.get_rust_rank(
+                        entries,
+                        self._configuration,
+                        runtime_config,
+                        self._log_analyzer,
+                        solutions,
+                    )
                     end = time.time()
                     print("RE time:", end - start)
 

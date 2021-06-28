@@ -1,9 +1,9 @@
-use crate::{Arena, Expr, ExprIx, Prog, ProgIx, Runner};
+use crate::{Arena, Expr, ExprIx, Prog, ProgIx, Runner, ValueIx, RootSlab};
 use pyo3::{
     prelude::*,
     types::{PyList, PyType},
 };
-use serde_json::{from_str, Value};
+use serde_json::{from_str};
 use smallvec::SmallVec;
 use std::{collections::HashMap, convert::TryInto};
 
@@ -58,12 +58,13 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         };
 
         // Create our arena
+        let mut slab = RootSlab::new();
         let mut arena = Arena::new();
 
         // Then, translate our programs and traces
         let t = std::time::Instant::now();
         let progs = translate_progs(&imports, &progs, &mut arena)?;
-        translate_traces(&imports, traces, &mut arena);
+        translate_traces(&imports, traces, &mut arena, &mut slab);
         println!("py to rs time: {}", t.elapsed().as_micros());
 
         // Then, using the log analyzer, create our inputs
@@ -73,9 +74,9 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
             let vals: Vec<&PyAny> = log_analyzer
                 .call_method("get_values_by_type", (input_type,), None)?
                 .extract()?;
-            let vals: Vec<Value> = vals
+            let vals: Vec<ValueIx> = vals
                 .into_iter()
-                .map(|x| jsonify(dumps, x))
+                .map(|x| jsonify(dumps, x, &mut slab))
                 .collect::<PyResult<Vec<_>>>()?;
 
             new_inputs.push((arena.intern_str(input_name), vals));
@@ -86,7 +87,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
 
         let t = std::time::Instant::now();
         // And run it on our inputs
-        let res = r.run(&new_inputs, target_ix, multiple);
+        let res = r.run(&new_inputs, target_ix, multiple, &slab);
         println!("interpret time: {}", t.elapsed().as_micros());
 
         Ok(res)
@@ -95,17 +96,18 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
     Ok(())
 }
 
-fn jsonify(dumps: &PyAny, x: &PyAny) -> PyResult<Value> {
+fn jsonify(dumps: &PyAny, x: &PyAny, slab: &mut RootSlab) -> PyResult<ValueIx> {
     let json = dumps.call1((x,))?.extract()?;
     let val = from_str(json).unwrap();
 
-    Ok(val)
+    Ok(slab.allocate(val))
 }
 
 fn translate_traces<'p>(
     imports: &Imports<'p>,
     traces: HashMap<&str, HashMap<Vec<&str>, Vec<(HashMap<&str, &PyAny>, &PyAny, usize)>>>,
     arena: &mut Arena,
+    slab: &mut RootSlab,
 ) {
     for (fun, rest) in traces.into_iter() {
         for (param_names, old_vals) in rest.into_iter() {
@@ -119,10 +121,10 @@ fn translate_traces<'p>(
             for (param_nvs, response, weight) in old_vals {
                 let param_values = param_nvs
                     .into_iter()
-                    .map(|(n, v)| (arena.intern_str(n), jsonify(imports.dumps, v).unwrap()))
+                    .map(|(n, v)| (arena.intern_str(n), jsonify(imports.dumps, v, slab).unwrap()))
                     .collect::<hashbrown::HashMap<_, _>>();
 
-                let response = jsonify(imports.dumps, response).unwrap();
+                let response = jsonify(imports.dumps, response, slab).unwrap();
 
                 vals.push((param_values, response, weight));
             }

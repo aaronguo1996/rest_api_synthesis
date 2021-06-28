@@ -90,6 +90,34 @@ results (measured in s):
 | rust w/ jemalloc                   | 0.578 |     1.014 |  1.733 |
 | rust w/ bugfixes (simple choice)   | 0.578 |     3.300 |  4.000 |
 | rust w/ bugfixes (weighted choice) | 0.547 |     9.086 |  9.794 |
+* TODO remaining correctness bugs
+** TODO get input selection on par with py impl
+should improve rankings
+** TODO situations where there are no input values for an input name?
+e.g. 2.3
+** TODO evaluation gets stuck in a loop i think
+2.11, 2.12
+* DONE fix perf bugs
+CLOSED: [2021-06-27 Sun 18:35]
+** DONE larger objects cause perf, not weighted random algo
+CLOSED: [2021-06-25 Fri 13:40]
+** DONE memory alloc?
+CLOSED: [2021-06-27 Sun 18:35]
+improving the allocator used seems to have a very large impact on performance:
+- system to jemalloc improved by 2.5x
+- jemalloc to mimalloc improved by 1.4x
+thus, it stands to reason that a lot of perf could be gained by minimizing the number of allocations we're doing.
+
+in particular, we do have a lot of those "clone" calls in execution, even though in most circumstances we don't need to allocate our own =Value=. =Proj= can just return a reference into an existing =Value=, owned by the
+
+I want a =Cow<'a, BorrowedValue<'a>>= - where =BorrowedValue= is the borrowed value type from simdjson?
+
+We could also do Slab allocation: store all =Value= allocations on a pre-allocated =Slab= in the =Arena= instead of having owned =Values= floating around everywhere, and just store references/keys into this =Slab=. (see =slab= crate and their keys - stack becomes just a stack of keys!)
+
+Even for Vector operations (i.e. bind) - we can just store a vector to =Cow<'a, Value>=!
+
+also: use Bumpalo arena allocation for even faster?
+** TODO profiling
 * DONE get it working lol - test baseline perf!
 CLOSED: [2021-06-20 Sun 15:30]
 fast RE example - 3.1. slow RE example - 1.4
@@ -151,28 +179,11 @@ Instead of having disparate functions =translate_expr=, =translate_prog=, etc., 
 CLOSED: [2021-06-24 Thu 17:26]
 * DONE verify correctness
 CLOSED: [2021-06-24 Thu 17:26]
-* TODO fix perf bugs
-** DONE larger objects cause perf, not weighted random algo
-CLOSED: [2021-06-25 Fri 13:40]
-** TODO memory alloc?
-improving the allocator used seems to have a very large impact on performance:
-- system to jemalloc improved by 2.5x
-- jemalloc to mimalloc improved by 1.4x
-thus, it stands to reason that a lot of perf could be gained by minimizing the number of allocations we're doing.
-
-in particular, we do have a lot of those "clone" calls in execution, even though in most circumstances we don't need to allocate our own =Value=. =Proj= can just return a reference into an existing =Value=, owned by the
-
-I want a =Cow<'a, BorrowedValue<'a>>= - where =BorrowedValue= is the borrowed value type from simdjson?
-
-We could also do Slab allocation: store all =Value= allocations on a pre-allocated =Slab= in the =Arena= instead of having owned =Values= floating around everywhere, and just store references/keys into this =Slab=. (see =slab= crate and their keys - stack becomes just a stack of keys!)
-
-Even for Vector operations (i.e. bind) - we can just store a vector to =Cow<'a, Value>=!
-
-also: use Bumpalo arena allocation for even faster?
-** TODO profiling
-* TODO add =filter_num= stuff
+* DONE add =filter_num= stuff
+CLOSED: [2021-06-27 Sun 18:35]
 run repeats to get rank, run =filter_nums= to get multiple ranks
-* TODO finish complete re pipeline - hook up into rest of program
+* DONE finish complete re pipeline - hook up into rest of program
+CLOSED: [2021-06-27 Sun 18:35]
 * TODO traces structure - move value vec to left side
 this removes the last linear search and means getting traces is just get in a hashmap.
 this requires rolling our own hash impl for Value. we can do that p easy.
@@ -246,103 +257,5 @@ typedef struct {
 basically, =jvp_object= just stores a list of =object_slots=, which is a map from string to value. surprise!
 * DONE try using smallvec for traces?
 CLOSED: [2021-06-26 Sat 18:13]
-* TODO parallelism with rayon
-* TODO what the hell happened to how things were executed before?
-- the whole "randomly get input value" thing. Huh???
-* legacy
-right now, the structure of RE is like this:
-
-- Each type of =Expression= is represented as a subclass of =Expression= - memory allocation is all over the place lol
-- during program execution, the only time we modify env is pushing/popping vars. the only other time we even look at analyzer state is to get traces.
-
-in =DynamicAnalyzer.get_trace=, the code loops through the traces multiple times, progressively filtering down traces which match progressively tighter abstraction levels, up to the desired abstraction level. idk if this is performant? or maybe it'll be even more performant for us with our soa approach.
-
-Ideas for us that we can use:
-
-- Represent an =Expression= as an Enum instead of a bunch of subclasses of a root class - in this way,
-  - Additionally, when we are parsing expressions, we should allocate all of our expressions into a single arena vector, where the children are allocated before the current expression. (Recursive calls etc)
-  - This would allow us to be v cache efficient with exprs!
-  - Alternatively: don't even bother with translating, just execute directly (from Python classes?)
-- Instead of =DynamicAnalysis=, we now have a struct for an execution context which holds the environment and all that
-  - Execution takes one input and one expr
-  - We'll have an execution runner responsible for coordinating running between everything - this would also handle multithreaded/tiled runs and all that
-  - Execution runner should hold Vec/Slab with exprs and traces
-    - or references to those things
-    - some root struct translates everything, responsible for running everything
-- Multithreaded execution - we have a bunch of programs. We have a bunch of inputs we want to check against outputs. This should be TRIVIALLY parallelizable.
-  - Prolly would be aided with tiling, so we don't thrash the cache badly
-  - This indicates that translating Python classes to Rust =Expr= enums, stored in a cache-friendly way in one =Vec=, might be good for performance - if we're repeatedly interpreting a program, might be good to keep the program in cache and keep mem use down.
-  - Might want to pad expr things to 64 bytes to avoid false sharing?
-    - But we're not writing to exprs, just reading. So it shouldn't matter lol
-
-Future things:
-- Bytecode/JIT compilation, if this is still too slow
-
-concrete actions:
-- [X] finish data structure stuff
-  - incl minimal subset of datatypes needed for RE
-    - need less info than for synthesis, which uses LogAnalyzer
-    - we use DynamicAnalyzer
-  - [X] expr
-  - [X] program - list of expr!
-  - [X] trace
-- [X] finish translation logic
-  - [X] expr
-  - [X] trace
-    - we don't even need to translate this?
-    - just read straight from file - reimplement =parse_entries=
-      - [ ] reimpl =analyzer/parser.py=?
-        could just use a har parser (e.g. =har-rs=, etc.)
-      - parse minimal subset of har/TraceEntry needed for RE
-        - see above
-  - [X] program
-- [-] impl re algorithm
-  - [X] start with simple tree walker
-    - impl bind: iterator map!
-  - [ ] proceed to stack machine with code and data stacks
-    - which would be more amenable to parallelism?
-    - but we're alr doin parallelism on a program execution level
-
-*extra parallelism*:
-when evaluating after binding assigns, we can ||ize!
-
-*improvement for expr*:
-have a stack machine as our executor! executing instuctions which modify a stack and a persistent environment
-Var(v): get v from env and push v.
-App(f, n): pop n vars. push f(n) - vector result?
-- Named args?
-  - for each arg, pop off stack, push smth else
-  - new instruction: Arg(Spur), which pushes a spur to the stack
-  - application pops n var names and then n vars
-Proj(x): pop v, push p.v
-Filter(x): pop 2
-- only retain elems in vector that match filter.
-- push result back onto stack
-Assign(x, bool): pop v, assign/bind x = v in env
-- how do we handle binds? answer:
-  - don't actually pop v off stack!
-  - on assign(x, true), get top v
-  - somehow do jumps and all that
-  - instead, a bind is two instructions:
-    - Push index 0 to stack
-    - access and incr
-  - add new instruction: conditional jump
-    - Jump(ip, =arr_len=)
-    - if top of stack < arr len, incr and jump back?
-    - this is a do while loop
-- for each value in popped v:
-  - execute until end
-  - go (jump) back to assign, set value to next item in list.
-  - or, if we have a "code" stack along with our data stack, we could push a "goto ix" to the code stack, and at the end of executing program, pop first elem off code stack, and go there (if not and end of array)
-  - or somehow integrate this with a regular map?
-Probably should have other control instructions: jump and return
-
-the stack machine approach could be better for performance and cache locality and all that:
-https://news.ycombinator.com/item?id=18822369
-https://www.reddit.com/r/learnprogramming/comments/w6i0p/bytecode_execution_vs_ast_walking_speed/c5ax1dw/
-
-stack machine instructions: max 16 bytes. 4 bytes per L1 cache
-
-somehow - connection between this and state machines?
-
-this lets us just execute all instructions of a top-level program in a row.
+* DONE parallelism with rayon
+CLOSED: [2021-06-27 Sun 18:35]
