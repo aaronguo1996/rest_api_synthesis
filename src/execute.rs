@@ -15,26 +15,29 @@ pub struct Runner {
     arena: Arena,
     /// A list of programs stored in the `arena`.
     progs: Vec<Prog>,
+    default_inputs: HashMap<MiniSpur, Vec<ValueIx>>,
 }
 
 impl Runner {
-    pub fn new(mut arena: Arena, progs: Vec<Prog>) -> Self {
+    pub fn new(
+        mut arena: Arena,
+        progs: Vec<Prog>,
+        default_inputs: HashMap<MiniSpur, Vec<ValueIx>>,
+    ) -> Self {
         // Swap arena into read-only mode
         arena = arena.swap_rodeo();
 
-        Self { arena, progs }
+        Self {
+            arena,
+            progs,
+            default_inputs,
+        }
     }
 
     /// Runs retrospective execution over a set of inputs.
     /// inputs is a map from an input argument name to a list of possible
     /// values for that input.
-    pub fn run(
-        self,
-        inputs: &[(MiniSpur, Vec<ValueIx>)],
-        target_ix: ProgIx,
-        multiple: bool,
-        slab: &RootSlab,
-    ) -> Vec<usize> {
+    pub fn run(self, target_ix: ProgIx, multiple: bool, slab: &RootSlab) -> Vec<usize> {
         // Not sure why the list of input solutions would be empty but
         // Apparently it happens lol
         if self.progs.is_empty() {
@@ -50,86 +53,87 @@ impl Runner {
                 self.progs
                     .par_iter()
                     .enumerate()
-                    .map_init(|| ThreadSlab::new(slab), |mut t, (ix, prog)| {
-                        // res = self.progs.iter().enumerate().map(|(ix, prog)| {
-                        let reses: Vec<(Option<ValueIx>, Cost)> = (0..5)
-                            .map(|_i| {
-                                // (0..5).into_par_iter().map(|_i| {
-                                let mut env = HashMap::new();
-
-                                // Choose random values for our inputs
-                                let mut rng = tls_rng();
-                                for (input_name, input_vals) in inputs {
-                                    env.insert(
-                                        *input_name,
-                                        input_vals[rng.generate_range(0, input_vals.len() - 1)],
+                    .map_init(
+                        || ThreadSlab::new(slab),
+                        |mut t, (ix, prog)| {
+                            // res = self.progs.iter().enumerate().map(|(ix, prog)| {
+                            let reses: Vec<(Option<ValueIx>, Cost)> = (0..5)
+                                .map(|_i| {
+                                    // Make a new execution environment
+                                    let mut ex = ExecEnv::new(
+                                        &self.arena,
+                                        prog.start,
+                                        prog.end,
+                                        &self.default_inputs,
                                     );
-                                }
 
-                                // Make a new execution environment
-                                let mut ex =
-                                    ExecEnv::new(&self.arena, prog.start, prog.end, env);
+                                    // Run RE!
+                                    let out = ex.run(&mut t);
 
-                                // Run RE!
-                                let out = ex.run(&mut t);
+                                    out.unwrap_or_else(|| (None, 99999))
+                                })
+                                .collect();
 
-                                out.unwrap_or_else(|| (None, 99999))
-                            })
-                            .collect();
+                            // Then do analysis on the valid solutions we got
+                            // TODO: perf
+                            let mut all_none = true;
+                            let mut all_singleton = true;
+                            let mut all_multiple = true;
+                            let mut all_empty = true;
 
-                        // Then do analysis on the valid solutions we got
-                        // TODO: perf
-                        let mut all_none = true;
-                        let mut all_singleton = true;
-                        let mut all_multiple = true;
-                        let mut all_empty = true;
+                            let mut costs = Vec::with_capacity(5);
 
-                        let mut costs = Vec::with_capacity(5);
-
-                        for (result, cost) in reses {
-                            if let Some(r) = result {
-                                if !(t.get(r).unwrap().as_array().map(|x| x.len() == 0).unwrap_or_else(|| false)) {
-                                    all_empty = false;
-                                }
-
-                                let mut rr = t.get(r).unwrap();
-
-                                all_none = false;
-                                while let Some(ra) = rr.as_array() {
-                                    if ra.len() == 1 {
-                                        rr = t.get(ra[0]).unwrap();
-                                    } else {
-                                        break;
+                            for (result, cost) in reses {
+                                if let Some(r) = result {
+                                    if !(t
+                                        .get(r)
+                                        .unwrap()
+                                        .as_array()
+                                        .map(|x| x.len() == 0)
+                                        .unwrap_or_else(|| false))
+                                    {
+                                        all_empty = false;
                                     }
-                                }
 
-                                if rr.is_array() {
-                                    all_singleton = false;
-                                } else {
-                                    all_multiple = false;
-                                }
+                                    let mut rr = t.get(r).unwrap();
 
-                                costs.push(cost);
+                                    all_none = false;
+                                    while let Some(ra) = rr.as_array() {
+                                        if ra.len() == 1 {
+                                            rr = t.get(ra[0]).unwrap();
+                                        } else {
+                                            break;
+                                        }
+                                    }
+
+                                    if rr.is_array() {
+                                        all_singleton = false;
+                                    } else {
+                                        all_multiple = false;
+                                    }
+
+                                    costs.push(cost);
+                                }
                             }
-                        }
 
-                        if all_none {
-                            return (ix, 99999);
-                        }
+                            if all_none {
+                                return (ix, 99999);
+                            }
 
-                        let mut cost_avg = costs.iter().sum::<Cost>() / costs.len();
-                        if all_singleton && multiple {
-                            cost_avg += 25;
-                        } else if all_multiple && !multiple {
-                            cost_avg += 50;
-                        }
+                            let mut cost_avg = costs.iter().sum::<Cost>() / costs.len();
+                            if all_singleton && multiple {
+                                cost_avg += 25;
+                            } else if all_multiple && !multiple {
+                                cost_avg += 50;
+                            }
 
-                        if all_empty {
-                            cost_avg += 10;
-                        }
+                            if all_empty {
+                                cost_avg += 10;
+                            }
 
-                        (ix, cost_avg)
-                    })
+                            (ix, cost_avg)
+                        },
+                    )
                     .collect_into_vec(&mut res);
 
                 // Sort the result by cost and get the cost of the target ix
@@ -166,14 +170,26 @@ pub struct Frame {
 pub struct ExecEnv<'a> {
     // invocation params
     arena: &'a Arena,
+    default_inputs: &'a HashMap<MiniSpur, Vec<ValueIx>>,
     ret: ExprIx,
 
     // mutating state
+
+    // Pointers
     ip: ExprIx,
     tip: ExprIx,
+
+    // cost
     cost: usize,
+
+    // state flags
+    candidates: bool,
     error: bool,
+
+    // env
     env: HashMap<MiniSpur, ValueIx>,
+
+    // stacks
     data: Vec<ValueIx>,
     call: Vec<Frame>,
 }
@@ -183,16 +199,18 @@ impl<'a> ExecEnv<'a> {
         arena: &'a Arena,
         start: ExprIx,
         ret: ExprIx,
-        env: HashMap<MiniSpur, ValueIx>,
+        default_inputs: &'a HashMap<MiniSpur, Vec<ValueIx>>,
     ) -> Self {
         Self {
             arena,
+            default_inputs,
             ret,
 
             ip: start,
             tip: 0,
             error: false,
-            env,
+            candidates: false,
+            env: HashMap::new(),
             cost: 0,
             data: Vec::with_capacity(8),
             call: Vec::with_capacity(8),
@@ -201,7 +219,7 @@ impl<'a> ExecEnv<'a> {
 
     // TODO: deal with clones. probably some Cow stuff
     pub fn run(&mut self, heap: &mut ThreadSlab) -> Option<(Option<ValueIx>, Cost)> {
-        loop {
+        'outer: loop {
             // println!(
             //     "{} {:?} err: {} stack: {} tip: {} cost: {}",
             //     self.ip,
@@ -224,9 +242,54 @@ impl<'a> ExecEnv<'a> {
                 }
                 Expr::Var(v) => {
                     // Get var out of heap and push to stack.
-                    self.data.push(self.env.get(v)?.clone());
+                    let v = if let Some(val) = self.env.get(v) {
+                        *val
+                    } else {
+                        // If we're trying to reference an undefined variable, it must
+                        // be an input value.
+
+                        // If self.candidates has been set, use the top of the stack
+                        // to populate this variable. Otherwise, use the default inputs.
+                        if self.candidates {
+                            let last = self.data.last()?;
+                            if let Some(choices) = heap.get(*last).unwrap().as_array() {
+                                // Choose one of these values for our input
+                                let mut rng = tls_rng();
+                                let choice = choices[rng.generate_range(0, choices.len() - 1)];
+                                self.env.insert(*v, choice);
+
+                                choice
+                            } else {
+                                self.env.insert(*v, *last);
+
+                                *last
+                            }
+                        } else {
+                            // Choose random values for our input
+
+                            let mut rng = tls_rng();
+                            let choices = self.default_inputs.get(v)?;
+
+                            // Check that we have choices lmao
+                            if choices.is_empty() {
+                                return None;
+                            }
+
+                            let choice = choices[rng.generate_range(0, choices.len() - 1)];
+                            self.env.insert(*v, choice);
+
+                            choice
+                        }
+                    };
+
+                    self.data.push(v);
 
                     self.cost += 1;
+                    self.ip += 1;
+                }
+                Expr::SetCandidates => {
+                    self.candidates = true;
+
                     self.ip += 1;
                 }
                 Expr::Assign(v) => {
@@ -235,24 +298,17 @@ impl<'a> ExecEnv<'a> {
 
                     self.ip += 1;
                 }
-                Expr::Filter(f) => {
-                    // filter(lhs.f == rhs)
+                Expr::Filter => {
+                    // when we translated the filter, the lhs already has the
+                    // projection. so we just check if lhs == rhs.
                     // Pop rhs and lhs off the stack.
                     let rhs = self.data.pop()?;
                     let lhs = self.data.pop()?;
 
-                    // Filter. if lhs.v == rhs, we good.
-                    let mut tmp = heap.get(lhs).unwrap();
-                    for path in self.arena.get_str(f).split('.') {
-                        if let Some(p) = tmp.get(path, &heap) {
-                            tmp = p.1;
-                        } else {
-                            self.set_error();
-                            continue;
-                        }
-                    }
+                    // Reset candidates flag.
+                    self.candidates = false;
 
-                    if tmp.deep_eq(heap.get(rhs)?, &heap) {
+                    if heap.get(lhs)?.deep_eq(heap.get(rhs)?, &heap) {
                         // TODO: variables??
                         // Filter doesn't push anything to the stack
 
@@ -267,8 +323,13 @@ impl<'a> ExecEnv<'a> {
                     let x = self.data.pop()?;
                     let mut tmp = (x, heap.get(x)?);
                     for path in self.arena.get_str(f).split('.') {
-                        tmp = tmp.1.get(path, &heap)?;
-                        self.cost += 1;
+                        if let Some(v) = tmp.1.get(path, &heap) {
+                            tmp = v;
+                            self.cost += 1;
+                        } else {
+                            self.set_error();
+                            continue 'outer;
+                        }
                     }
                     self.data.push(tmp.0);
 
@@ -394,8 +455,7 @@ impl<'a> ExecEnv<'a> {
                             // println!("{} {} {:?}", cur, len, self.data.len());
                             self.push_var(
                                 bound,
-                                heap
-                                    .get(self.data[stack_ix])
+                                heap.get(self.data[stack_ix])
                                     .unwrap()
                                     .as_array()
                                     .unwrap()
@@ -452,8 +512,7 @@ impl<'a> ExecEnv<'a> {
                                 self.cost = cost + bind_cost;
 
                                 // Push list to stack and loop again!
-                                self.data
-                                    .push(heap.push_rval(RValue::Array(res.into())));
+                                self.data.push(heap.push_rval(RValue::Array(res.into())));
                             }
 
                             // Set tip to top of stack
@@ -623,80 +682,80 @@ impl Arena {
 //     rng.generate_range(0, weights.len())
 // }
 
-// fn weighted_choice2(weights: &[usize]) -> usize {
-//     let mut rng = tls_rng();
-//     let cumulative = weights
-//         .iter()
-//         .scan(0, |state, &x| {
-//             *state = *state + x;
-//             Some(*state)
-//         })
-//         .collect::<SmallVec<[usize; 16]>>();
-//     let last = cumulative[cumulative.len() - 1];
-//
-//     let target = rng.generate_range(0, last);
-//
-//     match cumulative.binary_search(&target) {
-//         Ok(i) => i,
-//         Err(i) => i,
-//     }
-// }
-
 fn weighted_choice(weights: &[usize]) -> usize {
-    let n = weights.len();
-    let avg = weights.iter().sum::<usize>() / n;
-
-    let mut smalls: SmallVec<[(usize, usize); 16]> = weights
-        .iter()
-        .copied()
-        .enumerate()
-        .filter(|(_, w)| *w < avg)
-        .collect();
-    let mut larges: SmallVec<[(usize, usize); 16]> = weights
-        .iter()
-        .copied()
-        .enumerate()
-        .filter(|(_, w)| *w >= avg)
-        .collect();
-
-    let mut aliases: SmallVec<[(usize, usize); 16]> = smallvec::smallvec![(0, 0); n];
-
-    let mut small = smalls.pop();
-    let mut large = larges.pop();
-
-    while let (Some(s), Some(mut l)) = (small, large) {
-        aliases[s.0] = (s.1, l.0);
-        l = (l.0, l.1 - (avg - s.1));
-        if l.1 < avg {
-            small = Some(l);
-            large = larges.pop();
-        } else {
-            small = smalls.pop();
-            large = Some(l);
-        }
-    }
-
-    while let Some(s) = small {
-        aliases[s.0] = (avg, 0);
-        small = smalls.pop();
-    }
-
-    while let Some(l) = large {
-        aliases[l.0] = (n, 0);
-        large = larges.pop();
-    }
-
-    // Actually choose!
     let mut rng = tls_rng();
-    let r2 = rng.generate_range(0, avg);
-    let r1 = r2 * n / avg;
-    // let r1 = rng.generate_range(0, n);
+    let cumulative = weights
+        .iter()
+        .scan(0, |state, &x| {
+            *state = *state + x;
+            Some(*state)
+        })
+        .collect::<SmallVec<[usize; 16]>>();
+    let last = cumulative[cumulative.len() - 1];
 
-    let (lim, other) = aliases[r1];
-    if r1 < lim {
-        // if r2 < lim {
-        r1
-    } else {
-        other
+    let target = rng.generate_range(0, last);
+
+    match cumulative.binary_search(&target) {
+        Ok(i) => i,
+        Err(i) => i,
     }
 }
+
+// fn weighted_choice(weights: &[usize]) -> usize {
+//     let n = weights.len();
+//     let avg = weights.iter().sum::<usize>() / n;
+//
+//     let mut smalls: SmallVec<[(usize, usize); 16]> = weights
+//         .iter()
+//         .copied()
+//         .enumerate()
+//         .filter(|(_, w)| *w < avg)
+//         .collect();
+//     let mut larges: SmallVec<[(usize, usize); 16]> = weights
+//         .iter()
+//         .copied()
+//         .enumerate()
+//         .filter(|(_, w)| *w >= avg)
+//         .collect();
+//
+//     let mut aliases: SmallVec<[(usize, usize); 16]> = smallvec::smallvec![(0, 0); n];
+//
+//     let mut small = smalls.pop();
+//     let mut large = larges.pop();
+//
+//     while let (Some(s), Some(mut l)) = (small, large) {
+//         aliases[s.0] = (s.1, l.0);
+//         l = (l.0, l.1 - (avg - s.1));
+//         if l.1 < avg {
+//             small = Some(l);
+//             large = larges.pop();
+//         } else {
+//             small = smalls.pop();
+//             large = Some(l);
+//         }
+//     }
+//
+//     while let Some(s) = small {
+//         aliases[s.0] = (avg, 0);
+//         small = smalls.pop();
+//     }
+//
+//     while let Some(l) = large {
+//         aliases[l.0] = (n, 0);
+//         large = larges.pop();
+//     }
+//
+//     // Actually choose!
+//     let mut rng = tls_rng();
+//     let r2 = rng.generate_range(0, avg);
+//     let r1 = r2 * n / avg;
+//     // let r1 = rng.generate_range(0, n);
+//
+//     let (lim, other) = aliases[r1];
+//     if r1 < lim {
+//         // if r2 < lim {
+//         r1
+//     } else {
+//         other
+//     }
+// }

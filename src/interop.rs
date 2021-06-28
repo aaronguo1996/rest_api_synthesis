@@ -1,9 +1,10 @@
-use crate::{Arena, Expr, ExprIx, Prog, ProgIx, Runner, ValueIx, RootSlab};
+use crate::{Arena, Expr, ExprIx, Prog, ProgIx, RootSlab, Runner, ValueIx};
+use hashbrown::HashMap as HBMap;
 use pyo3::{
     prelude::*,
     types::{PyList, PyType},
 };
-use serde_json::{from_str};
+use serde_json::from_str;
 use smallvec::SmallVec;
 use std::{collections::HashMap, convert::TryInto};
 
@@ -68,7 +69,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         println!("py to rs time: {}", t.elapsed().as_micros());
 
         // Then, using the log analyzer, create our inputs
-        let mut new_inputs = Vec::new();
+        let mut new_inputs = HBMap::new();
 
         for (input_name, input_type) in inputs {
             let vals: Vec<&PyAny> = log_analyzer
@@ -79,15 +80,15 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
                 .map(|x| jsonify(dumps, x, &mut slab))
                 .collect::<PyResult<Vec<_>>>()?;
 
-            new_inputs.push((arena.intern_str(input_name), vals));
+            new_inputs.insert(arena.intern_str(input_name), vals);
         }
 
         // Create our Runner!
-        let r = Runner::new(arena, progs);
+        let r = Runner::new(arena, progs, new_inputs);
 
         let t = std::time::Instant::now();
         // And run it on our inputs
-        let res = r.run(&new_inputs, target_ix, multiple, &slab);
+        let res = r.run(target_ix, multiple, &slab);
         println!("interpret time: {}", t.elapsed().as_micros());
 
         Ok(res)
@@ -121,7 +122,12 @@ fn translate_traces<'p>(
             for (param_nvs, response, weight) in old_vals {
                 let param_values = param_nvs
                     .into_iter()
-                    .map(|(n, v)| (arena.intern_str(n), jsonify(imports.dumps, v, slab).unwrap()))
+                    .map(|(n, v)| {
+                        (
+                            arena.intern_str(n),
+                            jsonify(imports.dumps, v, slab).unwrap(),
+                        )
+                    })
                     .collect::<hashbrown::HashMap<_, _>>();
 
                 let response = jsonify(imports.dumps, response, slab).unwrap();
@@ -228,12 +234,14 @@ fn translate_expr<'p>(
         .unwrap()
         .is_instance(py_expr)?
     {
-        // Translate the base object and the value
+        // Translate lhs
         translate_expr(imports, py_expr.getattr("_obj")?, arena)?;
-        translate_expr(imports, py_expr.getattr("_val")?, arena)?;
-        // Then intern the field and alloc expr
+        // Intern the field and push projection and set candidate
         let field = arena.intern_str(py_expr.getattr("_field")?.extract()?);
-        Ok(arena.alloc_expr(Expr::Filter(field)))
+        arena.alloc_expr(Expr::Proj(field));
+        arena.alloc_expr(Expr::SetCandidates);
+        translate_expr(imports, py_expr.getattr("_val")?, arena)?;
+        Ok(arena.alloc_expr(Expr::Filter))
     } else if imports
         .assign_expr
         .cast_as::<PyType>()

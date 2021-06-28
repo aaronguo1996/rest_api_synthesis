@@ -10,10 +10,10 @@ mod interop;
 mod trace;
 mod value;
 
-pub use execute::{Runner, Arena};
+pub use execute::{Arena, Runner};
 pub use expr::{Expr, ExprIx, Prog, ProgIx};
 pub use trace::Traces;
-pub use value::{RValue, ValueIx, RootSlab, ThreadSlab};
+pub use value::{RValue, RootSlab, ThreadSlab, ValueIx};
 
 pub use interop::apiphany;
 

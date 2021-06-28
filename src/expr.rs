@@ -11,11 +11,14 @@ pub type ExprIx = usize;
 pub enum Expr {
     Var(MiniSpur),
     Assign(MiniSpur),
-    Filter(MiniSpur),
     Proj(MiniSpur),
     Singleton,
     Ret,
-    
+
+    // Filtering
+    Filter,
+    SetCandidates,
+
     // Function application
     App(u16),
     Push(MiniSpur),

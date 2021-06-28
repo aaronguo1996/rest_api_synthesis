@@ -91,12 +91,46 @@ results (measured in s):
 | rust w/ bugfixes (simple choice)   | 0.578 |     3.300 |  4.000 |
 | rust w/ bugfixes (weighted choice) | 0.547 |     9.086 |  9.794 |
 * TODO remaining correctness bugs
-** TODO get input selection on par with py impl
-should improve rankings
-** TODO situations where there are no input values for an input name?
+** DONE implement input selection based on filter results to improve rankings
+CLOSED: [2021-06-28 Mon 15:47]
+FilterExpr's execute method is how they can have such consistent results - they only pick filter values that work!
+
+pass in =candidates= to evaluation, strings it along.
+basically the way it works is, for a filter expression if lhs.f == rhs:
+- evaluates lhs.
+- projects f into lhs.
+- if lhs.f is a list
+  - evaluate rhs, with the list of candidates to choose from for unknown vars being the values in lhs.f
+  - since input values aren't given a value in the env anymore, in the VarExpr.execute method, it'll look to the candidates to see what value the var should have. these candidates just so happen to be successful filter values!
+    - this is then propagated with =analyzer.push_var(self._var, val)=
+
+unfortunately, doing this requires being able to know that we're in a filter, first evaluate the left child, then do some pathing logic, then evaluate the right child, which isn't really possible in our approach. (we always evaluate children first, then parent)
+
+what we can do:
+- for inputs, have them evaluate to "holes." for filters, if the rhs is a hole (don't worry about "contains" since the technique would fail if this were true), set var value to random choice.
+  - alternatively - new method for values that lets them "collect holes"
+
+on varexpr first use smth smth
+*** concretely
+inputs no longer have their values pre-assigned.
+
+if we encounter a varexpr and the var does not exist, it must be an input (we don't have to deal with non-well-formed programs!). this evaluates to a =RValue::Thunk=.
+
+in executing a filter expression, if the right hand side is a thunk, set it to one of the values of the left hand side.
+
+in all other cases, thunks evaluate to a random value of the input type.
+*** concretely 2
+add new translation for filter which lets execution know to assign unknown variable to (top of stack).(projection).
+** DONE situations where there are no input values for an input name?
+CLOSED: [2021-06-28 Mon 15:47]
 e.g. 2.3
-** TODO evaluation gets stuck in a loop i think
+** DONE evaluation gets stuck in a loop i think
+CLOSED: [2021-06-28 Mon 15:47]
 2.11, 2.12
+** TODO get input selection on par with py impl
+* TODO rvalue hashconsing?
+- might speed up equality since every unique term occurs only once
+  memory drastically lowered, at the cost of perf prolly
 * DONE fix perf bugs
 CLOSED: [2021-06-27 Sun 18:35]
 ** DONE larger objects cause perf, not weighted random algo
@@ -184,10 +218,6 @@ CLOSED: [2021-06-27 Sun 18:35]
 run repeats to get rank, run =filter_nums= to get multiple ranks
 * DONE finish complete re pipeline - hook up into rest of program
 CLOSED: [2021-06-27 Sun 18:35]
-* TODO traces structure - move value vec to left side
-this removes the last linear search and means getting traces is just get in a hashmap.
-this requires rolling our own hash impl for Value. we can do that p easy.
-or just call =value.as_str()= and hash that lmao
 * TODO additional stack machine opts
 ** TODO remove need for "env"? during translation, compile env access into stack access
 basically, we know at "compile-time" how many pushes and pops we're gonna have at every point. so during compile-time, instead of having a heap var, just have an offset from the top of the stack.
