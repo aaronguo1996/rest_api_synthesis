@@ -7,7 +7,6 @@ def retrospective_execute(
     log_analyzer, entries, skip_fields, 
     re_bias_type, program):
     # print(program, flush=True)
-    random.seed(3)
     dynamic_analyzer = dynamic.DynamicAnalysis(
         entries,
         skip_fields,
@@ -55,13 +54,10 @@ def check_results(results, multiple):
 
     # check multiplicity match
     score_avg = sum(scores) / len(scores)
-    if all_singleton and multiple:
+    if ((all_singleton and multiple) or
+        (all_multiple and not multiple)):
         # print("expects multiple values, but this program does not match the multiplicity")
         score_avg = score_avg + 25.0
-
-    if all_multiple and not multiple:
-        # print("expects single value, but this program does not match the multiplicity")
-        score_avg = score_avg + 50.0
 
     # penalty on all empty results
     if all_empty:

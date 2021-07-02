@@ -17,7 +17,7 @@ import cProfile
 from benchmarks.benchmark import BenchConfig, Benchmark, BenchmarkSuite, Bencher
 from schemas import types
 from analyzer import dynamic
-from program.program import (Program, ProjectionExpr, FilterExpr,
+from program.program import (Program, ProjectionExpr, EquiExpr,
                             AssignExpr, VarExpr, AppExpr, ListExpr)
 
 bias_type_args = {
@@ -100,7 +100,7 @@ slack_benchmarks = [
                 [
                     AssignExpr("x0", AppExpr("/conversations.list_GET", []), False),
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
-                    FilterExpr(VarExpr("x1"), "name", VarExpr("channel_name"), False),
+                    EquiExpr(ProjectionExpr(VarExpr("x1"), "name"), VarExpr("channel_name")),
                     AssignExpr("x2", AppExpr("/conversations.members_GET", [("channel", ProjectionExpr(VarExpr("x1"), "id"))]), False),
                     AssignExpr("x3", ProjectionExpr(VarExpr("x2"), "members"), True),
                     AssignExpr("x4", AppExpr("/users.profile.get_GET", [("user", VarExpr("x3"))]), False),
@@ -132,7 +132,7 @@ slack_benchmarks = [
         "1.3",
         "Get all unread message for a user",
         {
-            "user_id": types.PrimString("defs_user_id")
+            "user_id": types.PrimString("defs_bot_id")
         },
         types.ArrayType(None, types.ArrayType(None, types.SchemaObject("objs_message"))),
         [
@@ -152,7 +152,7 @@ slack_benchmarks = [
         "1.4",
         "Get all messages associated with a user",
         {
-            "user_id": types.PrimString("defs_user_id"),
+            "user_id": types.PrimString("defs_bot_id"),
             "ts": types.PrimString("defs_ts"),
         },
         types.ArrayType(None, types.SchemaObject("objs_message")),
@@ -164,7 +164,7 @@ slack_benchmarks = [
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
                     AssignExpr("x2", AppExpr("/conversations.history_GET", [("channel", ProjectionExpr(VarExpr("x1"), "id")), ("oldest", VarExpr("ts"))]), False),
                     AssignExpr("x3", ProjectionExpr(VarExpr("x2"), "messages"), True),
-                    FilterExpr(VarExpr("x3"), "user", VarExpr("user_id"), False),
+                    EquiExpr(ProjectionExpr(VarExpr("x3"), "user"), VarExpr("user_id")),
                     VarExpr("x3")
                 ]
             )
@@ -174,7 +174,7 @@ slack_benchmarks = [
         "1.5",
         "Create a channel and invite users",
         {
-            "user_ids": types.ArrayType(None, types.PrimString("defs_user_id")),
+            "user_ids": types.ArrayType(None, types.PrimString("defs_bot_id")),
             "channel_name": types.PrimString("objs_conversation.name"),
         },
         types.ArrayType(None, types.SchemaObject("objs_conversation")),
@@ -222,7 +222,7 @@ slack_benchmarks = [
                 [
                     AssignExpr("x0", AppExpr("/conversations.list_GET", []), False),
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
-                    FilterExpr(VarExpr("x1"), "name", VarExpr("channel"), False),
+                    EquiExpr(ProjectionExpr(VarExpr("x1"), "name"), VarExpr("channel")),
                     AssignExpr("x2", AppExpr("/chat.postMessage_POST", [("channel", ProjectionExpr(VarExpr("x1"), "id"))]), False),
                     ProjectionExpr(VarExpr("x2"), "message")
                 ]
@@ -270,7 +270,7 @@ stripe_benchmarks = [
             "customer_id": types.PrimString("customer.id"),
             "cur": types.PrimString("fee.currency"),
             "amt": types.PrimInt("price.unit_amount"),
-            "pm_type": types.PrimString("source.type"),
+            "pm_type": types.PrimString("token.type"),
         },
         types.SchemaObject("payment_intent"),
         [
@@ -330,7 +330,7 @@ stripe_benchmarks = [
     ),
     Benchmark(
         "2.5",
-        "sending invoice",
+        "Sending invoice to a customer",
         {
             "customer_id": types.PrimString("customer.id"),
             "price_id": types.PrimString("plan.id"),
@@ -354,14 +354,14 @@ stripe_benchmarks = [
         {
             "email": types.PrimString("customer.email"),
         },
-        types.SchemaObject("customer"),
+        types.ArrayType(None, types.SchemaObject("customer")),
         [
             Program(
                 ["email"],
                 [
                     AssignExpr("x0", AppExpr("/v1/customers_GET", []), False),
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "data"), True),
-                    FilterExpr(VarExpr("x1"), "email", VarExpr("email"), False),
+                    EquiExpr(ProjectionExpr(VarExpr("x1"), "email"), VarExpr("email")),
                     VarExpr("x1")
                 ]
             )
@@ -430,26 +430,15 @@ stripe_benchmarks = [
         },
         types.ArrayType(None, types.PrimString("customer.email")),
         [
-            # [
-            #     "\\product_id -> {",
-            #     "let x1 = /v1/subscriptions_GET()",
-            #     "x2 <- x1.data",
-            #     "x3 <- x2.items",
-            #     "if x3.price.product = product_id",
-            #     "let x4 = /v1/customers/{customer}_GET(customer=x2.customer_id)",
-            #     "return x4",
-            #     "}"
-            # ],
-            # types do not flow in this benchmark
             Program(
                 ["product_id"],
                 [
                     AssignExpr("x1", AppExpr("/v1/subscriptions_GET", []), False),
                     AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "data"), True),
-                    AssignExpr("x3", ProjectionExpr(VarExpr("x2"), "items"), True),
-                    FilterExpr(VarExpr("x3"), "price.product", VarExpr("product_id"), False),
-                    AssignExpr("x4", AppExpr("/v1/customers/{customer}_GET", [("customer", ProjectionExpr(VarExpr("x1"), "customer"))]), False),
-                    VarExpr("x4")
+                    AssignExpr("x3", ProjectionExpr(ProjectionExpr(VarExpr("x2"), "items"), "data"), True),
+                    EquiExpr(ProjectionExpr(ProjectionExpr(VarExpr("x3"), "price"), "product"), VarExpr("product_id")),
+                    AssignExpr("x4", AppExpr("/v1/customers/{customer}_GET", [("customer", ProjectionExpr(VarExpr("x2"), "customer"))]), False),
+                    ProjectionExpr(VarExpr("x4"), "email")
                 ]
             )
         ]
@@ -576,9 +565,9 @@ square_benchmarks = [
                 [
                     AssignExpr("x0", AppExpr("/v2/subscriptions/search_POST", []), False),
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "subscriptions"), True),
-                    FilterExpr(VarExpr("x1"), "customer_id", VarExpr("customer_id"), False),
-                    FilterExpr(VarExpr("x1"), "location_id", VarExpr("location_id"), False),
-                    FilterExpr(VarExpr("x1"), "plan_id", VarExpr("plan_id"), False),
+                    EquiExpr(ProjectionExpr(VarExpr("x1"), "customer_id"), VarExpr("customer_id")),
+                    EquiExpr(ProjectionExpr(VarExpr("x1"), "location_id"), VarExpr("location_id")),
+                    EquiExpr(ProjectionExpr(VarExpr("x1"), "plan_id"), VarExpr("plan_id")),
                     VarExpr("x1")
                 ]
             ),
@@ -587,9 +576,9 @@ square_benchmarks = [
                 [
                     AssignExpr("x0", AppExpr("/v2/subscriptions/search_POST", []), False),
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "subscriptions"), True),
-                    FilterExpr(VarExpr("x1"), "location_id", VarExpr("location_id"), False),
-                    FilterExpr(VarExpr("x1"), "customer_id", VarExpr("customer_id"), False),
-                    FilterExpr(VarExpr("x1"), "plan_id", VarExpr("plan_id"), False),
+                    EquiExpr(ProjectionExpr(VarExpr("x1"), "location_id"), VarExpr("location_id")),
+                    EquiExpr(ProjectionExpr(VarExpr("x1"), "customer_id"), VarExpr("customer_id")),
+                    EquiExpr(ProjectionExpr(VarExpr("x1"), "plan_id"), VarExpr("plan_id")),
                     VarExpr("x1")
                 ]
             )
@@ -608,8 +597,8 @@ square_benchmarks = [
                 [
                     AssignExpr("x0", AppExpr("/v2/catalog/search_POST", []), False),
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
-                    AssignExpr("x2", ListExpr(VarExpr("tax_id")), False),
-                    FilterExpr(VarExpr("x1"), "item_data.tax_ids", VarExpr("x2"), False),
+                    AssignExpr("x2", ProjectionExpr(ProjectionExpr(VarExpr("x1"), "item_data"), "tax_ids"), True),
+                    EquiExpr(VarExpr("x2"), VarExpr("tax_id")),
                     VarExpr("x1")
                 ]
             )
@@ -647,7 +636,7 @@ square_benchmarks = [
                     AssignExpr("x0", AppExpr("/v2/catalog/list_GET", []), False),
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
                     AssignExpr("x2", VarExpr("names"), True),
-                    FilterExpr(VarExpr("x1"), "item_data.name", VarExpr("x2"), False),
+                    EquiExpr(ProjectionExpr(ProjectionExpr(VarExpr("x1"), "item_data"), "name"), VarExpr("x2")),
                     AssignExpr("x3", AppExpr("/v2/catalog/batch-delete_DELETE", [("object_ids[0]", VarExpr("x1"))]), False),
                     VarExpr("x3")
                 ]
@@ -762,7 +751,16 @@ square_benchmarks = [
                 [
                     AssignExpr("x0", AppExpr("/v2/customers_GET", []), False),
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "customers"), True),
-                    FilterExpr(VarExpr("x1"), "given_name", VarExpr("name"), False),
+                    EquiExpr(ProjectionExpr(VarExpr("x1"), "given_name"), VarExpr("name")),
+                    VarExpr("x1")
+                ]
+            ),
+            Program(
+                ["name"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/customers/search_POST", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "customers"), True),
+                    EquiExpr(ProjectionExpr(VarExpr("x1"), "given_name"), VarExpr("name")),
                     VarExpr("x1")
                 ]
             )

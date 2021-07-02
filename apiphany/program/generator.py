@@ -66,9 +66,9 @@ class ProgramGenerator:
             p = Program(list(inputs.keys()), body)
             p._expressions = p.reachable_expressions({})
             if self._filter_by_names(self._signatures, transitions, inputs, p):
-                # print(p, flush=True)
-                p = p.lift(self._name_counters)
-                if p not in programs:
+                # print("Before lifting", p, flush=True)
+                p = p.lift(self._name_counters, self._signatures, target)
+                if p is not None and p not in programs:
                     # print(p)
                     # print(p.to_expression({}))
                     programs.append(p)

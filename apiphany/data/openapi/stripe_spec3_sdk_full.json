@@ -45112,6 +45112,10 @@
                     "type": "string"
                   }
                 },
+                "required": [
+                  "amount",
+                  "currency"
+                ],
                 "type": "object"
               }
             }
@@ -70926,6 +70930,9 @@
                     "x-stripeBypassValidation": true
                   }
                 },
+                "required": [
+                  "type"
+                ],
                 "type": "object"
               }
             }
@@ -73240,7 +73247,9 @@
                   }
                 },
                 "required": [
-                  "currency"
+                  "currency",
+                  "product",
+                  "unit_amount"
                 ],
                 "type": "object"
               }
@@ -76612,6 +76621,9 @@
                     "type": "boolean"
                   }
                 },
+                "required": [
+                  "charge"
+                ],
                 "type": "object"
               }
             }

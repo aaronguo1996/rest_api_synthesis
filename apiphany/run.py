@@ -79,11 +79,11 @@ def create_entries(doc, config, ascription):
             for entry in typed_entries:
                 # store results
                 entry_name = make_entry_name(entry.endpoint, entry.method)
-                if endpoint == "/v2/orders/batch-retrieve":
-                    print(entry_name)
-                    print("*******", [(p.arg_name, p.path, p.is_required, p.type) for p in entry.parameters])
-                    p = entry.response
-                    print("*******", (p.arg_name, p.path, p.is_required, p.type))
+                # if endpoint == "/conversations.members":
+                #     print(entry_name)
+                #     print("*******", [(p.arg_name, p.path, p.is_required, p.type) for p in entry.parameters])
+                #     p = entry.response
+                #     print("*******", (p.arg_name, p.path, p.is_required, p.type))
                 entries[entry_name] = entry
 
     return entries
@@ -259,30 +259,9 @@ def main():
             solutions = synthesizer.run_n(
                 [],
                 {
-                    # "payment": types.PrimString("source.id"),
-                    # "price": types.SchemaObject("price", None)
-                    # "subscription": types.PrimString("subscription.id"),
-                    # "customer": types.PrimString("customer.id"),
-                    # "price_id": types.PrimString("plan.id")
-                    # "product_ids": types.ArrayType(None, types.PrimString("product.id")),
-                    # "user_id": types.PrimString("defs_user_id")
-                    # "location_id": types.PrimString("Location.id"),
-                    # "transaction_id": types.PrimString("Order.id"),
-                    # "fulfillments": types.ArrayType(None, types.SchemaObject("OrderFulfillment")),
-                    # "email": types.PrimString("objs_conversation.name"),
-                    # "location_id": types.PrimString("Location.id"),
-                    # "plan_id": types.PrimString("CatalogObject.id"),
-                    # "subscription": types.SchemaObject("Subscription")
-                    # "user_ids": types.ArrayType(None, types.PrimString("defs_user_id")),
-                    "channel_id": types.PrimString("defs_channel"),
-                    "ts_id": types.PrimString("defs_ts"),
+                    "channel_name": types.PrimString("objs_conversation.name")
                 },
-                [
-                    # types.SchemaObject("objs_message"),
-                    # types.ArrayType(None, types.SchemaObject("bank_account.last4")),
-                    # types.ArrayType(None, types.PrimString("Order"))
-                    types.ArrayType(None, types.SchemaObject("objs_message")),
-                ],
+                [types.ArrayType(None, types.PrimString("objs_user.profile.email"))],
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOL_NUM]
             )
 

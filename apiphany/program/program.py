@@ -7,6 +7,7 @@ import program.utils as utils
 import consts
 from analyzer.utils import name_to_path
 from schemas import types
+from openapi import defs
 
 class Expression:
     def __init__(self, typ, signature):
@@ -187,7 +188,7 @@ class AppExpr(Expression):
 
         return exprs, let_var
 
-    def lift(self, counter):
+    def lift(self, counter, signatures):
         sig = self.signature
         sig_params = sig.parameters
         
@@ -301,7 +302,7 @@ class VarExpr(Expression):
     def sizes(self):
         return 0, 0, 1
 
-    def lift(self, signatures, counter):
+    def lift(self, counter, signatures):
         return [], self
 
 class ProjectionExpr(Expression):
@@ -399,7 +400,7 @@ class ProjectionExpr(Expression):
         
         return exprs, proj_expr
 
-    def lift(self, counter):
+    def lift(self, counter, signatures):
         proj_sig = self.signature
         
         param = proj_sig.parameters[0]
@@ -431,6 +432,50 @@ class ProjectionExpr(Expression):
     def sizes(self):
         endpoints, projections, sz = self._obj.sizes()
         return endpoints, (projections + 1), (sz + 1)
+
+class EquiExpr(Expression):
+    def __init__(self, lhs, rhs, typ=None, sig=None):
+        super().__init__(typ, sig)
+        self._lhs = lhs
+        self._rhs = rhs
+
+    def __str__(self):
+        return f"if {self._lhs} = {self._rhs}"
+
+    def __eq__(self, other):
+        if not isinstance(other, EquiExpr):
+            return NotImplemented
+
+        return (
+            self._lhs == other._lhs and
+            self._rhs == other._rhs
+        )
+
+    def apply_subst(self, subst):
+        return EquiExpr(
+            self._lhs.apply_subst(subst),
+            self._rhs.apply_subst(subst)
+        )
+
+    def collect_exprs(self):
+        return self._lhs.collect_exprs() + self._rhs.collect_exprs() + [self]
+
+    def execute(self, analyzer, _):
+        lhs, lscore = self._lhs.execute(analyzer, [])
+        candidates = [lhs]
+        rhs, rscore = self._rhs.execute(analyzer, candidates)
+        return lhs == rhs, lscore + rscore
+
+    def pretty(self, hang):
+        return consts.SPACE * hang + f"if {self._lhs} = {self._rhs}"
+
+    def lift(self, counter, signatures):
+        raise NotImplementedError
+
+    def get_vars(self):
+        lhs_vars = self._lhs.get_vars()
+        rhs_vars = self._rhs.get_vars()
+        return lhs_vars.union(rhs_vars)
 
 class FilterExpr(Expression):
     def __init__(self, obj, field, val, is_val_list, typ=None, sig=None):
@@ -592,22 +637,66 @@ class FilterExpr(Expression):
         val_eps, val_prs, val_sz = self._val.sizes()
         return (obj_eps + val_eps), (obj_prs + val_prs), (obj_sz + val_sz + 1)
 
-    def lift(self, counter):
+    def _expand_field(self, counter, signatures, field, in_typ, in_obj):
+        proj_name = f"projection({in_typ}, {field})"
+        trans_name = make_entry_name(proj_name, "")
+        # print("getting signature for", trans_name)
+        proj_sig = signatures.get(trans_name)
+        if proj_sig is None:
+            # print("cannot find projection", trans_name)
+            return [], None
+
+        proj_expr = ProjectionExpr(
+            in_obj, field, 
+            proj_sig.response.type, 
+            proj_sig)
+        binds, proj_expr = proj_expr.lift(counter, signatures)
+        let_x = counter.get("x", 0)
+        counter["x"] += 1
+        expr = AssignExpr(f"x{let_x}", proj_expr, False)
+        binds.append(expr)
+        var = VarExpr(f"x{let_x}", proj_sig.response.type)
+        return binds, var
+
+    def lift(self, counter, sigs):
+        """
+        First expand the field into projections, then do the actual lifting
+        """
+        # print("lifting", self)
         filter_sig = self.signature
+        # print("filter sig", [p.type for p in filter_sig.parameters], filter_sig.response.type)
         
         obj_param = filter_sig.parameters[0]
         obj_binds, obj_x = insert_binds(counter, self._obj, obj_param.type)
-        obj = VarExpr(obj_x, obj_param.type)
+        obj_expr = VarExpr(obj_x, obj_param.type)
+
+        fields = self._field.split('.')
+        in_typ = obj_param.type
+        in_obj = obj_expr
+        for f in fields:
+            if f == defs.INDEX_ANY:
+                continue
+
+            in_typ = in_typ.ignore_array()
+            binds, in_obj = self._expand_field(counter, sigs, f, in_typ, in_obj)
+
+            # when previous expand step fails
+            if in_obj is None:
+                return [], None, None
+
+            obj_binds += binds
+            in_typ = in_obj.type
 
         val_param = filter_sig.parameters[1]
+        # print("val param type", val_param.type, flush=True)
+        lhs_binds, lhs_x = insert_binds(counter, in_obj, val_param.type)
+        in_obj = VarExpr(lhs_x, val_param.type)
         val_binds, val_x = insert_binds(counter, self._val, val_param.type)
         val = VarExpr(val_x, val_param.type)
 
-        filter_expr = FilterExpr(
-            obj, self._field, val,
-            filter_sig.response.type, filter_sig)
+        filter_expr = EquiExpr(in_obj, val)
 
-        return (obj_binds + val_binds), filter_expr
+        return (obj_binds + lhs_binds + val_binds), filter_expr, obj_expr
 
 class ListExpr(Expression):
     def __init__(self, expr, typ=None, sig=None):
@@ -649,7 +738,7 @@ class ListExpr(Expression):
         item_eps, item_prs, item_sz = self._obj.sizes()
         return item_eps, item_prs, item_sz + 1
 
-    def lift(self, counter):
+    def lift(self, counter, signatures):
         raise NotImplementedError
 
 class AssignExpr(Expression):
@@ -750,14 +839,18 @@ class AssignExpr(Expression):
         else:
             return endpoints, projections, sz
 
-    def lift(self, counter):
-        binds, rhs = self._rhs.lift(counter)
-        # print(type(rhs))
-        if isinstance(rhs, FilterExpr):
+    def lift(self, counter, signatures):
+        if isinstance(self._rhs, FilterExpr):
+            binds, rhs, obj = self._rhs.lift(counter, signatures)
+            if rhs is None:
+                return None
+
             binds.append(rhs)
-            expr = AssignExpr(self._lhs, rhs._obj, False)
+            expr = AssignExpr(self._lhs, obj, False)
         else:
+            binds, rhs = self._rhs.lift(counter, signatures)
             expr = AssignExpr(self._lhs, rhs, False)
+        
         binds.append(expr)
         return binds
 
@@ -955,15 +1048,20 @@ class Program:
     def assign_type(self, t):
         self._expressions[-1].type = t
 
-    def lift(self, counter):
-        # self._expressions = self.reachable_expressions({})
-
+    def lift(self, counter, signatures, target):
         exprs = []
         for expr in self._expressions:
             if isinstance(expr, AssignExpr):
-                exprs += expr.lift(counter)
-            else:
-                exprs.append(expr)
+                lifted_exprs = expr.lift(counter, signatures)
+                if lifted_exprs is None:
+                    return None
+
+                exprs += lifted_exprs
+            else: # return statement
+                # FIXME: is this correct?
+                binds, x = insert_binds(counter, expr, target.ignore_array())
+                exprs += binds
+                exprs.append(VarExpr(x, target))
 
         # print(exprs)
         program = Program(self._inputs, exprs)
@@ -1007,6 +1105,13 @@ class Program:
                     val = vals
                 else:
                     analyzer.push_var(expr.var, val)
+                    val, sub_cost = self._execute_exprs(exprs[1:], analyzer)
+                    cost += sub_cost
+            elif isinstance(expr, EquiExpr):
+                val, cost = expr.execute(analyzer, [])
+                if val is None or val == False:
+                    return None, consts.MAX_COST
+                else:
                     val, sub_cost = self._execute_exprs(exprs[1:], analyzer)
                     cost += sub_cost
             else:

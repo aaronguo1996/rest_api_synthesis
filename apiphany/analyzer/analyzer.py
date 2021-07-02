@@ -92,6 +92,7 @@ class DSU:
 class LogAnalyzer:
     def __init__(self):
         self.value_to_param = {}
+        self.type_to_param = {}
         self.dsu = DSU()
         self.type_fields = {}
         self.type_partitions = {}
@@ -231,16 +232,26 @@ class LogAnalyzer:
             self.dsu.union(param, param)
             return
 
+        # merge by value
         if param.value not in self.value_to_param:
             self.value_to_param[param.value] = param
 
         root = self.value_to_param[param.value]
+        self.dsu.union(root, param)
 
-        # v = param.value
-        # if isinstance(v, str) and ("re_" == v[:3] or "ch_" == v[:3]):            
-        #     print("Adding", param.value, param.func_name, param.path, param.type)
-        #     print(get_representative(self.dsu.get_group(root)))
+        # merge by type
+        param_typ = str(param.type)
+        if (param_typ == defs.TYPE_BOOL or
+            param_typ == defs.TYPE_INT or
+            param_typ == defs.TYPE_STRING or
+            param_typ == defs.TYPE_NUM or
+            param_typ == defs.TYPE_OBJECT):
+            return
+            
+        if param_typ not in self.type_to_param:
+            self.type_to_param[param_typ] = param
 
+        root = self.type_to_param[param_typ]
         self.dsu.union(root, param)
 
     def analysis_result(self):
@@ -268,23 +279,23 @@ class LogAnalyzer:
                 rep = group[0].arg_name
 
             # for debug
-            # if rep == "CatalogObject.id":
-            #     group_params = []
-            #     for param in group:
-            #         if param.type is not None:
-            #             group_params.append((
-            #                 param.func_name, 
-            #                 param.method, 
-            #                 param.path, 
-            #                 param.value, 
-            #                 param.type,
-            #                 param.type.aliases
-            #             ))
+            if rep == "customer":
+                group_params = []
+                for param in group:
+                    if param.type is not None:
+                        group_params.append((
+                            param.func_name, 
+                            param.method, 
+                            param.path, 
+                            param.value, 
+                            param.type,
+                            param.type.aliases
+                        ))
 
-            #     for p in group_params:
-            #         print(p)
+                for p in group_params:
+                    print(p)
 
-            #     print("==================")
+                print("==================")
 
     def to_json(self):
         groups = self.analysis_result()
@@ -397,14 +408,6 @@ class LogAnalyzer:
         return descendants
 
     def get_values_by_type(self, typ):
-        # params = self.dsu._parents.keys()
-        # values = set()
-        # for param in params:
-        #     if param.type and param.type.name == typ.name:
-        #         values = values.union(self.dsu.get_value_bank(param))
-
-        # values = list(values) + self.type_values.get(str(typ), [])
-
         return list(self.value_map.get(str(typ), []))
 
     def index_values_by_type(self):
@@ -413,7 +416,7 @@ class LogAnalyzer:
         for param in params:
             if param.type:
                 typs = param.type.aliases
-                typs.add(str(param.type))
+                typs = typs.union(set([str(param.type)]))
                 for typ in typs:
                     if typ not in value_map:
                         value_map[typ] = set()
@@ -441,9 +444,6 @@ class LogAnalyzer:
             items = [param.type.item]
         else:
             items = [param.type]
-        
-        if str(param.type) == "[CatalogObject.item_data.tax_ids]":
-            print("Trying to find type for parameter", param, flush=True)
 
         params = self.dsu._parents.keys()
         for p in params:
@@ -460,22 +460,18 @@ class LogAnalyzer:
                 if same_type_name(p, tmp_param):
                     has_same_name = True
 
-            # if str(p.type) == "CatalogObject.id" or str(p.type) == "CatalogItem.tax_ids":
-            #     print(p.type.aliases, flush=True)
-
             if p == param or has_same_name:
-                if str(param.type) == "[CatalogObject.item_data.tax_ids]":
-                    print("found parameter", p, flush=True)
-
                 group = self.dsu.get_group(p)
                 rep = get_representative(group)
 
                 if rep is not None:
-                    # if str(param.type) == "invoice.charge, charge":
-                    #     print("Setting type", rep)
+                    # if param.type.name is not None:
+                    #     param.type.aliases.add(param.type.name)
                     param.type.name = rep
 
                     if isinstance(param.type, types.ArrayType):
+                        # if param.type.item.name is not None:
+                        #     param.type.item.aliases.add(param.type.item.name)
                         param.type.item.name = rep
 
                 break
@@ -490,30 +486,43 @@ class LogAnalyzer:
         Args:
             param: the request/response parameter to be splitted
         """
-        # if (param.type and param.type.name is not None and
-        #     re.search(r'^/.*_response$', param.type.name)):
-        #     return param
-        
-        params = self.dsu._parents.keys()
-        for p in params:
-            if p.func_name == "/chat.update" and param.func_name == "/chat.update":
-                print("p", p.method, p.arg_name, p.array_level, p.path)
-                print("param", param.method, param.arg_name, param.array_level, param.path)
-                print(p==param)
-
-            if p == param:
-                group = self.dsu.get_group(p)
-                rep = get_representative(group)
-                if rep is not None:
-                    param.type.name = rep
-                break
-        
-        if (param.type.name == defs.TYPE_BOOL or
-            param.type.name == defs.TYPE_INT or
-            param.type.name == defs.TYPE_STRING or
-            param.type.name == defs.TYPE_NUM or
-            param.type.name == defs.TYPE_OBJECT):
-            param.type.name = str(param) # defs.TYPE_UNK
+        # if param.func_name == "/conversations.members":
+        #     print("finding type for parameter", param)
+        param_typ = param.type
+        if isinstance(param_typ, types.ArrayType):
+            param_item = Parameter(
+                param.method,
+                defs.INDEX_ANY,
+                param.func_name,
+                param.path + [defs.INDEX_ANY],
+                param.is_required,
+                param.array_level + 1,
+                param_typ.get_item(),
+                None)
+            param_item = self.set_type(param_item)
+            param.type.item = param_item.type
+        else:
+            params = self.dsu._parents.keys()
+            for p in params:
+                if p == param:
+                    # if param.func_name == "/conversations.members":
+                    #     print("found parameter", p)
+                    group = self.dsu.get_group(p)
+                    rep = get_representative(group)
+                    if rep is not None:
+                        # if param.type.name is not None:
+                        #     param.type.aliases.add(param.type.name)
+                        param.type.name = rep
+                        # if param.func_name == "/conversations.members":
+                        #     print("found parameter type", rep)
+                    break
+            
+            if (param.type.name == defs.TYPE_BOOL or
+                param.type.name == defs.TYPE_INT or
+                param.type.name == defs.TYPE_STRING or
+                param.type.name == defs.TYPE_NUM or
+                param.type.name == defs.TYPE_OBJECT):
+                param.type.name = str(param) # defs.TYPE_UNK
 
         return param
 
