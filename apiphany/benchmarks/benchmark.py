@@ -165,6 +165,9 @@ class Benchmark:
             if found:
                 break
 
+        if not found:
+            return [], None
+
         ranks = rust_re(
             log_analyzer, solutions, entries,
             list(self.inputs.items()), target_ix,

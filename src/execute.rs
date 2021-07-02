@@ -2,6 +2,7 @@ use crate::{Expr, ExprIx, Prog, ProgIx, RValue, RootSlab, ThreadSlab, Traces, Va
 use hashbrown::HashMap;
 use lasso::{MiniSpur, Rodeo, RodeoResolver};
 use nanorand::{tls_rng, RNG};
+use rand::prelude::*;
 use rayon::prelude::*;
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryInto;
@@ -44,7 +45,7 @@ impl Runner {
             return vec![];
         }
 
-        let mut avgs: Vec<usize> = (0..3)
+        let mut avgs: Vec<usize> = (0..5)
             .into_par_iter()
             .map(|_exp| {
                 let mut res = Vec::with_capacity(self.progs.len());
@@ -56,7 +57,6 @@ impl Runner {
                     .map_init(
                         || ThreadSlab::new(slab),
                         |mut t, (ix, prog)| {
-                            // res = self.progs.iter().enumerate().map(|(ix, prog)| {
                             let reses: Vec<(Option<ValueIx>, Cost)> = (0..5)
                                 .map(|_i| {
                                     // Make a new execution environment
@@ -100,13 +100,14 @@ impl Runner {
                                     all_none = false;
                                     while let Some(ra) = rr.as_array() {
                                         if ra.len() == 1 {
-                                            rr = t.get(ra[0]).unwrap();
+                                            let mut rng = tls_rng();
+                                            rr = t.get(ra[rng.generate_range(0, ra.len() - 1)]).unwrap();
                                         } else {
                                             break;
                                         }
                                     }
 
-                                    if rr.is_array() {
+                                    if rr.is_array() && rr.as_array().unwrap().len() > 1 {
                                         all_singleton = false;
                                     } else {
                                         all_multiple = false;
@@ -254,6 +255,7 @@ impl<'a> ExecEnv<'a> {
                             let last = self.data.last()?;
                             if let Some(choices) = heap.get(*last).unwrap().as_array() {
                                 // Choose one of these values for our input
+                                // TODO: flatten list
                                 let mut rng = tls_rng();
                                 let choice = choices[rng.generate_range(0, choices.len() - 1)];
                                 self.env.insert(*v, choice);
