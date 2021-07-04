@@ -79,11 +79,11 @@ def create_entries(doc, config, ascription):
             for entry in typed_entries:
                 # store results
                 entry_name = make_entry_name(entry.endpoint, entry.method)
-                # if endpoint == "/conversations.members":
-                #     print(entry_name)
-                #     print("*******", [(p.arg_name, p.path, p.is_required, p.type) for p in entry.parameters])
-                #     p = entry.response
-                #     print("*******", (p.arg_name, p.path, p.is_required, p.type))
+                if endpoint == "/conversations.history":
+                    print(entry_name)
+                    print("*******", [(p.arg_name, p.path, p.is_required, p.type) for p in entry.parameters])
+                    p = entry.response
+                    print("*******", (p.arg_name, p.path, p.is_required, p.type))
                 entries[entry_name] = entry
 
     return entries
@@ -259,9 +259,12 @@ def main():
             solutions = synthesizer.run_n(
                 [],
                 {
-                    "channel_name": types.PrimString("objs_conversation.name")
+                    "product_name": types.PrimString("product.name"),
+                    "customer_id": types.PrimString("customer.id"),
+                    "currency": types.PrimString("fee.currency"),
+                    "unit_amount": types.PrimInt("plan.amount"),
                 },
-                [types.ArrayType(None, types.PrimString("objs_user.profile.email"))],
+                [types.ArrayType(None, types.PrimString("invoiceitem"))],
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOL_NUM]
             )
 

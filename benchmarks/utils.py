@@ -16,8 +16,26 @@ def prep_exp_dir(config):
 
     return exp_dir
 
+def update_type(skip_fields, entries, endpoints):
+    for e in entries:
+        entry_def = endpoints.get(e.endpoint).get(e.method.upper())
+        if entry_def is None:
+            raise Exception(f"{e.endpoint} {e.method.upper()} is not found")
+
+        for param in e.parameters:
+            if param.arg_name in skip_fields:
+                continue
+
+            for doc_param in entry_def.parameters:
+                if doc_param.arg_name == param.arg_name:
+                    match_param = doc_param
+                    break
+
+            param.type = match_param.type
+
 def parse_entries(configuration, exp_dir, base_path, endpoints):
     trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
+    skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
     if not os.path.exists(trace_file):
         print("Parsing OpenAPI document...")
         # entries = None
@@ -27,7 +45,7 @@ def parse_entries(configuration, exp_dir, base_path, endpoints):
             base_path, endpoints)
         entries = log_parser.parse_entries(
             configuration[consts.KEY_ANALYSIS][consts.KEY_UNINTERESTING],
-            configuration.get(consts.KEY_SKIP_FIELDS),
+            skip_fields,
         )
         # if configuration[consts.KEY_DEBUG]:
         #     # write entries to log file
@@ -40,6 +58,8 @@ def parse_entries(configuration, exp_dir, base_path, endpoints):
     else:
         with open(trace_file, 'rb') as f:
             entries = pickle.load(f)
+
+        update_type(skip_fields, entries, endpoints)
 
     return entries
 
@@ -101,7 +121,7 @@ def index_entries(entries, skip_fields):
 
         all_params = []
         for param in e.parameters:
-            params = param.flatten_ad_hoc_by_value()
+            params = param.flatten_ad_hoc_by_value(skip_fields)
             all_params += params
         e.parameters = all_params
 

@@ -23,6 +23,7 @@ class Synthesizer:
         self._unique_entries = {}
         self._entries = entries
         self._program_generator = ProgramGenerator({})
+        self._programs = {}
         # flags
         self._expand_group = config[consts.KEY_SYNTHESIS][consts.KEY_EXPAND_GROUP]
         self._block_perms = config[consts.KEY_SYNTHESIS][consts.KEY_BLOCK_PERM]
@@ -96,6 +97,11 @@ class Synthesizer:
 
     def _generate_solutions(self, i, inputs, outputs, result, time):
         programs = []
+
+        # if tuple(result) in self._perms:
+        #     print("duplicate program, excluded", flush=True)
+        #     return programs, [list(range(len(result)))]
+
         groups = self._expand_groups(result) 
         for r in itertools.product(*groups):
             programs += self._program_generator.generate_program(
@@ -104,37 +110,46 @@ class Synthesizer:
 
         # print(len(programs), flush=True)
 
-        all_perms = []
-        for p in programs:
-            # print(p.to_expression({}))
-            # write solutions to file
-            self._write_solution(i, time, p)
+        # all_perms = []
+        # for p in programs:
+        #     # print(p.to_expression({}))
+        #     # write solutions to file
+        #     self._write_solution(i, time, p)
 
-            # generate all topological sorts for blocking
-            if self._block_perms:
-                perms = self._get_topo_sorts(p)
-                all_perms += perms
+        #     # generate all topological sorts for blocking
+        #     if self._block_perms:
+        #         perms = self._get_topo_sorts(p)
+        #         all_perms += perms
 
-        # convert permutations into indices
-        perm_indices = []
-        if self._block_perms:
-            for perms in all_perms:
-                indices = []
-                for tr in perms:
-                    for idx, r in enumerate(result):
-                        if tr == r[:len(tr)]:
-                            indices.append(idx)
-                            break
+        # # convert permutations into indices
+        # perm_indices = []
+        # if self._block_perms:
+        #     for perms in all_perms:
+        #         indices = []
+        #         for tr in perms:
+        #             for idx, r in enumerate(result):
+        #                 if tr == r[:len(tr)]:
+        #                     indices.append(idx)
+        #                     break
 
-                if len(indices) == len(result):
-                    perm_indices.append(indices)
+        #         if len(indices) == len(result):
+        #             perm_indices.append(indices)
+        #             permuted = [result[i] for i in indices]
+        #             print("adding", permuted, flush=True)
+        #             self._perms.add(tuple(permuted))
                 
 
-        # print("Get perms", perm_indices, flush=True)
-        if not perm_indices:
-            perm_indices = [list(range(len(result)))]
+        # # print("Get perms", perm_indices, flush=True)
+        # if not perm_indices:
+        #     perm_indices = [list(range(len(result)))]
 
-        self._serialize_solutions(i, programs)
+        # self._serialize_solutions(i, programs)
+        if i not in self._programs:
+            self._programs[i] = set()
+
+        self._programs[i] = self._programs[i].union(set(programs))
+
+        perm_indices = [list(range(len(result)))]
 
         return programs, perm_indices
 
@@ -187,15 +202,15 @@ class Synthesizer:
         while len(solutions) < n:
             result = self._encoder.solve()
             while result is not None:
-                print("Find path", result, flush=True)
+                # print("Find path", result, flush=True)
                 programs, perms = self._generate_solutions(
                     0, inputs, outputs, result, 
                     time.time() - start
                 )
-                print("get programs", len(programs), flush=True)
+                # print("get programs", len(programs), flush=True)
                 # print(programs[:3])
                 solutions = solutions.union(set(programs))
-                print("get solutions", len(solutions), flush=True)
+                # print("get solutions", len(solutions), flush=True)
                 if len(solutions) >= n:
                     break
 

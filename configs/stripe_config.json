@@ -27,14 +27,14 @@
         "timeout_per_request": 60,
         "iterations": 0,
         "plot_every": 10,
-        "max_opt_params": 0
+        "max_opt_params": 2
     },
     "synthesis": {
         "expand_group": true,
         "block_perms": true,
         "solver_type": "petri net ILP",
         "solver_number": 4,
-        "solution_number": 700,
+        "solution_number": 600,
         "enable_prefilter": false
     },
     "endpoints": [
@@ -54,7 +54,14 @@
         "ok",
         "topic",
         "x-*",
-        "expand"
+        "expand",
+        "created",
+        "lt",
+        "gt",
+        "lte",
+        "gte",
+        "limit",
+        "risk_score"
     ],
     "blacklist": [
         "/v1/search",

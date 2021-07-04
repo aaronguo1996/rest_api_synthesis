@@ -1,5 +1,6 @@
 from collections import defaultdict
 import concurrent.futures as cf
+import multiprocessing
 import os
 import pebble
 import time
@@ -9,7 +10,7 @@ from synthesizer.ilp_encoder import ILPetriEncoder
 from synthesizer.petrinet_encoder import PetriNetEncoder
 import consts
 
-def run_encoder(synthesizer, inputs, outputs, path_len):
+def run_encoder(synthesizer, inputs, outputs, path_len, solutions):
     input_map = defaultdict(int)
     for _, typ in inputs.items():
         typ_name = str(typ.ignore_array())
@@ -42,7 +43,7 @@ def run_encoder(synthesizer, inputs, outputs, path_len):
             f.write("\n")
             f.write(str(len(encoder._net.transition())))
 
-    solutions = set()
+    solution_set = set()
     start = time.time()
     path = encoder.get_length_of(path_len, input_map, output_map)
     while path is not None:
@@ -53,21 +54,33 @@ def run_encoder(synthesizer, inputs, outputs, path_len):
         programs, perms = synthesizer._generate_solutions(
             path_len, inputs, outputs, path, end - start
         )
-        solutions = solutions.union(set(programs))
-        if programs is not None:
-            encoder.block_prev(perms)
-            path = encoder.solve()
+
+        for p in set(programs):
+            if p not in solution_set:
+                solution_set.add(p)
+                solutions.put(p)
+
+        # solution_set = solution_set.union(set(programs))
+        
+        encoder.block_prev(perms)
+        path = encoder.solve()
 
     print("Finished encoder running for path length", path_len, 
         "after time", time.time() - start, flush=True)
 
-def spawn_encoders(synthesizer, inputs, outputs, solver_num, timeout=100):
+def spawn_encoders(synthesizer, inputs, outputs, solver_num, timeout=60):
+    m = multiprocessing.Manager()
+    all_solutions = []
+    for i in range(consts.DEFAULT_LENGTH_LIMIT + 1):
+        solutions = m.Queue()
+        all_solutions.append(solutions)
+
     with pebble.ProcessPool() as pool:
         futures = []
         for i in range(consts.DEFAULT_LENGTH_LIMIT + 1):
             future = pool.schedule(
                 run_encoder, 
-                args=(synthesizer, inputs, outputs, i),
+                args=(synthesizer, inputs, outputs, i, all_solutions[i]),
                 timeout=timeout,
                 )
             futures.append(future)
@@ -79,3 +92,17 @@ def spawn_encoders(synthesizer, inputs, outputs, solver_num, timeout=100):
         except cf.TimeoutError:
             pass
             # print(f"Killed path length {i} due to timeout")
+
+    for i, progs in enumerate(all_solutions):
+        # print(i, progs.qsize(), flush=True)
+        prog_list = []
+        while not progs.empty():
+            item = progs.get_nowait()
+            if item is None:
+                break
+
+            prog_list.append(item)
+            
+        # progs.task_done()
+
+        synthesizer._serialize_solutions(i, prog_list)

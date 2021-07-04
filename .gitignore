@@ -254,3 +254,7 @@ dist
 
 # we probably won't need to include any tex file, remove this if I'm wrong
 *.tex
+
+pyvenv.cfg
+Cargo.lock
+lib64

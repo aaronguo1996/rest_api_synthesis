@@ -144,6 +144,9 @@ class ObjectType(BaseType):
 
     @staticmethod
     def is_schema_type(expected_type):
+        if not isinstance(expected_type, dict):
+            return None
+
         typ = expected_type.get(defs.DOC_PROPERTIES)
         if typ is not None:
             return typ
@@ -214,6 +217,9 @@ class ArrayType(BaseType):
 
     @staticmethod
     def is_array_type(expected_type):
+        if not isinstance(expected_type, dict):
+            return None
+
         typ = expected_type.get(defs.DOC_PROPERTIES, expected_type)
         if (defs.DOC_ITEMS in typ and
             typ.get(defs.DOC_TYPE, None) == defs.TYPE_ARRAY):
@@ -262,10 +268,18 @@ class UnionType(BaseType):
         if self.name is not None:
             return self.name
         else:
+            for item in self.items:
+                name = str(item)
+                if name != "None":
+                    return name
+
             return str(self.items[0])
 
     @staticmethod
     def is_union_type(expected_type):
+        if not isinstance(expected_type, dict):
+            return None
+
         return (
             expected_type.get(defs.DOC_ONEOF) or
             expected_type.get(defs.DOC_ANYOF) or
@@ -316,6 +330,9 @@ class UnionType(BaseType):
         return UnionType(self.name, items)
 
 def construct_prim_type(name, schema):
+    if not isinstance(schema, dict):
+        return PrimString(name=name)
+        
     typ = schema.get(defs.DOC_TYPE)
     ref = schema.get(defs.DOC_REF)
     if ref is not None:
@@ -345,7 +362,8 @@ def construct_type(name, schema):
     array_schema = ArrayType.is_array_type(schema)
     if array_schema is not None:
         item_schema = array_schema.get(defs.DOC_ITEMS)
-        item_type = construct_type(f"{name}.{defs.INDEX_ANY}", item_schema)
+        item_name = None if name is None else f"{name}.{defs.INDEX_ANY}"
+        item_type = construct_type(item_name, item_schema)
         ret_type = ArrayType(name, item_type)
 
     if ret_type is None:
@@ -360,7 +378,6 @@ def construct_type(name, schema):
 
     if ret_type is None:
         object_schema = ObjectType.is_schema_type(schema)
-        required_fields = schema.get(defs.DOC_REQUIRED, [])
         if object_schema is not None:
             fields = {}
             for k, v in object_schema.items():
@@ -368,6 +385,7 @@ def construct_type(name, schema):
                 field_type = construct_type(field_name, v)
                 fields[k] = field_type
 
+            required_fields = schema.get(defs.DOC_REQUIRED, [])
             ret_type = ObjectType(name, fields, required_fields)
         else:
             ret_type = construct_prim_type(name, schema)

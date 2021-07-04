@@ -46,6 +46,15 @@ class DSU:
             return
 
         xr, yr = self.find(x), self.find(y)
+        # xr_rep = get_representative(self.get_group(xr))
+        # yr_rep = get_representative(self.get_group(yr))
+        # if ((xr_rep == "plan.amount" and yr_rep == "line_item.period.end") or
+        #     (yr_rep == "plan.amount" and xr_rep == "line_item.period.end")):
+        #     return
+
+        # if (xr_rep == "plan.amount" or yr_rep == "plan.amount"):
+        #     print(x, x.value, xr_rep, y, y.value, yr_rep, flush=True)
+
         self._values[xr].add(x.value)
         self._values[yr].add(y.value)
 
@@ -224,13 +233,23 @@ class LogAnalyzer:
         if not param.value:
             return
         
+        if isinstance(param.type, types.PrimInt):
+            param.value = int(param.value)
+
+        if isinstance(param.type, types.PrimNum):
+            param.value = float(param.value)
+
         # integers and booleans for merge 
         # but add them as separate nodes, they are meaningless
-        if ((isinstance(param.value, int)) or
+        if ((isinstance(param.value, int) and (param.value <= 1000)) or
+            (isinstance(param.value, float) and (param.value <= 1000)) or
             isinstance(param.value, bool) or
             "balance_transaction.source" in str(param.type)):
             self.dsu.union(param, param)
             return
+
+        # if isinstance(param.value, int):
+        #     print(param)
 
         # merge by value
         if param.value not in self.value_to_param:
@@ -252,6 +271,12 @@ class LogAnalyzer:
             self.type_to_param[param_typ] = param
 
         root = self.type_to_param[param_typ]
+        # if param_typ == "plan.trial_period_days":
+        #     print("param", param, param.value, type(param.type))
+        #     print("root", root, root.value, root.type)
+        # if param.value == 1621889723 or param.value == 1621890030:
+        #     print("*******", param, param.value, param.type, "merging", root.type)
+
         self.dsu.union(root, param)
 
     def analysis_result(self):
@@ -279,7 +304,7 @@ class LogAnalyzer:
                 rep = group[0].arg_name
 
             # for debug
-            if rep == "customer":
+            if rep == "oldest_/chat.scheduledMessages.list_GET_oldest" or rep == "defs_ts":
                 group_params = []
                 for param in group:
                     if param.type is not None:

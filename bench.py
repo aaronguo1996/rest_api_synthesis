@@ -238,30 +238,30 @@ stripe_benchmarks = [
             )
         ]
     ),
+    # Benchmark(
+    #     "2.2",
+    #     "Charge a saved card given customer id",
+    #     {
+    #         "customer_id": types.PrimString("customer.id"),
+    #         "cur": types.PrimString("fee.currency"),
+    #         "amt": types.PrimInt("price.unit_amount"),
+    #         "pm_type": types.PrimString("token.type"),
+    #     },
+    #     types.SchemaObject("payment_intent"),
+    #     [
+    #         Program(
+    #             ["customer_id", "cur", "amt", "pm_type"],
+    #             [
+    #                 AssignExpr("x1", AppExpr("/v1/payment_methods_GET", [("customer", VarExpr("customer_id")), ("type", VarExpr("pm_type"))]), False),
+    #                 AssignExpr("x2", AppExpr("/v1/payment_intents_POST", [("customer", VarExpr("customer_id")), ("payment_method", ProjectionExpr(VarExpr("x1"), "id")), ("currency", VarExpr("cur")), ("amount", VarExpr("amt"))]), False),
+    #                 AssignExpr("x3", AppExpr("/v1/payment_intents/{intent}/confirm", [("intent", ProjectionExpr(VarExpr("x2"), "id"))]), False),
+    #                 VarExpr("x3")
+    #             ]
+    #         ),
+    #     ]
+    # ),
     Benchmark(
         "2.2",
-        "Charge a saved card given customer id",
-        {
-            "customer_id": types.PrimString("customer.id"),
-            "cur": types.PrimString("fee.currency"),
-            "amt": types.PrimInt("price.unit_amount"),
-            "pm_type": types.PrimString("token.type"),
-        },
-        types.SchemaObject("payment_intent"),
-        [
-            Program(
-                ["customer_id", "cur", "amt", "pm_type"],
-                [
-                    AssignExpr("x1", AppExpr("/v1/payment_methods_GET", [("customer", VarExpr("customer_id")), ("type", VarExpr("pm_type"))]), False),
-                    AssignExpr("x2", AppExpr("/v1/payment_intents_POST", [("customer", VarExpr("customer_id")), ("payment_method", ProjectionExpr(VarExpr("x1"), "id")), ("currency", VarExpr("cur")), ("amount", VarExpr("amt"))]), False),
-                    AssignExpr("x3", AppExpr("/v1/payment_intents/{intent}/confirm", [("intent", ProjectionExpr(VarExpr("x2"), "id"))]), False),
-                    VarExpr("x3")
-                ]
-            ),
-        ]
-    ),
-    Benchmark(
-        "2.3",
         "Subscribe to multiple items",
         {
             "customer_id": types.PrimString("customer.id"),
@@ -282,13 +282,13 @@ stripe_benchmarks = [
         ]
     ),
     Benchmark(
-        "2.4",
+        "2.3",
         "Create a product and invoice a customer",
         {
             "product_name": types.PrimString("product.name"),
             "customer_id": types.PrimString("customer.id"),
             "currency": types.PrimString("fee.currency"),
-            "unit_amount": types.PrimInt("unit_amount_/v1/prices_POST_unit_amount"),
+            "unit_amount": types.PrimInt("plan.amount"),
         },
         types.SchemaObject("invoiceitem"),
         [
@@ -303,28 +303,28 @@ stripe_benchmarks = [
             )
         ]
     ),
+    # Benchmark(
+    #     "2.5",
+    #     "Sending invoice to a customer",
+    #     {
+    #         "customer_id": types.PrimString("customer.id"),
+    #         "price_id": types.PrimString("plan.id"),
+    #     },
+    #     types.SchemaObject("invoice"),
+    #     [
+    #         Program(
+    #             ["customer_id", "price_id"],
+    #             [
+    #                 AssignExpr("x1", AppExpr("/v1/invoiceitems_POST", [("customer", VarExpr("customer_id")), ("price", VarExpr("price_id"))]), False),
+    #                 AssignExpr("x2", AppExpr("/v1/invoices_POST", [("customer", ProjectionExpr(VarExpr("x1"), "customer"))]), False),
+    #                 AssignExpr("x3", AppExpr("/v1/invoices/{invoice}/send_POST", [("invoice", ProjectionExpr(VarExpr("x2"), "id"))]), False),
+    #                 VarExpr("x3")
+    #             ]
+    #         )
+    #     ]
+    # ),
     Benchmark(
-        "2.5",
-        "Sending invoice to a customer",
-        {
-            "customer_id": types.PrimString("customer.id"),
-            "price_id": types.PrimString("plan.id"),
-        },
-        types.SchemaObject("invoice"),
-        [
-            Program(
-                ["customer_id", "price_id"],
-                [
-                    AssignExpr("x1", AppExpr("/v1/invoiceitems_POST", [("customer", VarExpr("customer_id")), ("price", VarExpr("price_id"))]), False),
-                    AssignExpr("x2", AppExpr("/v1/invoices_POST", [("customer", ProjectionExpr(VarExpr("x1"), "customer"))]), False),
-                    AssignExpr("x3", AppExpr("/v1/invoices/{invoice}/send_POST", [("invoice", ProjectionExpr(VarExpr("x2"), "id"))]), False),
-                    VarExpr("x3")
-                ]
-            )
-        ]
-    ),
-    Benchmark(
-        "2.6",
+        "2.4",
         "Retrieve customer by email",
         {
             "email": types.PrimString("customer.email"),
@@ -343,7 +343,7 @@ stripe_benchmarks = [
         ]
     ),
     Benchmark(
-        "2.7",
+        "2.5",
         "Get a list of receipts for a customer",
         {
             "customer_id": types.PrimString("customer.id"),
@@ -362,7 +362,7 @@ stripe_benchmarks = [
         ]
     ),
     Benchmark(
-        "2.8",
+        "2.6",
         "Get refund for given subscription",
         {
             "subscription": types.PrimString("subscription.id"),
@@ -381,7 +381,7 @@ stripe_benchmarks = [
         ]
     ),
     Benchmark(
-        "2.9",
+        "2.7",
         "Get email of all customers",
         {
         },
@@ -398,7 +398,7 @@ stripe_benchmarks = [
         ]
     ),
     Benchmark(
-        "2.10",
+        "2.8",
         "Get email of subscribers to some product",
         {
             "product_id": types.PrimString("product.id"),
@@ -419,7 +419,7 @@ stripe_benchmarks = [
         ]
     ),
     Benchmark(
-        "2.11",
+        "2.9",
         "Get last 4 digit of card for a customer",
         {
             "customer_id": types.PrimString("customer.id"),
@@ -437,26 +437,26 @@ stripe_benchmarks = [
             )
         ]
     ),
+    # Benchmark(
+    #     "2.12",
+    #     "Delete a card for a customer",
+    #     {
+    #         "customer_id": types.SchemaObject("customer.id"),
+    #     },
+    #     types.SchemaObject("payment_source"),
+    #     [
+    #         Program(
+    #             ["customer_id"],
+    #             [
+    #                 AssignExpr("x1", AppExpr("/v1/customers/{customer}_GET", [("customer", VarExpr("customer_id"))]), False),
+    #                 AssignExpr("x2", AppExpr("/v1/customers/{customer}/sources/{id}_DELETE", [("customer", VarExpr("customer_id")), ("source", ProjectionExpr(VarExpr("x1"), "default_source"))]), False),
+    #                 VarExpr("x3")
+    #             ]
+    #         )
+    #     ]
+    # ),
     Benchmark(
-        "2.12",
-        "Delete a card for a customer",
-        {
-            "customer_id": types.SchemaObject("customer.id"),
-        },
-        types.SchemaObject("payment_source"),
-        [
-            Program(
-                ["customer_id"],
-                [
-                    AssignExpr("x1", AppExpr("/v1/customers/{customer}_GET", [("customer", VarExpr("customer_id"))]), False),
-                    AssignExpr("x2", AppExpr("/v1/customers/{customer}/sources/{id}_DELETE", [("customer", VarExpr("customer_id")), ("source", ProjectionExpr(VarExpr("x1"), "default_source"))]), False),
-                    VarExpr("x3")
-                ]
-            )
-        ]
-    ),
-    Benchmark(
-        "2.13",
+        "2.10",
         "Update payment methods for all subscriptions",
         {
             "payment_method": types.SchemaObject("payment_method"),
@@ -576,48 +576,48 @@ square_benchmarks = [
             )
         ],
     ),
+    # Benchmark(
+    #     "3.5",
+    #     "Delete catalog items with names",
+    #     {
+    #         "item_type": types.PrimString("CatalogObject.type"),
+    #         "names": types.ArrayType(None, types.PrimString("CatalogDiscount.name"))
+    #     },
+    #     types.ArrayType(None, types.PrimString("CatalogObject.id")),
+    #     [
+    #         Program(
+    #             ["item_type", "names"],
+    #             [
+    #                 AssignExpr("x0", AppExpr("/v2/catalog/list_GET", []), False),
+    #                 AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
+    #                 AssignExpr("x2", VarExpr("names"), True),
+    #                 EquiExpr(ProjectionExpr(ProjectionExpr(VarExpr("x1"), "item_data"), "name"), VarExpr("x2")),
+    #                 AssignExpr("x3", AppExpr("/v2/catalog/batch-delete_DELETE", [("object_ids[0]", VarExpr("x1"))]), False),
+    #                 VarExpr("x3")
+    #             ]
+    #         )
+    #     ],
+    # ),
+    # Benchmark(
+    #     "3.6",
+    #     "Delete all catalog items",
+    #     {
+    #     },
+    #     types.ArrayType(None, types.PrimString("CatalogObject.id")),
+    #     [
+    #         Program(
+    #             [],
+    #             [
+    #                 AssignExpr("x0", AppExpr("/v2/catalog/batch-retrieve_POST", []), False),
+    #                 AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
+    #                 AssignExpr("x2", AppExpr("/v2/catalog/batch-delete_DELETE", [("object_ids[0]", VarExpr("x1"))]), False),
+    #                 VarExpr("x2")
+    #             ]
+    #         )
+    #     ],
+    # ),
     Benchmark(
         "3.5",
-        "Delete catalog items with names",
-        {
-            "item_type": types.PrimString("CatalogObject.type"),
-            "names": types.ArrayType(None, types.PrimString("CatalogDiscount.name"))
-        },
-        types.ArrayType(None, types.PrimString("CatalogObject.id")),
-        [
-            Program(
-                ["item_type", "names"],
-                [
-                    AssignExpr("x0", AppExpr("/v2/catalog/list_GET", []), False),
-                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
-                    AssignExpr("x2", VarExpr("names"), True),
-                    EquiExpr(ProjectionExpr(ProjectionExpr(VarExpr("x1"), "item_data"), "name"), VarExpr("x2")),
-                    AssignExpr("x3", AppExpr("/v2/catalog/batch-delete_DELETE", [("object_ids[0]", VarExpr("x1"))]), False),
-                    VarExpr("x3")
-                ]
-            )
-        ],
-    ),
-    Benchmark(
-        "3.6",
-        "Delete all catalog items",
-        {
-        },
-        types.ArrayType(None, types.PrimString("CatalogObject.id")),
-        [
-            Program(
-                [],
-                [
-                    AssignExpr("x0", AppExpr("/v2/catalog/batch-retrieve_POST", []), False),
-                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
-                    AssignExpr("x2", AppExpr("/v2/catalog/batch-delete_DELETE", [("object_ids[0]", VarExpr("x1"))]), False),
-                    VarExpr("x2")
-                ]
-            )
-        ],
-    ),
-    Benchmark(
-        "3.7",
         "Add order details to order",
         {
             "location_id": types.PrimString("Location.id"),
@@ -639,7 +639,7 @@ square_benchmarks = [
         ],
     ),
     Benchmark(
-        "3.8",
+        "3.6",
         "Get payment notes",
         {
         },
@@ -656,7 +656,7 @@ square_benchmarks = [
         ],
     ),
     Benchmark(
-        "3.9",
+        "3.7",
         "Get order ids associated with your transactions",
         {
             "location_id": types.PrimString("Location.id"),
@@ -674,7 +674,7 @@ square_benchmarks = [
         ],
     ),
     Benchmark(
-        "3.10",
+        "3.8",
         "Get order names from transaction id",
         {
             "location_id": types.PrimString("Location.id"),
@@ -694,7 +694,7 @@ square_benchmarks = [
         ],
     ),
     Benchmark(
-        "3.11",
+        "3.9",
         "Search customers by name",
         {
             "name": types.PrimString("Customer.given_name"),
@@ -743,8 +743,8 @@ def main():
         args.parallel)
     b = Bencher(
         [
-            slack_suite,
-            stripe_suite,
+            # slack_suite,
+            # stripe_suite,
             square_suite,
         ],
         config)
