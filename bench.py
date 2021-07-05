@@ -756,7 +756,7 @@ def main():
         output=args.output,
         print_api=True,
         print_results=True,
-        cached_results=True)
+        cached_results=False)
 
     # pr.print_stats()
 
