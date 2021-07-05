@@ -743,8 +743,8 @@ def main():
         args.parallel)
     b = Bencher(
         [
-            # slack_suite,
-            # stripe_suite,
+            slack_suite,
+            stripe_suite,
             square_suite,
         ],
         config)
@@ -756,7 +756,7 @@ def main():
         output=args.output,
         print_api=True,
         print_results=True,
-        cached_results=False)
+        cached_results=True)
 
     # pr.print_stats()
 
