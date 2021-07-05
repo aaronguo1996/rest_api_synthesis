@@ -45,10 +45,11 @@ class BenchmarkResult:
         self.endpoint_calls = None
 
 class APIInfo:
-    def __init__(self, api, num_args, obj_size, ep_num, ep_covered, annotations):
+    def __init__(self, api, num_args, obj_sizes, obj_num, ep_num, ep_covered, annotations):
         self.api_name = api
-        self.avg_num_args = num_args
-        self.obj_size = obj_size
+        self.num_args = num_args
+        self.obj_sizes = obj_sizes
+        self.obj_num = obj_num
         self.ep_num = ep_num
         self.ep_covered = ep_covered
         self.annotations = annotations
@@ -257,24 +258,26 @@ class BenchmarkSuite:
             annotations = len(a)
 
         # average number of endpoint arguments
-        avg_num_args = utils.avg([len(x.parameters) for x in self._entries])
+        num_args = [len(x.parameters) for x in self._typed_entries.values()]
 
         # average number of object size
         # FIXME: this is wrong, we need to count numbers of nodes in objects
         # the problem is that we might have mutual recursive definitions
         obj_sizes = []
         schemas = self._doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS)
+        obj_num = len(schemas)
         for _, sch in schemas.items():
             typ = sch.get(defs.DOC_TYPE)
             if typ == defs.TYPE_OBJECT:
                 if defs.DOC_PROPERTIES in sch:
                     properties = sch.get(defs.DOC_PROPERTIES)
+                    if not properties:
+                        continue
+
                     obj_sizes.append(len(properties))
                     continue
 
             obj_sizes.append(1)
-
-        obj_size = utils.avg(obj_sizes)
 
         # number of endpoints
         endpoints = self._doc.get(defs.DOC_PATHS)
@@ -287,7 +290,7 @@ class BenchmarkSuite:
         ep_covered = len(covered)
 
         return APIInfo(
-            self.api, avg_num_args, obj_size, 
+            self.api, num_args, obj_sizes, obj_num,
             ep_num, ep_covered, annotations)
 
     def run(self, runtime_config, names, cached_results=False):
@@ -371,23 +374,24 @@ class Bencher:
 
     def print_api_info(self, places, transitions, output=None):
         res = ("% auto-generated: ./bench.py, table 1\n"
-            "\\resizebox{\\textwidth}{!}{\\begin{tabular}{lrrrrrrr}"
+            "\\resizebox{\\textwidth}{!}{\\begin{tabular}{lrrrrrrrrr}"
             "\\toprule"
             "& \\multicolumn{3}{c}{API size} & \\multicolumn{2}{c}{Sub-API size} & \\multicolumn{2}{c}{TTN size} \\\\"
             "\\cmidrule(lr){2-4} \\cmidrule(lr){5-6} \\cmidrule(lr){7-8}"
-            "API & \\# endpoints & Avg. endpoint args & Avg. object size & \\# endpoints covered & \\# annotations & \\# places & \\# transitions \\\\"
+            "API & \\# endpoints & Endpoint args & \\# objects & Object size & \\# endpoints covered & \\# annotations & \\# places & \\# transitions \\\\"
             "\\midrule")
         res += "\n"
 
         for i, suite in enumerate(self._suites):
             if places[i] is not None:
                 api_info = suite.get_info()
-                avg_num_args = round(api_info.avg_num_args, 2)
-                obj_size = round(api_info.obj_size, 2)
+                # avg_num_args = round(api_info.avg_num_args, 2)
+                # obj_size = round(api_info.obj_size, 2)
                 res += (f"  {api_info.api_name.capitalize()} "
                     f"& {api_info.ep_num} "
-                    f"& {avg_num_args} "
-                    f"& {obj_size} "
+                    f"& {min(api_info.num_args)} - {max(api_info.num_args)} "
+                    f"& {api_info.obj_num} "
+                    f"& {min(api_info.obj_sizes)} - {max(api_info.obj_sizes)} "
                     f"& {api_info.ep_covered} "
                     f"& {api_info.annotations} "
                     f"& {places[i]} "

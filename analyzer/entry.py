@@ -65,7 +65,9 @@ class Parameter:
                     values[t] += fd_values[t]
 
         except:
-            raise Exception(self.method, self.func_name, self.path, self.is_required, self.value, self.type)
+            pass
+            # return results, values
+            # raise Exception(self.method, self.func_name, self.path, self.is_required, self.value, self.type)
         
         return results, values
 
@@ -158,8 +160,11 @@ class Parameter:
 
         return results
 
-    def flatten_ad_hoc_by_value(self):
+    def flatten_ad_hoc_by_value(self, skip_fields):
         results = []
+
+        if self.arg_name in skip_fields:
+            return results
 
         if self.type is not None:
             # the arg itself is an ad-hoc object when the name is None
@@ -178,7 +183,7 @@ class Parameter:
                         self.method, field, self.func_name,
                         self.path + [field], is_required,
                         self.array_level, fields[field], value)
-                    results += p.flatten_ad_hoc_by_value()
+                    results += p.flatten_ad_hoc_by_value(skip_fields)
             elif isinstance(self.type, types.ArrayType):
                 if len(self.value) == 0:
                     results.append(self)
@@ -192,7 +197,7 @@ class Parameter:
                         self.path + [defs.INDEX_ANY], self.is_required,
                         array_level, item_type, value
                     )
-                    results += p.flatten_ad_hoc_by_value()
+                    results += p.flatten_ad_hoc_by_value(skip_fields)
             elif isinstance(self.type, types.UnionType):
                 items = self.type.items
                 p = Parameter(
@@ -200,7 +205,7 @@ class Parameter:
                     self.path, self.is_required, self.array_level,
                     items[0], self.value # TODO: is this sufficient?
                 )
-                results += p.flatten_ad_hoc_by_value()
+                results += p.flatten_ad_hoc_by_value(skip_fields)
             else:
                 results.append(self)
         else:

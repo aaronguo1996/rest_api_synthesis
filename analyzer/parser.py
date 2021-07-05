@@ -1,7 +1,6 @@
 import json
 import re
 from urllib.parse import urlparse, unquote
-from witnesses.utils import add_as_object
 
 from analyzer.entry import TraceEntry, Parameter
 from analyzer.utils import name_to_path
