@@ -441,7 +441,7 @@ class Bencher:
                "\\toprule"
                "& \\multicolumn{2}{c|}{Benchmark info} & \\multicolumn{4}{c|}{Solution stats} & \\multicolumn{2}{c}{Solution rank} \\\\"
                "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9}"
-               "API & Name & Description & Size & $n_{ep}$ & $n_{proj}$ & $n_{filter} $ & w/o RE & w/ RE \\\\"
+               "API & Name & Description & Size & $n_{ep}$ & $n_{proj}$ & $n_{guard} $ & w/o RE & w/ RE \\\\"
                "\\midrule")
         res += "\n"
 
