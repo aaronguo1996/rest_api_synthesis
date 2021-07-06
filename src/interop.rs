@@ -15,6 +15,7 @@ pub struct Imports<'p> {
     pub var_expr: &'p PyAny,
     pub projection_expr: &'p PyAny,
     pub filter_expr: &'p PyAny,
+    pub equi_expr: &'p PyAny,
     pub assign_expr: &'p PyAny,
     pub list_expr: &'p PyAny,
 
@@ -41,6 +42,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         let var_expr = program.get("VarExpr")?;
         let projection_expr = program.get("ProjectionExpr")?;
         let filter_expr = program.get("FilterExpr")?;
+        let equi_expr = program.get("EquiExpr")?;
         let assign_expr = program.get("AssignExpr")?;
         let list_expr = program.get("ListExpr")?;
 
@@ -52,6 +54,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
             var_expr,
             projection_expr,
             filter_expr,
+            equi_expr,
             assign_expr,
             list_expr,
 
@@ -241,6 +244,18 @@ fn translate_expr<'p>(
         arena.alloc_expr(Expr::Proj(field));
         arena.alloc_expr(Expr::SetCandidates);
         translate_expr(imports, py_expr.getattr("_val")?, arena)?;
+        Ok(arena.alloc_expr(Expr::Filter))
+    } else if imports
+        .equi_expr
+        .cast_as::<PyType>()
+        .unwrap()
+        .is_instance(py_expr)?
+    {
+        // Translate lhs
+        translate_expr(imports, py_expr.getattr("_lhs")?, arena)?;
+        arena.alloc_expr(Expr::SetCandidates);
+        // Translate rhs
+        translate_expr(imports, py_expr.getattr("_rhs")?, arena)?;
         Ok(arena.alloc_expr(Expr::Filter))
     } else if imports
         .assign_expr

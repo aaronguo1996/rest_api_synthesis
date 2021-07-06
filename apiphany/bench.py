@@ -78,7 +78,8 @@ slack_minimal = [
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
                     AssignExpr("x2", AppExpr("/conversations.history_GET", [("channel", ProjectionExpr(VarExpr("x1"), "id")), ("oldest", VarExpr("ts"))]), False),
                     AssignExpr("x3", ProjectionExpr(VarExpr("x2"), "messages"), True),
-                    FilterExpr(VarExpr("x3"), "user", VarExpr("user_id"), False),
+                    EquiExpr(ProjectionExpr(VarExpr("x3"), "user"), VarExpr("user_id")),
+                    # FilterExpr(VarExpr("x3"), "user", VarExpr("user_id"), False),
                     VarExpr("x3")
                 ]
             )

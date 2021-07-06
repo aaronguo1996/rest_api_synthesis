@@ -28,7 +28,23 @@ impl RValue {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        match self {
+            RValue::Null => true,
+            RValue::Object(v) => v.is_empty(),
+            RValue::Array(a) => a.is_empty(),
+            _ => false,
+        }
+    }
+
     pub fn as_array(&self) -> Option<&SmallVec<[ValueIx; 4]>> {
+        match self {
+            RValue::Array(a) => Some(a),
+            _ => None,
+        }
+    }
+
+    pub fn as_mut_array(&mut self) -> Option<&mut SmallVec<[ValueIx; 4]>> {
         match self {
             RValue::Array(a) => Some(a),
             _ => None,
@@ -143,6 +159,16 @@ impl<'r> ThreadSlab<'r> {
             self.data.get(ix - self.init)
         } else {
             self.root.data.get(ix)
+        }
+    }
+
+    pub fn get_mut(&mut self, ix: ValueIx) -> Option<(ValueIx, &mut RValue)> {
+        if ix >= self.init {
+            self.data.get_mut(ix - self.init).map(|x| (ix, x))
+        } else {
+            let og = self.root.data.get(ix)?;
+            let new_ix = self.push_rval(og.clone());
+            Some((new_ix, self.data.get_mut(new_ix - self.init).unwrap()))
         }
     }
 }
