@@ -26,7 +26,7 @@ from apiphany import rust_re
 
 class BenchConfig:
     def __init__(
-        self, cache=False, repeat=5, filter_num=3,
+        self, cache=False, repeat=5, filter_num=5,
         filter_sol_only=False, synthesis_only=False,
         bias_type=dynamic.BiasType.SIMPLE, use_parallel=True):
         self.cache = cache
@@ -113,11 +113,11 @@ class Benchmark:
         log_analyzer, solutions):
         all_results = []
         
-        # random.seed(229)
+        random.seed(229)
         with pebble.ThreadPool() as pool:
             for i, p in enumerate(solutions):
                 # print(f"{i}/{len(solutions)}", flush=True)
-                # print(p, flush=True)
+                print(p, flush=True)
 
                 is_target_sol = False
                 for tgt_sol in self.solutions:
@@ -228,15 +228,13 @@ class Benchmark:
             res = sorted(res, key=lambda x: x[-1])
             for rank, (_, res_sol, score) in enumerate(res):
                 if (res_sol in self.solutions and
-                    abs(score - consts.MAX_COST) > 1e-2):
+                    score < consts.MAX_COST):
                     tgt_score = score
 
                     break
 
-        for res in program_ranks:
-            res = sorted(res, key=lambda x: x[-1])
             for rank, (_, res_sol, score) in enumerate(res):
-                if (abs(score - tgt_score) > 1e-2):
+                if (abs(score - tgt_score) < 1e-2):
                     ranks.append((rank + 1, res_sol, score))
 
                     for i, r in enumerate(res):

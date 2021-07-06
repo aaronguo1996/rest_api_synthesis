@@ -69,7 +69,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         let t = std::time::Instant::now();
         let progs = translate_progs(&imports, &progs, &mut arena)?;
         translate_traces(&imports, traces, &mut arena, &mut slab);
-        println!("py to rs time: {}", t.elapsed().as_micros());
+        // println!("py to rs time: {}", t.elapsed().as_micros());
 
         // Then, using the log analyzer, create our inputs
         let mut new_inputs = HBMap::new();
@@ -92,7 +92,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         let t = std::time::Instant::now();
         // And run it on our inputs
         let res = r.run(target_ix, multiple, &slab);
-        println!("interpret time: {}", t.elapsed().as_micros());
+        // println!("interpret time: {}", t.elapsed().as_micros());
 
         Ok(res)
     }

@@ -6,6 +6,7 @@ use rand::prelude::*;
 use rayon::prelude::*;
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryInto;
+use rand::distributions::WeightedIndex;
 
 pub type Cost = usize;
 
@@ -68,7 +69,9 @@ impl Runner {
                                     );
 
                                     // Run RE!
+                                    // println!("{}", ix);
                                     let out = ex.run(&mut t);
+                                    println!("{} returns {:?}", ix, out);
 
                                     out.unwrap_or_else(|| (None, 99999))
                                 })
@@ -80,7 +83,7 @@ impl Runner {
                             let mut all_multiple = true;
                             let mut all_empty = true;
 
-                            let mut costs = Vec::with_capacity(5);
+                            let mut costs = Vec::with_capacity(10);
 
                             for (result, cost) in reses {
                                 if let Some(r) = result {
@@ -148,9 +151,11 @@ impl Runner {
                 // Sort the result by cost and get the cost of the target ix
                 res.sort_by_key(|x| x.1);
 
-                println!("min (rank 1): {:?}", res.get(0).unwrap());
-                res.iter().position(|x| x.1 == tgt_cost).unwrap() + 1
+                println!("min (rank 1): {:?}", &res[0..20]);
+                (tgt_cost, res.iter().position(|x| x.1 == tgt_cost).unwrap() + 1)
             })
+            .filter(|x| x.0 < 99999)
+            .map(|x| x.1)
             .collect();
 
         avgs.sort();
@@ -295,7 +300,7 @@ impl<'a> ExecEnv<'a> {
 
                     self.data.push(v);
 
-                    self.cost += 1;
+                    // self.cost += 1;
                     self.ip += 1;
                 }
                 Expr::SetCandidates => {
@@ -333,18 +338,24 @@ impl<'a> ExecEnv<'a> {
                     // Pop from top of stack, project into it, push.
                     let x = self.data.pop()?;
                     let mut tmp = (x, heap.get(x)?);
-                    for path in self.arena.get_str(f).split('.') {
-                        if let Some(v) = tmp.1.get(path, &heap) {
-                            tmp = v;
-                            self.cost += 1;
-                        } else {
-                            self.set_error();
-                            continue 'outer;
-                        }
+                    // for path in self.arena.get_str(f).split('.') {
+                    //     if let Some(v) = tmp.1.get(path, &heap) {
+                    //         tmp = v;
+                    //         self.cost += 1;
+                    //     } else {
+                    //         self.set_error();
+                    //         continue 'outer;
+                    //     }
+                    // }
+                    let path = self.arena.get_str(f);
+                    if let Some(v) = tmp.1.get(path, &heap) {
+                        self.data.push(v.0);
+                        self.cost += 1;
+                        self.ip += 1;
+                    } else {
+                        // println!("cannot find field {}", path);
+                        self.set_error();
                     }
-                    self.data.push(tmp.0);
-
-                    self.ip += 1;
                 }
                 Expr::Bind(v) => {
                     // First, peek at top of stack.
@@ -445,6 +456,7 @@ impl<'a> ExecEnv<'a> {
                         cost,
                     }) = self.call.pop()
                     {
+                        // println!("there exists a frame!");
                         // Increment cur.
                         cur += 1;
 
@@ -651,11 +663,11 @@ impl Arena {
         };
 
         if !responses.is_empty() {
-            // let dist = WeightedIndex::new(&weights).unwrap();
-            // let mut rng = thread_rng();
-            // Some(responses[dist.sample(&mut rng)].clone())
+            let dist = WeightedIndex::new(&weights).unwrap();
+            let mut rng = thread_rng();
+            Some(responses[dist.sample(&mut rng)].clone())
 
-            Some(responses[weighted_choice(&weights)])
+            // Some(responses[weighted_choice(&weights)])
         } else {
             None
         }
