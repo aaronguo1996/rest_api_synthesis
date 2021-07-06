@@ -45,7 +45,7 @@ impl Runner {
             return vec![];
         }
 
-        let mut avgs: Vec<usize> = (0..5)
+        let mut avgs: Vec<usize> = (0..10)
             .into_par_iter()
             .map(|_exp| {
                 let mut res = Vec::with_capacity(self.progs.len());
@@ -57,7 +57,7 @@ impl Runner {
                     .map_init(
                         || ThreadSlab::new(slab),
                         |mut t, (ix, prog)| {
-                            let reses: Vec<(Option<ValueIx>, Cost)> = (0..5)
+                            let reses: Vec<(Option<ValueIx>, Cost)> = (0..10)
                                 .map(|_i| {
                                     // Make a new execution environment
                                     let mut ex = ExecEnv::new(
@@ -75,7 +75,6 @@ impl Runner {
                                 .collect();
 
                             // Then do analysis on the valid solutions we got
-                            // TODO: perf
                             let mut all_none = true;
                             let mut all_singleton = true;
                             let mut all_multiple = true;
@@ -85,23 +84,21 @@ impl Runner {
 
                             for (result, cost) in reses {
                                 if let Some(r) = result {
+                                    all_none = false;
+
                                     if !(t
                                         .get(r)
                                         .unwrap()
-                                        .as_array()
-                                        .map(|x| x.len() == 0)
-                                        .unwrap_or_else(|| false))
+                                        .is_empty())
                                     {
                                         all_empty = false;
                                     }
 
                                     let mut rr = t.get(r).unwrap();
 
-                                    all_none = false;
                                     while let Some(ra) = rr.as_array() {
                                         if ra.len() == 1 {
-                                            let mut rng = tls_rng();
-                                            rr = t.get(ra[rng.generate_range(0, ra.len() - 1)]).unwrap();
+                                            rr = t.get(ra[0]).unwrap();
                                         } else {
                                             break;
                                         }
@@ -122,6 +119,11 @@ impl Runner {
                             }
 
                             let mut cost_avg = costs.iter().sum::<Cost>() / costs.len();
+
+                            if ix == target_ix {
+                                println!("pre-adds: {}", cost_avg);
+                            }
+                            
                             if all_singleton && multiple {
                                 cost_avg += 25;
                             } else if all_multiple && !multiple {
@@ -132,14 +134,22 @@ impl Runner {
                                 cost_avg += 10;
                             }
 
+                            if ix == target_ix {
+                                println!("post-adds: {}", cost_avg);
+                            }
+
                             (ix, cost_avg)
                         },
                     )
                     .collect_into_vec(&mut res);
 
+                let tgt_cost = res.get(target_ix).unwrap().1;
+
                 // Sort the result by cost and get the cost of the target ix
                 res.sort_by_key(|x| x.1);
-                res.iter().position(|x| x.0 == target_ix).unwrap() + 1
+
+                println!("min (rank 1): {:?}", res.get(0).unwrap());
+                res.iter().position(|x| x.1 == tgt_cost).unwrap() + 1
             })
             .collect();
 
@@ -268,7 +278,6 @@ impl<'a> ExecEnv<'a> {
                             }
                         } else {
                             // Choose random values for our input
-
                             let mut rng = tls_rng();
                             let choices = self.default_inputs.get(v)?;
 
@@ -339,12 +348,20 @@ impl<'a> ExecEnv<'a> {
                 }
                 Expr::Bind(v) => {
                     // First, peek at top of stack.
-                    let x = heap.get(*self.data.last()?)?.as_array()?;
+                    let (id, x) = {
+                        let (id, v) = heap.get_mut(self.data.pop()?)?;
+                        (id, v.as_mut_array()?)
+                    };
+
+                    let mut rng = thread_rng();
+                    x.shuffle(&mut rng);
 
                     // If x is empty, error.
                     if x.is_empty() {
                         self.set_error();
                     } else {
+                        self.data.push(id);
+                        
                         // Push to call stack.
                         self.call.push(Frame {
                             stack_ix: self.data.len() - 1,
