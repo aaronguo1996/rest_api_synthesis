@@ -91,7 +91,10 @@ class AppExpr(Expression):
         return set().union(*arg_vars)
 
     def execute(self, analyzer, _):
+        # print("call:", self._fun)
+        # print("names:", [x for x, _ in self._args])
         args = [arg.execute(analyzer, []) for _, arg in self._args]
+        # print("vals:", args)
 
         # if any of the argument fails, the whole term fails
         for arg, _ in args:

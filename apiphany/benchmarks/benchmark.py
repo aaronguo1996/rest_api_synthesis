@@ -21,6 +21,9 @@ from synthesizer.synthesizer import Synthesizer
 import benchmarks.utils as utils
 import consts
 
+from multiprocessing import cpu_count
+from apiphany import rust_re
+
 class BenchConfig:
     def __init__(
         self, cache=False, repeat=5, filter_num=3,
@@ -81,6 +84,7 @@ class Benchmark:
         if not cached or not runtime_config.cache:
             synthesizer = Synthesizer(configuration, entries, bm_dir)
             synthesizer.init()
+            print("inputs", self.inputs)
             parallel.spawn_encoders(
                 synthesizer,
                 self.inputs, [self.output],
@@ -151,6 +155,36 @@ class Benchmark:
 
         return all_results
 
+    def get_rust_rank(
+        self, entries, configuration, runtime_config, 
+        log_analyzer, solutions):
+        found = False
+        target_ix = 0
+        sol_prog = None
+        print("Total solutions:", len(solutions), flush=True)
+        for rank, res_sol in enumerate(solutions):
+            for tgt_sol in self.solutions:
+                if tgt_sol == res_sol:
+                    found = True
+                    self.latex_entry.rank_no_re = rank
+                    target_ix = rank
+                    sol_prog = tgt_sol
+                    break
+
+            if found:
+                break
+
+        if not found:
+            return [], None
+
+        ranks = rust_re(
+            log_analyzer, solutions, entries,
+            list(self.inputs.items()), target_ix,
+            isinstance(self.output, types.ArrayType))
+        sol_prog = sol_prog if len(ranks) > 0 else None
+
+        return ranks, sol_prog
+        
     def get_rank(
         self, entries, configuration, runtime_config, 
         log_analyzer, solutions):
@@ -203,6 +237,7 @@ class Benchmark:
 
         sol_prog = ranks[0][1] if len(ranks) > 0 else None
         ranks = [r[0] for r in ranks]
+        
         return ranks, sol_prog
 
     def to_latex_entry(self, ranks, sol_prog):
@@ -337,8 +372,6 @@ class BenchmarkSuite:
                 if names is not None and benchmark.name not in names:
                     continue
 
-                print("Running benchmark", benchmark.name)
-
                 places, transitions, solutions = benchmark.run(
                     self._exp_dir, 
                     self._typed_entries, 
@@ -348,7 +381,14 @@ class BenchmarkSuite:
 
                 if not runtime_config.synthesis_only:
                     start = time.time()
-                    ranks, sol_prog = benchmark.get_rank(
+                    # ranks, sol_prog = benchmark.get_rank(
+                    #     entries,
+                    #     self._configuration,
+                    #     runtime_config,
+                    #     self._log_analyzer,
+                    #     solutions,
+                    # )
+                    ranks, sol_prog = benchmark.get_rust_rank(
                         entries,
                         self._configuration,
                         runtime_config,
