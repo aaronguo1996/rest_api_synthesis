@@ -61,31 +61,6 @@ def build_cmd_parser():
 ##                                  SLACK                                     ##
 ################################################################################
 
-slack_minimal = [
-    Benchmark(
-        "1.4",
-        "Get all messages associated with a user",
-        {
-            "user_id": types.PrimString("defs_user_id"),
-            "ts": types.PrimString("defs_ts"),
-        },
-        types.ArrayType(None, types.SchemaObject("objs_message")),
-        [
-            Program(
-                ["user_id", "ts"],
-                [
-                    AssignExpr("x0", AppExpr("/conversations.list_GET", []), False),
-                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
-                    AssignExpr("x2", AppExpr("/conversations.history_GET", [("channel", ProjectionExpr(VarExpr("x1"), "id")), ("oldest", VarExpr("ts"))]), False),
-                    AssignExpr("x3", ProjectionExpr(VarExpr("x2"), "messages"), True),
-                    FilterExpr(VarExpr("x3"), "user", VarExpr("user_id"), False),
-                    VarExpr("x3")
-                ]
-            )
-        ]
-    ),
-]
-
 slack_benchmarks = [
     Benchmark(
         "1.1",
