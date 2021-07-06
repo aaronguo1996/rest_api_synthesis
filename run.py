@@ -259,12 +259,12 @@ def main():
             solutions = synthesizer.run_n(
                 [],
                 {
-                    "product_name": types.PrimString("product.name"),
-                    "customer_id": types.PrimString("customer.id"),
-                    "currency": types.PrimString("fee.currency"),
-                    "unit_amount": types.PrimInt("plan.amount"),
+                    # "product_name": types.PrimString("product.name"),
+                    # "customer_id": types.PrimString("customer.id"),
+                    # "currency": types.PrimString("fee.currency"),
+                    # "unit_amount": types.PrimInt("plan.amount"),
                 },
-                [types.ArrayType(None, types.PrimString("invoiceitem"))],
+                [types.ArrayType(None, types.PrimString("customer.email"))],
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOL_NUM]
             )
 

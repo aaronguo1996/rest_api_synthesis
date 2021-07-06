@@ -83,9 +83,11 @@ class LogParser:
             decoded_name = unquote(rp[har_consts.HAR_NAME])
             param_path = name_to_path(decoded_name)
             # print(endpoint, "decode", rp["name"], "into", param_path)
+            val = rp[har_consts.HAR_VALUE]
+            if isinstance(val, str):
+                val = unquote(val)
             request_obj = add_as_object(
-                request_obj, param_path, 
-                unquote(rp[har_consts.HAR_VALUE])
+                request_obj, param_path, val
             )
             # print(endpoint, "get param object", request_obj)
 

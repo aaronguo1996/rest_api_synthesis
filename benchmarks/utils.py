@@ -33,6 +33,21 @@ def update_type(skip_fields, entries, endpoints):
 
             param.type = match_param.type
 
+def get_initial_witnesses(configuration, exp_dir, base_path, endpoints):
+    trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
+    skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
+    log_parser = parser.LogParser(
+        configuration[consts.KEY_LOG_FILE], 
+        configuration[consts.KEY_HOSTNAME],
+        base_path, endpoints)
+    entries = log_parser.parse_entries(
+        configuration[consts.KEY_ANALYSIS][consts.KEY_UNINTERESTING],
+        skip_fields,
+    )
+
+    return entries
+
+
 def parse_entries(configuration, exp_dir, base_path, endpoints):
     trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
     skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)

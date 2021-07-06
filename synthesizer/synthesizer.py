@@ -249,6 +249,8 @@ class Synthesizer:
     def _add_transitions(self):
         unique_entries = self._group_transitions(self._entries)
         lst = [
+            # "/v1/customers_GET",
+            # "projection(customer, email)_"
             # "/v1/subscriptions_POST",
             # "/v1/prices_GET",
             # # "projection({'data': [price], 'has_more': boolean, 'object': string, 'url': string}, data)_",

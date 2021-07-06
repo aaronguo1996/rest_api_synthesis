@@ -1,3 +1,4 @@
+
 from globs import get_petri_net_data
 import json
 import pickle
@@ -7,17 +8,18 @@ import pebble
 import time
 import random
 
-import consts
+from analyzer import dynamic
+from analyzer.entry import ErrorResponse
 from openapi import defs
-from openapi.utils import read_doc
 from openapi.parser import OpenAPIParser
+from openapi.utils import read_doc
+from program.program import EquiExpr, ProjectionExpr, AppExpr
+from schemas import types
+from synthesizer import parallel
+from synthesizer.filtering import retrospective_execute, check_results
 from synthesizer.synthesizer import Synthesizer
 import benchmarks.utils as utils
-from schemas import types
-from analyzer import dynamic
-from synthesizer.filtering import retrospective_execute, check_results
-from program.program import EquiExpr, ProjectionExpr, AppExpr
-from synthesizer import parallel
+import consts
 
 class BenchConfig:
     def __init__(
@@ -45,12 +47,16 @@ class BenchmarkResult:
         self.endpoint_calls = None
 
 class APIInfo:
-    def __init__(self, api, num_args, obj_sizes, obj_num, ep_num, ep_covered, annotations):
+    def __init__(self, api, num_args, obj_sizes, obj_num, ep_num, 
+        init_w, init_covered, gen_w, ep_covered, annotations):
         self.api_name = api
         self.num_args = num_args
         self.obj_sizes = obj_sizes
         self.obj_num = obj_num
         self.ep_num = ep_num
+        self.init_w = init_w
+        self.init_covered = init_covered
+        self.gen_w = gen_w
         self.ep_covered = ep_covered
         self.annotations = annotations
 
@@ -103,7 +109,7 @@ class Benchmark:
         log_analyzer, solutions):
         all_results = []
         
-        random.seed(229)
+        # random.seed(229)
         with pebble.ThreadPool() as pool:
             for i, p in enumerate(solutions):
                 # print(f"{i}/{len(solutions)}", flush=True)
@@ -243,6 +249,12 @@ class BenchmarkSuite:
             self._exp_dir, 
             base_path, 
             doc_entries)
+        self._initial_witnesses = utils.get_initial_witnesses(
+            self._configuration, 
+            self._exp_dir, 
+            base_path, 
+            doc_entries
+        )
 
         with open(os.path.join(self._exp_dir, consts.FILE_ENTRIES), "rb") as f:
             self._typed_entries = pickle.load(f)
@@ -283,15 +295,25 @@ class BenchmarkSuite:
         endpoints = self._doc.get(defs.DOC_PATHS)
         ep_num = len(endpoints)
 
+        # initial witnesses and coverage
+        initial_witness_cnt = len(self._initial_witnesses)
+        initial_covered = {
+            x.endpoint for x in self._initial_witnesses if x.endpoint in endpoints
+        }
+        initial_covered_num = len(initial_covered)
+
         # covered endpoints
         covered = {
             x.endpoint for x in self._entries if x.endpoint in endpoints
         }
         ep_covered = len(covered)
+        all_witness_cnt = len([e for e in self._entries if not isinstance(e.response, ErrorResponse)])
 
         return APIInfo(
-            self.api, num_args, obj_sizes, obj_num,
-            ep_num, ep_covered, annotations)
+            self.api, num_args, obj_sizes, obj_num, ep_num, 
+            initial_witness_cnt, initial_covered_num,
+            all_witness_cnt - initial_witness_cnt,
+            ep_covered, annotations)
 
     def run(self, runtime_config, names, cached_results=False):
         latex_entries = []
@@ -374,11 +396,11 @@ class Bencher:
 
     def print_api_info(self, places, transitions, output=None):
         res = ("% auto-generated: ./bench.py, table 1\n"
-            "\\resizebox{\\textwidth}{!}{\\begin{tabular}{lrrrrrrrrr}"
+            "\\resizebox{\\textwidth}{!}{\\small\\begin{tabular}{l|rrrr|rrrrr|rr}"
             "\\toprule"
-            "& \\multicolumn{3}{c}{API size} & \\multicolumn{2}{c}{Sub-API size} & \\multicolumn{2}{c}{TTN size} \\\\"
-            "\\cmidrule(lr){2-4} \\cmidrule(lr){5-6} \\cmidrule(lr){7-8}"
-            "API & \\# endpoints & Endpoint args & \\# objects & Object size & \\# endpoints covered & \\# annotations & \\# places & \\# transitions \\\\"
+            "& \\multicolumn{4}{c|}{API size} & \\multicolumn{5}{c|}{API Analysis} & \\multicolumn{2}{c}{TTN size} \\\\"
+            "\\cmidrule(lr){2-5} \\cmidrule(lr){6-10} \\cmidrule(lr){11-12}"
+            "API & \\# Ep & \\# Args & \\# Objs & Obj Sizes & $n_{init}$ & $cv_{init}$ & $n_{gen}$ & $cv_{gen}$ & $n_{ann}$ & \\# places & \\# trans \\\\"
             "\\midrule")
         res += "\n"
 
@@ -387,11 +409,14 @@ class Bencher:
                 api_info = suite.get_info()
                 # avg_num_args = round(api_info.avg_num_args, 2)
                 # obj_size = round(api_info.obj_size, 2)
-                res += (f"  {api_info.api_name.capitalize()} "
+                res += (f"  \\{api_info.api_name} "
                     f"& {api_info.ep_num} "
                     f"& {min(api_info.num_args)} - {max(api_info.num_args)} "
                     f"& {api_info.obj_num} "
                     f"& {min(api_info.obj_sizes)} - {max(api_info.obj_sizes)} "
+                    f"& {api_info.init_w} "
+                    f"& {api_info.init_covered} "
+                    f"& {api_info.gen_w} "
                     f"& {api_info.ep_covered} "
                     f"& {api_info.annotations} "
                     f"& {places[i]} "
@@ -422,7 +447,7 @@ class Bencher:
 
         for i, suite in enumerate(self._suites):
             bench_results = results[i]
-            res += f"\\multirow{{{len(suite.benchmarks)}}}{{*}}{{{suite.api.capitalize()}}} "
+            res += f"\\multirow{{{len(suite.benchmarks)}}}{{*}}{{\\{suite.api}}} "
             for r in bench_results:
                 if r is None:
                     continue

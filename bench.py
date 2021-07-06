@@ -208,7 +208,7 @@ slack_benchmarks = [
 
 slack_suite = BenchmarkSuite(
     "configs/slack_config.json",
-    "Slack",
+    "slack",
     slack_benchmarks
 )
 
@@ -479,7 +479,7 @@ stripe_benchmarks = [
 
 stripe_suite = BenchmarkSuite(
     "configs/stripe_config.json",
-    "Stripe",
+    "stripe",
     stripe_benchmarks
 )
 
@@ -725,7 +725,7 @@ square_benchmarks = [
 
 square_suite = BenchmarkSuite(
     "configs/square_config.json",
-    "Square",
+    "squareapi",
     square_benchmarks
 )
 
