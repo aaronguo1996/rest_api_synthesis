@@ -48,32 +48,6 @@ class DynamicAnalysis:
     def reset_env(self):
         self._environment = {}
 
-    def sample_value_by_type(self, typ):
-        if isinstance(typ, types.ArrayType):
-            lst_len = random.choice(range(1, 5))
-            vals = []
-            for _ in range(lst_len):
-                val = self.sample_value_by_type(typ.item)
-                vals.append(val)
-
-            return vals
-        else:
-            candidates = self._log_analyzer.get_values_by_type(typ)
-            vals = candidates
-
-            if not vals:
-                # only two cases here
-                if str(typ) == "unit_amount_/v1/prices_POST_unit_amount":
-                    vals = [random.randint(1, 10)]
-                else:
-                    print("Not val available for type", typ)
-                    # x = xeger.Xeger()
-                    # vals = [x.xeger("^[a-z0-9]{10,}$")]
-                    vals = ["fuzz_string"]
-            
-            # print("Sampling by type", typ, "from", vals)
-            return random.choice(vals)
-
     def get_traces_by_param(self, param):
         results = []
         for entry in self._entries:
@@ -155,6 +129,9 @@ class DynamicAnalysis:
 
     def lookup_var(self, x):
         return self._environment.get(x)
+
+    def sample_value_by_type(self, typ):
+        return self._log_analyzer.sample_value_by_type(typ)
 
     def _sample_entry(self, entries, backup=[]):
         if entries:

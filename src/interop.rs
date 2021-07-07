@@ -76,7 +76,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
 
         for (input_name, input_type) in inputs {
             let vals: Vec<&PyAny> = log_analyzer
-                .call_method("get_values_by_type", (input_type,), None)?
+                .call_method("sample_values_by_type", (input_type,), None)?
                 .extract()?;
             let vals: Vec<ValueIx> = vals
                 .into_iter()

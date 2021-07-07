@@ -7,6 +7,7 @@ from openapi import defs
 from synthesizer.utils import make_entry_name
 from schemas import types
 import consts
+import random
 
 class DSU:
     # TODO: record types for each param here
@@ -434,6 +435,35 @@ class LogAnalyzer:
 
     def get_values_by_type(self, typ):
         return list(self.value_map.get(str(typ), []))
+
+    def sample_value_by_type(self, typ):
+        if isinstance(typ, types.ArrayType):
+            lst_len = random.choice(range(1, 5))
+            vals = []
+            for _ in range(lst_len):
+                val = self.sample_value_by_type(typ.item)
+                vals.append(val)
+
+            return vals
+        else:
+            candidates = self.get_values_by_type(typ)
+            vals = candidates
+
+            if not vals:
+                print("Not val available for type", typ)
+                # x = xeger.Xeger()
+                # vals = [x.xeger("^[a-z0-9]{10,}$")]
+                vals = ["fuzz_string"]
+            
+            # print("Sampling by type", typ, "from", vals)
+            return random.choice(vals)
+
+    def sample_values_by_type(self, typ):
+        res = []
+        for _ in range(10):
+            res.append(self.sample_value_by_type(typ))
+
+        return res
 
     def index_values_by_type(self):
         value_map = {}
