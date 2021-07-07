@@ -715,7 +715,7 @@ class ListExpr(Expression):
         return self._item == other._item
 
     def pretty(self, hang):
-        return f"[{self._item}]"
+        return f"return {self._item}"
 
     def apply_subst(self, subst):
         return ListExpr(self._item.apply_subst(subst))

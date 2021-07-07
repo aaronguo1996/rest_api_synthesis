@@ -497,9 +497,9 @@ class Bencher:
                "\\resizebox{\\textwidth}{!}{"
                "\\begin{tabular}{l|lp{7.5cm}|rr|rrrr|rr}"
                "\\toprule"
-               "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{2}{c|}{Candidates} & \\multicolumn{4}{c|}{Solutions} & \\multicolumn{2}{c}{Rank} \\\\"
-               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-8} \\cmidrule(lr){9-10}"
-               "API & ID & Description & $n_{C}$ & $t_{RE}$ (s) & Size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & w/o RE & w/ RE \\\\"
+               "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{2}{c|}{Candidates} & \\multicolumn{4}{c|}{Solution} & \\multicolumn{2}{c}{Rank} \\\\"
+               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-5} \\cmidrule(lr){6-9} \\cmidrule(lr){10-11}"
+               "API & ID & Description & $n_{C}$ & $t_{RE}$ & Size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & w/o RE & w/ RE \\\\"
                "\\midrule")
         res += "\n"
 
