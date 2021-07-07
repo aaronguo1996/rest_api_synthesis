@@ -556,15 +556,22 @@ class Bencher:
                 res += f"\\emph{{\\textbf{{{bench.name}. {bench.description}}}}}\n\n"
 
                 # Input to output
-                input_vals = "\\T{"
-                input_vals += ', '.join([f"{v}" for k, v in bench.inputs.items()])
+                input_vals = ""
+                if len(bench.inputs.items()) > 0:
+                    input_vals += "{"
+                    input_vals += ', '.join([f"{k}: {v}" for k, v in bench.inputs.items()])
+                    input_vals += "}"
+                else:
+                    input_vals += "()"
                 input_vals += "}"
-                output_val = f"\\T{{{bench.output}}}"
+                output_val = f"{bench.output}"
                 
-                res += f"\emph{{Type query}}: ${input_vals} \\to {output_val}$\n\n"
+                res += (f"\emph{{Type query}}: "
+                        "\\lstinline[style=dsl,basicstyle=\\ttfamily,breakatwhitespace,breaklines=true,postbreak=\\mbox{\\textcolor{red}{$\\hookrightarrow$}\\space}]!"
+                        f"{input_vals} --> {output_val}!\n\n")
                 
                 # Target solution
-                res += ("\\begin{lstlisting}[style=dsl,basicstyle=\\ttfamily\\footnotesize,xleftmargin=5pt]\n"
+                res += ("\\begin{lstlisting}[style=dsl,basicstyle=\\ttfamily\\footnotesize,xleftmargin=5pt,breaklines=true,postbreak=\\mbox{\\textcolor{red}{$\\hookrightarrow$}\\space}]\n"
                         f"{bench.solutions[0]}\n"
                         "\\end{lstlisting}\n\n")
 
