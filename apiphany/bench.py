@@ -63,27 +63,26 @@ def build_cmd_parser():
 
 slack_minimal = [
     Benchmark(
-        "1.4",
-        "Get all messages associated with a user",
+        "1.1",
+        "Retrieve all member emails from channel name",
         {
-            "user_id": types.PrimString("defs_user_id"),
-            "ts": types.PrimString("defs_ts"),
+            "channel_name": types.PrimString("objs_conversation.name")
         },
-        types.ArrayType(None, types.SchemaObject("objs_message")),
+        types.ArrayType(None, types.PrimString("objs_user.profile.email")),
         [
             Program(
-                ["user_id", "ts"],
+                ["channel_name"],
                 [
                     AssignExpr("x0", AppExpr("/conversations.list_GET", []), False),
                     AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "channels"), True),
-                    AssignExpr("x2", AppExpr("/conversations.history_GET", [("channel", ProjectionExpr(VarExpr("x1"), "id")), ("oldest", VarExpr("ts"))]), False),
-                    AssignExpr("x3", ProjectionExpr(VarExpr("x2"), "messages"), True),
-                    EquiExpr(ProjectionExpr(VarExpr("x3"), "user"), VarExpr("user_id")),
-                    # FilterExpr(VarExpr("x3"), "user", VarExpr("user_id"), False),
-                    VarExpr("x3")
+                    EquiExpr(ProjectionExpr(VarExpr("x1"), "name"), VarExpr("channel_name")),
+                    AssignExpr("x2", AppExpr("/conversations.members_GET", [("channel", ProjectionExpr(VarExpr("x1"), "id"))]), False),
+                    AssignExpr("x3", ProjectionExpr(VarExpr("x2"), "members"), True),
+                    AssignExpr("x4", AppExpr("/users.profile.get_GET", [("user", VarExpr("x3"))]), False),
+                    ProjectionExpr(ProjectionExpr(VarExpr("x4"), "profile"), "email"),
                 ]
-            )
-        ]
+            ),
+        ],
     ),
 ]
 

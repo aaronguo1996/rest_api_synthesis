@@ -120,10 +120,6 @@ impl Runner {
 
                             let mut cost_avg = costs.iter().sum::<Cost>() / costs.len();
 
-                            if ix == target_ix {
-                                println!("pre-adds: {}", cost_avg);
-                            }
-                            
                             if all_singleton && multiple {
                                 cost_avg += 25;
                             } else if all_multiple && !multiple {
@@ -132,10 +128,6 @@ impl Runner {
 
                             if all_empty {
                                 cost_avg += 10;
-                            }
-
-                            if ix == target_ix {
-                                println!("post-adds: {}", cost_avg);
                             }
 
                             (ix, cost_avg)
@@ -148,7 +140,6 @@ impl Runner {
                 // Sort the result by cost and get the cost of the target ix
                 res.sort_by_key(|x| x.1);
 
-                println!("min (rank 1): {:?}", res.get(0).unwrap());
                 res.iter().position(|x| x.1 == tgt_cost).unwrap() + 1
             })
             .collect();
@@ -333,7 +324,10 @@ impl<'a> ExecEnv<'a> {
                     // Pop from top of stack, project into it, push.
                     let x = self.data.pop()?;
                     let mut tmp = (x, heap.get(x)?);
+
                     for path in self.arena.get_str(f).split('.') {
+                        // println!("{:?}", tmp);
+                    
                         if let Some(v) = tmp.1.get(path, &heap) {
                             tmp = v;
                             self.cost += 1;
@@ -342,6 +336,13 @@ impl<'a> ExecEnv<'a> {
                             continue 'outer;
                         }
                     }
+
+                    if let RValue::Null = tmp.1 {
+                        self.set_error();
+                        continue 'outer;
+                    }
+
+                    // println!("{:?}", tmp);
                     self.data.push(tmp.0);
 
                     self.ip += 1;

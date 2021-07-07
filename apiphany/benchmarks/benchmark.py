@@ -222,14 +222,6 @@ class Benchmark:
             for rank, (_, res_sol, score) in enumerate(res):
                 if (res_sol in self.solutions and
                     abs(score - consts.MAX_COST) > 1e-2):
-                    tgt_score = score
-
-                    break
-
-        for res in program_ranks:
-            res = sorted(res, key=lambda x: x[-1])
-            for rank, (_, res_sol, score) in enumerate(res):
-                if (abs(score - tgt_score) > 1e-2):
                     ranks.append((rank + 1, res_sol, score))
 
                     for i, r in enumerate(res):
@@ -365,20 +357,20 @@ class BenchmarkSuite:
 
                 if not runtime_config.synthesis_only:
                     start = time.time()
-                    ranks, sol_prog = benchmark.get_rank(
-                        entries,
-                        self._configuration,
-                        runtime_config,
-                        self._log_analyzer,
-                        solutions,
-                    )
-                    # ranks, sol_prog = benchmark.get_rust_rank(
+                    # ranks, sol_prog = benchmark.get_rank(
                     #     entries,
                     #     self._configuration,
                     #     runtime_config,
                     #     self._log_analyzer,
                     #     solutions,
                     # )
+                    ranks, sol_prog = benchmark.get_rust_rank(
+                        entries,
+                        self._configuration,
+                        runtime_config,
+                        self._log_analyzer,
+                        solutions,
+                    )
                     end = time.time()
                     print("RE time:", end - start)
 
