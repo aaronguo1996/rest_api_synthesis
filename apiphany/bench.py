@@ -376,7 +376,7 @@ stripe_benchmarks = [
         {
             "email": types.PrimString("customer.email"),
         },
-        types.ArrayType(None, types.SchemaObject("customer")),
+        types.SchemaObject("customer"),
         [
             Program(
                 ["email"],

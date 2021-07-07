@@ -4,3 +4,6 @@ SNAKES
 # seaborn
 jsonref
 pebble
+requests
+xeger
+gurobipy
