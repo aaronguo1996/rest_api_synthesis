@@ -563,7 +563,6 @@ class Bencher:
                     input_vals += "}"
                 else:
                     input_vals += "()"
-                input_vals += "}"
                 output_val = f"{bench.output}"
                 
                 res += (f"\emph{{Type query}}: "
