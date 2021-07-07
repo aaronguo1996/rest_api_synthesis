@@ -166,6 +166,6 @@ def index_entries(entries, skip_fields):
 
 def pretty_none(v):
     if isinstance(v, float):
-        return round(v, 2)
+        return round(v, 1)
         
     return v if v is not None else '-'

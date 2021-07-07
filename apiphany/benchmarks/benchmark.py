@@ -49,6 +49,7 @@ class BenchmarkResult:
         self.filters = None
         self.endpoint_calls = None
         self.time = None
+        self.candidates = None
 
 class APIInfo:
     def __init__(self, api, num_args, obj_sizes, obj_num, ep_num, 
@@ -255,14 +256,16 @@ class Benchmark:
         
         return ranks, sol_prog
 
-    def to_latex_entry(self, ranks, sol_prog, time):
+    def to_latex_entry(self, ranks, sol_prog, time, candidates):
         if len(ranks) > 0 and ranks[0] is not None:
             print(f"PASS, Ranks {ranks}")
             self.latex_entry.mean_rank = sum(ranks) / len(ranks)
             self.latex_entry.median_rank = sorted(ranks)[len(ranks)//2]
-            self.latex_entry.time = time
         else:
             print(f"FAIL")
+
+        self.latex_entry.time = time
+        self.latex_entry.candidates = candidates
         
         if sol_prog is not None:
             ns = sol_prog.collect_exprs()
@@ -412,7 +415,8 @@ class BenchmarkSuite:
                     end = time.time()
                     print("RE time:", end - start)
 
-                    latex_entry = benchmark.to_latex_entry(ranks, sol_prog, end - start)
+                    latex_entry = benchmark.to_latex_entry(
+                        ranks, sol_prog, end - start, len(solutions))
                     latex_entries.append(latex_entry)
 
 
@@ -491,11 +495,11 @@ class Bencher:
     def print_benchmark_results(self, results, output=None):
         res = ("% auto-generated: ./bench.py, table 2\n"
                "\\resizebox{\\textwidth}{!}{"
-               "\\begin{tabular}{l|lp{7.5cm}|rrrrr|rr}"
+               "\\begin{tabular}{l|lp{7.5cm}|rr|rrrr|rr}"
                "\\toprule"
-               "& \\multicolumn{2}{c|}{Benchmark info} & \\multicolumn{5}{c|}{Solution stats} & \\multicolumn{2}{c}{Solution rank} \\\\"
+               "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{2}{c|}{Candidates} & \\multicolumn{4}{c|}{Solutions} & \\multicolumn{2}{c}{Rank} \\\\"
                "\\cmidrule(lr){2-3} \\cmidrule(lr){4-8} \\cmidrule(lr){9-10}"
-               "API & Name & Description & Size & $n_{ep}$ & $n_{proj}$ & $n_{guard}$ & RE time (s) & w/o RE & w/ RE \\\\"
+               "API & ID & Description & $n_{C}$ & $t_{RE}$ (s) & Size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & w/o RE & w/ RE \\\\"
                "\\midrule")
         res += "\n"
 
@@ -509,11 +513,12 @@ class Bencher:
                 res += (
                     f"& {r.name} "
                     f"& {r.desc} "
+                    f"& {utils.pretty_none(r.candidates)} "
+                    f"& {utils.pretty_none(r.time)} "
                     f"& {utils.pretty_none(r.ast_size)} "
                     f"& {utils.pretty_none(r.endpoint_calls)} "
                     f"& {utils.pretty_none(r.projects)} "
                     f"& {utils.pretty_none(r.filters)} "
-                    f"& {utils.pretty_none(r.time)} "
                     f"& {utils.pretty_none(r.rank_no_re)} "
                     f"& {utils.pretty_none(r.median_rank)} ")
                 res += r" \\"
