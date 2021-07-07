@@ -71,7 +71,6 @@ impl Runner {
                                     // Run RE!
                                     // println!("{}", ix);
                                     let out = ex.run(&mut t);
-                                    println!("{} returns {:?}", ix, out);
 
                                     out.unwrap_or_else(|| (None, 99999))
                                 })
@@ -123,10 +122,6 @@ impl Runner {
 
                             let mut cost_avg = costs.iter().sum::<Cost>() / costs.len();
 
-                            if ix == target_ix {
-                                println!("pre-adds: {}", cost_avg);
-                            }
-                            
                             if all_singleton && multiple {
                                 cost_avg += 25;
                             } else if all_multiple && !multiple {
@@ -135,10 +130,6 @@ impl Runner {
 
                             if all_empty {
                                 cost_avg += 10;
-                            }
-
-                            if ix == target_ix {
-                                println!("post-adds: {}", cost_avg);
                             }
 
                             (ix, cost_avg)
@@ -151,7 +142,7 @@ impl Runner {
                 // Sort the result by cost and get the cost of the target ix
                 res.sort_by_key(|x| x.1);
 
-                println!("min (rank 1): {:?}", &res[0..20]);
+                // println!("min (rank 1): {:?}", &res[0..20]);
                 (tgt_cost, res.iter().position(|x| x.1 == tgt_cost).unwrap() + 1)
             })
             .filter(|x| x.0 < 99999)
@@ -338,24 +329,28 @@ impl<'a> ExecEnv<'a> {
                     // Pop from top of stack, project into it, push.
                     let x = self.data.pop()?;
                     let mut tmp = (x, heap.get(x)?);
-                    // for path in self.arena.get_str(f).split('.') {
-                    //     if let Some(v) = tmp.1.get(path, &heap) {
-                    //         tmp = v;
-                    //         self.cost += 1;
-                    //     } else {
-                    //         self.set_error();
-                    //         continue 'outer;
-                    //     }
-                    // }
-                    let path = self.arena.get_str(f);
-                    if let Some(v) = tmp.1.get(path, &heap) {
-                        self.data.push(v.0);
-                        self.cost += 1;
-                        self.ip += 1;
-                    } else {
-                        // println!("cannot find field {}", path);
-                        self.set_error();
+
+                    for path in self.arena.get_str(f).split('.') {
+                        // println!("{:?}", tmp);
+                    
+                        if let Some(v) = tmp.1.get(path, &heap) {
+                            tmp = v;
+                            self.cost += 1;
+                        } else {
+                            self.set_error();
+                            continue 'outer;
+                        }
                     }
+
+                    if let RValue::Null = tmp.1 {
+                        self.set_error();
+                        continue 'outer;
+                    }
+
+                    // println!("{:?}", tmp);
+                    self.data.push(tmp.0);
+
+                    self.ip += 1;
                 }
                 Expr::Bind(v) => {
                     // First, peek at top of stack.
