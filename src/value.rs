@@ -144,7 +144,7 @@ impl<'r> ThreadSlab<'r> {
     pub fn new(root: &'r RootSlab) -> Self {
         Self {
             root,
-            data: Vec::with_capacity(50000),
+            data: Vec::new(),
             init: root.data.len(),
         }
     }

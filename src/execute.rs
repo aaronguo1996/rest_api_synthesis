@@ -62,89 +62,77 @@ impl Runner {
                 self.progs
                     .par_iter()
                     .enumerate()
-                    .map(
-                        |(ix, prog)| {
+                    .map(|(ix, prog)| {
+                        let mut all_none = true;
+                        let mut all_singleton = true;
+                        let mut all_multiple = true;
+                        let mut all_empty = true;
+
+                        let mut costs: Vec<Cost> = Vec::with_capacity(repeat);
+                        for _rep in 0..repeat {
                             let mut t = ThreadSlab::new(slab);
-                            let reses: Vec<(Option<ValueIx>, Cost)> = (0..repeat)
-                                .map(|_i| {
-                                    // Make a new execution environment
-                                    let mut ex = ExecEnv::new(
-                                        &self.arena,
-                                        prog.start,
-                                        prog.end,
-                                        &self.default_inputs,
-                                    );
 
-                                    // Run RE!
-                                    // println!("{}", ix);
-                                    let out = ex.run(&mut t);
+                            // Make a new execution environment
+                            let mut ex = ExecEnv::new(
+                                &self.arena,
+                                prog.start,
+                                prog.end,
+                                &self.default_inputs,
+                            );
 
-                                    // println!("{:?}", out);
+                            // Run RE!
+                            let (result, cost) = ex.run(&mut t).unwrap_or_else(|| (None, 99999));
 
-                                    out.unwrap_or_else(|| (None, 99999))
-                                })
-                                .collect();
+                            if let Some(r) = result {
+                                all_none = false;
 
-                            // println!("overall slab size: {}", slab.data.len());
-                            // println!("thread slab size: {}", t.data.len());
-
-                            // Then do analysis on the valid solutions we got
-                            let mut all_none = true;
-                            let mut all_singleton = true;
-                            let mut all_multiple = true;
-                            let mut all_empty = true;
-
-                            let mut costs = Vec::with_capacity(10);
-
-                            for (result, cost) in reses {
-                                if let Some(r) = result {
-                                    all_none = false;
-
-                                    if !(t.get(r).unwrap().is_empty()) {
-                                        all_empty = false;
-                                    }
-
-                                    let mut rr = t.get(r).unwrap();
-
-                                    while let Some(ra) = rr.as_array() {
-                                        if ra.len() == 1 {
-                                            rr = t.get(ra[0]).unwrap();
-                                        } else {
-                                            break;
-                                        }
-                                    }
-
-                                    if rr.is_array() && rr.as_array().unwrap().len() > 1 {
-                                        all_singleton = false;
-                                    } else {
-                                        all_multiple = false;
-                                    }
-
-                                    costs.push(cost);
+                                if !(t.get(r).unwrap().is_empty()) {
+                                    all_empty = false;
                                 }
+
+                                let mut rr = t.get(r).unwrap();
+
+                                while let Some(ra) = rr.as_array() {
+                                    if ra.len() == 1 {
+                                        rr = t.get(ra[0]).unwrap();
+                                    } else {
+                                        break;
+                                    }
+                                }
+
+                                if rr.is_array() && rr.as_array().unwrap().len() > 1 {
+                                    all_singleton = false;
+                                } else {
+                                    all_multiple = false;
+                                }
+
+                                costs.push(cost);
                             }
+                        }
 
-                            if all_none {
-                                return (ix, 99999);
-                            }
+                        // println!("overall slab size: {}", slab.data.len());
+                        // println!("thread slab size: {}", t.data.len());
 
-                            let mut cost_avg = costs.iter().sum::<Cost>() / costs.len();
+                        if all_none {
+                            return (ix, 99999);
+                        }
 
-                            if all_singleton && multiple {
-                                cost_avg += 25;
-                            } else if all_multiple && !multiple {
-                                cost_avg += 50;
-                            }
+                        let mut cost_avg = costs.iter().sum::<Cost>() / costs.len();
 
-                            if all_empty {
-                                cost_avg += 10;
-                            }
+                        if all_singleton && multiple {
+                            cost_avg += 25;
+                        } else if all_multiple && !multiple {
+                            cost_avg += 50;
+                        }
 
-                            // println!("{}", cost_avg);
+                        if all_empty {
+                            cost_avg += 10;
+                        }
 
-                            (ix, cost_avg)
-                        },
-                    )
+                        // println!("{}", cost_avg);
+
+                        (ix, cost_avg)
+                    })
                     .collect_into_vec(&mut res);
 
                 let tgt_cost = res.get(target_ix).unwrap().1;
@@ -493,7 +481,8 @@ impl<'a> ExecEnv<'a> {
                             // println!("{} {} {:?}", cur, len, self.data.len());
                             self.push_var(
                                 bound,
-                                *heap.get(self.data[stack_ix])
+                                *heap
+                                    .get(self.data[stack_ix])
                                     .unwrap()
                                     .as_array()
                                     .unwrap()
