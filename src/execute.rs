@@ -62,9 +62,9 @@ impl Runner {
                 self.progs
                     .par_iter()
                     .enumerate()
-                    .map_init(
-                        || ThreadSlab::new(slab),
-                        |mut t, (ix, prog)| {
+                    .map(
+                        |(ix, prog)| {
+                            let mut t = ThreadSlab::new(slab);
                             let reses: Vec<(Option<ValueIx>, Cost)> = (0..repeat)
                                 .map(|_i| {
                                     // Make a new execution environment
@@ -79,9 +79,14 @@ impl Runner {
                                     // println!("{}", ix);
                                     let out = ex.run(&mut t);
 
+                                    // println!("{:?}", out);
+
                                     out.unwrap_or_else(|| (None, 99999))
                                 })
                                 .collect();
+
+                            // println!("overall slab size: {}", slab.data.len());
+                            // println!("thread slab size: {}", t.data.len());
 
                             // Then do analysis on the valid solutions we got
                             let mut all_none = true;
@@ -389,7 +394,7 @@ impl<'a> ExecEnv<'a> {
                         self.cost = 0;
 
                         // Push x[0] to env.
-                        self.env.insert(*v, x.get(0).unwrap().clone());
+                        self.env.insert(*v, *x.get(0).unwrap());
 
                         // Set tip to error recovery spot; the last place with
                         // a valid data val.
@@ -488,13 +493,12 @@ impl<'a> ExecEnv<'a> {
                             // println!("{} {} {:?}", cur, len, self.data.len());
                             self.push_var(
                                 bound,
-                                heap.get(self.data[stack_ix])
+                                *heap.get(self.data[stack_ix])
                                     .unwrap()
                                     .as_array()
                                     .unwrap()
                                     .get(cur)
-                                    .unwrap()
-                                    .clone(),
+                                    .unwrap(),
                             );
 
                             // TODO: try using last_mut instead of popping and repushing
@@ -667,7 +671,7 @@ impl Arena {
         if !responses.is_empty() {
             let dist = WeightedIndex::new(&weights).unwrap();
             let mut rng = thread_rng();
-            Some(responses[dist.sample(&mut rng)].clone())
+            Some(responses[dist.sample(&mut rng)])
 
             // Some(responses[weighted_choice(&weights)])
         } else {
