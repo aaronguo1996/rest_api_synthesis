@@ -149,6 +149,11 @@ impl<'r> ThreadSlab<'r> {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.data.clear();
+        self.init = self.root.data.len();
+    }
+
     pub fn push_rval(&mut self, v: RValue) -> ValueIx {
         self.data.push(v);
         self.init + self.data.len() - 1

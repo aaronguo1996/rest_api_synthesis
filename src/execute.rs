@@ -69,9 +69,8 @@ impl Runner {
                         let mut all_empty = true;
 
                         let mut costs: Vec<Cost> = Vec::with_capacity(repeat);
+                        let mut t = ThreadSlab::new(slab);
                         for _rep in 0..repeat {
-                            let mut t = ThreadSlab::new(slab);
-
                             // Make a new execution environment
                             let mut ex = ExecEnv::new(
                                 &self.arena,
@@ -108,6 +107,8 @@ impl Runner {
 
                                 costs.push(cost);
                             }
+
+                            t.clear();
                         }
 
                         // println!("overall slab size: {}", slab.data.len());
