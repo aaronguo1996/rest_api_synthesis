@@ -42,8 +42,7 @@ class BenchmarkResult:
         self.name = name
         self.desc = desc
         self.rank_no_re = None
-        self.mean_rank = None
-        self.median_rank = None
+        self.ranks = None
         self.ast_size = None
         self.projects = None
         self.filters = None
@@ -94,7 +93,7 @@ class Benchmark:
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
             )
             
-        solutions = {}
+        solutions = []
         for j in range(consts.DEFAULT_LENGTH_LIMIT + 1):
             sol_file = os.path.join(bm_dir, f"solutions_{j}.pkl")
             if os.path.exists(sol_file):
@@ -105,11 +104,11 @@ class Benchmark:
                     print(j)
                     raise Exception(e)
 
-                solutions.update({p:p for p in programs})
+                solutions.append({p:p for p in programs}.keys())
 
         num_place, num_trans = get_petri_net_data(bm_dir)
 
-        return num_place, num_trans, list(solutions.keys())
+        return num_place, num_trans, solutions
 
     def _run_re(
         self, entries, configuration, runtime_config, 
@@ -162,26 +161,29 @@ class Benchmark:
         self, entries, configuration, runtime_config, 
         log_analyzer, solutions):
         found = False
-        target_ix = 0
+        target_ix = None
         sol_prog = None
-        print("Total solutions:", len(solutions), flush=True)
-        for rank, res_sol in enumerate(solutions):
-            for tgt_sol in self.solutions:
-                if tgt_sol == res_sol:
-                    found = True
-                    self.latex_entry.rank_no_re = rank + 1
-                    target_ix = rank
-                    sol_prog = tgt_sol
-                    break
+        # print("Total solutions:", len(solutions), flush=True)
+        
+        
+        flatten_solutions = []
+        cnt = 0
+        for sol_at_len in solutions:
+            for rank, res_sol in enumerate(sol_at_len):
+                for tgt_sol in self.solutions:
+                    if tgt_sol == res_sol and target_ix is None:
+                        self.latex_entry.rank_no_re = (cnt + 1, cnt + len(sol_at_len))
+                        target_ix = cnt + rank
+                        sol_prog = tgt_sol
 
-            if found:
-                break
+            cnt += len(sol_at_len)
+            flatten_solutions += sol_at_len
 
-        if not found:
+        if target_ix is None:
             return [], None
 
         ranks = rust_re(
-            log_analyzer, solutions, entries,
+            log_analyzer, flatten_solutions, entries,
             list(self.inputs.items()), target_ix,
             isinstance(self.output, types.ArrayType),
             runtime_config.filter_num, runtime_config.repeat)
@@ -259,8 +261,9 @@ class Benchmark:
     def to_latex_entry(self, ranks, sol_prog, time, candidates):
         if len(ranks) > 0 and ranks[0] is not None:
             print(f"PASS, Ranks {ranks}")
-            self.latex_entry.mean_rank = sum(ranks) / len(ranks)
-            self.latex_entry.median_rank = sorted(ranks)[len(ranks)//2]
+            self.latex_entry.ranks = ranks
+            # self.latex_entry.mean_rank = sum(ranks) / len(ranks)
+            # self.latex_entry.median_rank = sorted(ranks)[len(ranks)//2]
         else:
             print(f"FAIL")
 
@@ -345,18 +348,20 @@ class BenchmarkSuite:
 
         # number of endpoints
         endpoints = self._doc.get(defs.DOC_PATHS)
-        ep_num = len(endpoints)
+        ep_num = 0
+        for ep in endpoints.values():
+            ep_num += len(ep)
 
         # initial witnesses and coverage
         initial_witness_cnt = len(self._initial_witnesses)
         initial_covered = {
-            x.endpoint for x in self._initial_witnesses if x.endpoint in endpoints
+            (x.endpoint, x.method.upper()) for x in self._initial_witnesses if x.endpoint in endpoints
         }
         initial_covered_num = len(initial_covered)
 
         # covered endpoints
         covered = {
-            x.endpoint for x in self._entries if x.endpoint in endpoints
+            (x.endpoint, x.method.upper()) for x in self._entries if x.endpoint in endpoints
         }
         ep_covered = len(covered)
         all_witness_cnt = len([e for e in self._entries if not isinstance(e.response, ErrorResponse)])
@@ -420,12 +425,12 @@ class BenchmarkSuite:
                     latex_entries.append(latex_entry)
 
 
-            # with open(cache_path, "wb") as f:
-            #     pickle.dump({
-            #         "places": places,
-            #         "transitions": transitions,
-            #         "results": latex_entries,
-            #     }, f)
+            with open(cache_path, "wb") as f:
+                pickle.dump({
+                    "places": places,
+                    "transitions": transitions,
+                    "results": latex_entries,
+                }, f)
 
         return latex_entries, places, transitions
 
@@ -458,7 +463,7 @@ class Bencher:
             "\\toprule"
             "& \\multicolumn{4}{c|}{API size} & \\multicolumn{5}{c|}{API Analysis} & \\multicolumn{2}{c}{TTN size} \\\\"
             "\\cmidrule(lr){2-5} \\cmidrule(lr){6-10} \\cmidrule(lr){11-12}"
-            "API & \\# Ep & \\# Args & \\# Objs & Obj Sizes & $n_{init}$ & $cv_{init}$ & $n_{gen}$ & $cv_{gen}$ & $n_{ann}$ & \\# places & \\# trans \\\\"
+            "API & $n_{m}$ & $n_{args}$ & $n_{objs}$ & $s_{objs}$ & $n_{init}$ & $cv_{init}$ & $n_{gen}$ & $cv_{gen}$ & $n_{ann}$ & \\# places & \\# trans \\\\"
             "\\midrule")
         res += "\n"
 
@@ -510,6 +515,19 @@ class Bencher:
                 if r is None:
                     continue
 
+                print(r.name)
+                ranks = r.ranks
+                if ranks is None:
+                    continue
+
+                median_rank = ranks[len(ranks)//2]
+                if r.rank_no_re is None:
+                    rank_no_re = '-'
+                elif isinstance(r.rank_no_re, tuple):
+                    rank_no_re = f"{r.rank_no_re[0]}-{r.rank_no_re[1]}"
+                else:
+                    rank_no_re = r.rank_no_re
+
                 res += (
                     f"& {r.name} "
                     f"& {r.desc} "
@@ -519,8 +537,8 @@ class Bencher:
                     f"& {utils.pretty_none(r.endpoint_calls)} "
                     f"& {utils.pretty_none(r.projects)} "
                     f"& {utils.pretty_none(r.filters)} "
-                    f"& {utils.pretty_none(r.rank_no_re)} "
-                    f"& {utils.pretty_none(r.median_rank)} ")
+                    f"& {rank_no_re} "
+                    f"& {utils.pretty_none(median_rank)} ")
                 res += r" \\"
                 res += "\n"
             if i < len(self._suites) - 1:

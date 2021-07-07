@@ -91,7 +91,7 @@ slack_benchmarks = [
         {
             "channel_name": types.PrimString("objs_conversation.name")
         },
-        types.ArrayType(None, types.PrimString("objs_user.profile.email")),
+        types.ArrayType(None, types.PrimString("objs_user_profile.email")),
         [
             Program(
                 ["channel_name"],
@@ -111,7 +111,7 @@ slack_benchmarks = [
         "1.2",
         "Send a message to some user given the email address",
         {
-            "email": types.PrimString("objs_user.profile.email")
+            "email": types.PrimString("objs_user_profile.email")
         },
         types.SchemaObject("objs_message"),
         [
@@ -470,7 +470,7 @@ stripe_benchmarks = [
         {
             "customer_id": types.PrimString("customer.id"),
         },
-        types.PrimString("source.card.last4"),
+        types.PrimString("bank_account.last4"),
         [
             Program(
                 ["customer_id"],

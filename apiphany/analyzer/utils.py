@@ -22,7 +22,7 @@ def get_representative(group):
 
     candidates = [n for n in candidates if not blacklist(n)]
     if candidates:
-        rep = min(candidates, key=lambda x: (len(x), x))
+        rep = min(candidates, key=lambda x: (x.count("."), len(x), x)) # we prefer names with fewer dots
         return rep
     else:
         return None
