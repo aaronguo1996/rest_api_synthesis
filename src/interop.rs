@@ -68,7 +68,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         let mut arena = Arena::new();
 
         // Then, translate our programs and traces
-        let t = std::time::Instant::now();
+        // let t = std::time::Instant::now();
         let progs = translate_progs(&imports, &progs, &mut arena)?;
         translate_traces(&imports, traces, &mut arena, &mut slab);
         // println!("py to rs time: {}", t.elapsed().as_micros());
@@ -91,7 +91,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         // Create our Runner!
         let r = Runner::new(arena, progs, new_inputs);
 
-        let t = std::time::Instant::now();
+        // let t = std::time::Instant::now();
         // And run it on our inputs
         let res = r.run(target_ix, multiple, &slab, filter_num, repeat);
         // println!("interpret time: {}", t.elapsed().as_micros());

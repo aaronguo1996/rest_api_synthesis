@@ -144,9 +144,14 @@ impl<'r> ThreadSlab<'r> {
     pub fn new(root: &'r RootSlab) -> Self {
         Self {
             root,
-            data: Vec::with_capacity(50000),
+            data: Vec::new(),
             init: root.data.len(),
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.data.clear();
+        self.init = self.root.data.len();
     }
 
     pub fn push_rval(&mut self, v: RValue) -> ValueIx {

@@ -242,22 +242,21 @@ slack_suite = BenchmarkSuite(
 
 stripe_minimal = [
     Benchmark(
-        "2.8",
-        "Get email of subscribers to some product",
+        "2.1",
+        "Make a subscription to a product for a customer",
         {
+            "customer_id": types.PrimString("customer.id"),
             "product_id": types.PrimString("product.id"),
         },
-        types.ArrayType(None, types.PrimString("customer.email")),
+        types.ArrayType(None, types.SchemaObject("subscription")),
         [
             Program(
-                ["product_id"],
+                ["customer_id", "product_id"],
                 [
-                    AssignExpr("x1", AppExpr("/v1/subscriptions_GET", []), False),
+                    AssignExpr("x1", AppExpr("/v1/prices_GET", [("product", VarExpr("product_id"))]), False),
                     AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "data"), True),
-                    AssignExpr("x3", ProjectionExpr(ProjectionExpr(VarExpr("x2"), "items"), "data"), True),
-                    EquiExpr(ProjectionExpr(ProjectionExpr(VarExpr("x3"), "price"), "product"), VarExpr("product_id")),
-                    AssignExpr("x4", AppExpr("/v1/customers/{customer}_GET", [("customer", ProjectionExpr(VarExpr("x2"), "customer"))]), False),
-                    ProjectionExpr(VarExpr("x4"), "email")
+                    AssignExpr("x3", AppExpr("/v1/subscriptions_POST", [("customer", VarExpr("customer_id")), ("items[0][price]", ProjectionExpr(VarExpr("x2"), "id"))]), False),
+                    VarExpr("x3")
                 ]
             )
         ]
@@ -272,7 +271,7 @@ stripe_benchmarks = [
             "customer_id": types.PrimString("customer.id"),
             "product_id": types.PrimString("product.id"),
         },
-        types.SchemaObject("subscription"),
+        types.ArrayType(None, types.SchemaObject("subscription")),
         [
             Program(
                 ["customer_id", "product_id"],

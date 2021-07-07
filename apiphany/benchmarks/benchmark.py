@@ -484,9 +484,9 @@ class Bencher:
         # print(res)
 
         if output:
-            with open(os.path.join(output, "table1.tex"), "w") as of:
+            with open(os.path.join(output, "api_info.tex"), "w") as of:
                 of.write(res)
-                print(f"written to {os.path.join(output, 'table1.tex')}")
+                print(f"written to {os.path.join(output, 'api_info.tex')}")
 
     def print_benchmark_results(self, results, output=None):
         res = ("% auto-generated: ./bench.py, table 2\n"

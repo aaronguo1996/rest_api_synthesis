@@ -115,7 +115,7 @@ def get_obj_weight(obj):
         for _, child in obj.items():
             total += get_obj_weight(child)
         return total
-    elif obj is not None:
+    elif obj:
         return 1
     else:
         return 0
