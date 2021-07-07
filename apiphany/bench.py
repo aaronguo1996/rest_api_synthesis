@@ -87,7 +87,7 @@ slack_minimal = [
 slack_benchmarks = [
     Benchmark(
         "1.1",
-        "Retrieve all member emails from channel name",
+        "Retrieve emails of all members in a channel",
         {
             "channel_name": types.PrimString("objs_conversation.name")
         },
@@ -109,7 +109,7 @@ slack_benchmarks = [
     ),
     Benchmark(
         "1.2",
-        "Send a message to some user given the email address",
+        "Send a message to a user given their email",
         {
             "email": types.PrimString("objs_user_profile.email")
         },
@@ -128,7 +128,7 @@ slack_benchmarks = [
     ),
     Benchmark(
         "1.3",
-        "Get all unread message for a user",
+        "Get the unread messages of a user",
         {
             "user_id": types.PrimString("defs_bot_id")
         },
@@ -170,7 +170,7 @@ slack_benchmarks = [
     ),
     Benchmark(
         "1.5",
-        "Create a channel and invite users",
+        "Create a channel and invite a list of users",
         {
             "user_ids": types.ArrayType(None, types.PrimString("defs_bot_id")),
             "channel_name": types.PrimString("objs_conversation.name"),
@@ -190,7 +190,7 @@ slack_benchmarks = [
     ),
     Benchmark(
         "1.6",
-        "Given a message, add a reply and then update it",
+        "Reply to a message and update it",
         {
             "channel": types.PrimString("defs_channel"),
             "ts": types.PrimString("defs_ts"),
@@ -209,7 +209,7 @@ slack_benchmarks = [
     ),
     Benchmark(
         "1.7",
-        "Send a message to a given channel name",
+        "Send a message to a channel with the given name",
         {
             "channel": types.PrimString("objs_conversation.name"),
         },
@@ -266,7 +266,7 @@ stripe_minimal = [
 stripe_benchmarks = [
     Benchmark(
         "2.1",
-        "Make a subscription to a product for a customer",
+        "Subscribe to a product for a customer",
         {
             "customer_id": types.PrimString("customer.id"),
             "product_id": types.PrimString("product.id"),
@@ -371,7 +371,7 @@ stripe_benchmarks = [
     # ),
     Benchmark(
         "2.4",
-        "Retrieve customer by email",
+        "Retrieve a customer by email",
         {
             "email": types.PrimString("customer.email"),
         },
@@ -409,7 +409,7 @@ stripe_benchmarks = [
     ),
     Benchmark(
         "2.6",
-        "Get refund for given subscription",
+        "Get a refund for a subscription",
         {
             "subscription": types.PrimString("subscription.id"),
         },
@@ -428,7 +428,7 @@ stripe_benchmarks = [
     ),
     Benchmark(
         "2.7",
-        "Get email of all customers",
+        "Get the emails of all customers",
         {
         },
         types.ArrayType(None, types.PrimString("customer.email")),
@@ -445,7 +445,7 @@ stripe_benchmarks = [
     ),
     Benchmark(
         "2.8",
-        "Get email of subscribers to some product",
+        "Get the emails of the subscribers of a product",
         {
             "product_id": types.PrimString("product.id"),
         },
@@ -466,7 +466,7 @@ stripe_benchmarks = [
     ),
     Benchmark(
         "2.9",
-        "Get last 4 digit of card for a customer",
+        "Get the last 4 digits of a customer's card",
         {
             "customer_id": types.PrimString("customer.id"),
         },
@@ -503,7 +503,7 @@ stripe_benchmarks = [
     # ),
     Benchmark(
         "2.10",
-        "Update payment methods for all subscriptions",
+        "Update the payment methods for a customer's subscriptions",
         {
             "payment_method": types.SchemaObject("payment_method"),
             "customer_id": types.PrimString("customer.id"),
@@ -556,7 +556,7 @@ square_minimal = [
 square_benchmarks = [
     Benchmark(
         "3.1",
-        "List invoices that match location id",
+        "List invoices that match a location id",
         {
             "location_id": types.PrimString("Location.id"),
         },
@@ -573,7 +573,7 @@ square_benchmarks = [
     ),
     Benchmark(
         "3.2",
-        "Find subscription from location, customer and plan",
+        "Get a list of subscriptions by location, customer, and plan",
         {
             "customer_id": types.PrimString("Customer.id"),
             "location_id": types.PrimString("Location.id"),
@@ -607,7 +607,7 @@ square_benchmarks = [
     ),
     Benchmark(
         "3.3",
-        "Get all items tax applies to",
+        "Get all items a tax applies to",
         {
             "tax_id": types.PrimString("CatalogObject.id"),
         },
@@ -627,7 +627,7 @@ square_benchmarks = [
     ),
     Benchmark(
         "3.4",
-        "List discounts in catalog",
+        "Get a list of discounts in the catalog",
         {
         },
         types.ArrayType(None, types.PrimString("CatalogDiscount")),
@@ -706,7 +706,7 @@ square_benchmarks = [
     ),
     Benchmark(
         "3.6",
-        "Get payment notes",
+        "Get payment notes of a payment",
         {
         },
         types.ArrayType(None, types.PrimString("Tender.note")),
@@ -723,7 +723,7 @@ square_benchmarks = [
     ),
     Benchmark(
         "3.7",
-        "Get order ids associated with your transactions",
+        "Get order ids associated with the current user's transactions",
         {
             "location_id": types.PrimString("Location.id"),
         },
@@ -741,7 +741,7 @@ square_benchmarks = [
     ),
     Benchmark(
         "3.8",
-        "Get order names from transaction id",
+        "Get order names from a transaction id",
         {
             "location_id": types.PrimString("Location.id"),
             "transaction_id": types.PrimString("Order.id"),
@@ -761,7 +761,7 @@ square_benchmarks = [
     ),
     Benchmark(
         "3.9",
-        "Search customers by name",
+        "Find customers by name",
         {
             "name": types.PrimString("Customer.given_name"),
         },
@@ -822,6 +822,7 @@ def main():
         output=args.output,
         print_api=True,
         print_results=True,
+        print_appendix=True,
         cached_results=False)
 
     # pr.print_stats()
