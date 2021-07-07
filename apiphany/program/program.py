@@ -91,7 +91,10 @@ class AppExpr(Expression):
         return set().union(*arg_vars)
 
     def execute(self, analyzer, _):
+        # print("call:", self._fun)
+        # print("names:", [x for x, _ in self._args])
         args = [arg.execute(analyzer, []) for _, arg in self._args]
+        # print("vals:", args)
 
         # if any of the argument fails, the whole term fails
         for arg, _ in args:
@@ -110,7 +113,7 @@ class AppExpr(Expression):
 
         val = analyzer.get_trace(self._fun, named_arg_vals)
         if val is None:
-            # print("fail to get successful trace for", self._fun, named_arg_vals)
+            print("fail to get successful trace for", self._fun, named_arg_vals)
             return None, consts.MAX_COST
         else:
             # print("[App] get back", val, "for", self._fun, named_arg_vals)
@@ -274,7 +277,7 @@ class VarExpr(Expression):
             analyzer.push_var(self._var, val)
 
         # print("[Var] get back", val, "for", self._var)
-        return val, 1
+        return val, 0
 
     def get_multiplicity(self, analyzer):
         var_mul = analyzer.lookup_var(self._var)
@@ -347,6 +350,8 @@ class ProjectionExpr(Expression):
         val, cost = self._obj.execute(analyzer, [])
         try:
             val = val.get(self._field)
+            # if val is None:
+            #     print("[Projection] field projection fails for", self._field)
             # print("[Projection] get back", val, "for", self._field)
             return val, cost + 1
         except:
@@ -461,7 +466,7 @@ class EquiExpr(Expression):
         lhs, lscore = self._lhs.execute(analyzer, [])
         candidates = [lhs]
         rhs, rscore = self._rhs.execute(analyzer, candidates)
-        return lhs == rhs, lscore + rscore
+        return lhs == rhs, lscore + rscore + 1
 
     def pretty(self, hang):
         return consts.SPACE * hang + f"if {self._lhs} = {self._rhs}"
@@ -967,6 +972,16 @@ class Program:
 
         return exprs
 
+    def remove_tautology(self):
+        exprs = []
+        for expr in self._expressions:
+            if isinstance(expr, EquiExpr) and expr._lhs == expr._rhs:
+                continue
+            else:
+                exprs.append(expr)
+
+        self._expressions = exprs
+
     def get_vars(self):
         all_vars = set()
         for expr in self._expressions:
@@ -1039,6 +1054,7 @@ class Program:
             old_expressions = self._expressions.copy()
             self.merge_direct_eqs(subst={})
             self.merge_projections(subst={})
+            # self.remove_tautology()
             # print("old", old_expressions)
             # print("new", self._expressions)
 

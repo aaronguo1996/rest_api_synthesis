@@ -21,9 +21,12 @@ from synthesizer.synthesizer import Synthesizer
 import benchmarks.utils as utils
 import consts
 
+from multiprocessing import cpu_count
+from apiphany import rust_re
+
 class BenchConfig:
     def __init__(
-        self, cache=False, repeat=5, filter_num=3,
+        self, cache=False, repeat=5, filter_num=5,
         filter_sol_only=False, synthesis_only=False,
         bias_type=dynamic.BiasType.SIMPLE, use_parallel=True):
         self.cache = cache
@@ -70,6 +73,8 @@ class Benchmark:
         self.latex_entry = BenchmarkResult(name, desc)
 
     def run(self, exp_dir, entries, configuration, runtime_config):
+        print(f"Running {self.name}")
+
         bm_dir = os.path.join(exp_dir, self.name)
         # create a directory for the current benchmark
         cached = os.path.exists(bm_dir) and len(os.listdir(bm_dir)) != 0
@@ -151,6 +156,36 @@ class Benchmark:
 
         return all_results
 
+    def get_rust_rank(
+        self, entries, configuration, runtime_config, 
+        log_analyzer, solutions):
+        found = False
+        target_ix = 0
+        sol_prog = None
+        print("Total solutions:", len(solutions), flush=True)
+        for rank, res_sol in enumerate(solutions):
+            for tgt_sol in self.solutions:
+                if tgt_sol == res_sol:
+                    found = True
+                    self.latex_entry.rank_no_re = rank + 1
+                    target_ix = rank
+                    sol_prog = tgt_sol
+                    break
+
+            if found:
+                break
+
+        if not found:
+            return [], None
+
+        ranks = rust_re(
+            log_analyzer, solutions, entries,
+            list(self.inputs.items()), target_ix,
+            isinstance(self.output, types.ArrayType))
+        sol_prog = sol_prog if len(ranks) > 0 else None
+
+        return ranks, sol_prog
+        
     def get_rank(
         self, entries, configuration, runtime_config, 
         log_analyzer, solutions):
@@ -190,10 +225,17 @@ class Benchmark:
 
         ranks = []
         for res in program_ranks:
+            tgt_score = None
             res = sorted(res, key=lambda x: x[-1])
             for rank, (_, res_sol, score) in enumerate(res):
                 if (res_sol in self.solutions and
-                    abs(score - consts.MAX_COST) > 1e-2):
+                    score < consts.MAX_COST):
+                    tgt_score = score
+
+                    break
+
+            for rank, (_, res_sol, score) in enumerate(res):
+                if (tgt_score is not None and abs(score - tgt_score) < 1e-2):
                     ranks.append((rank + 1, res_sol, score))
 
                     for i, r in enumerate(res):
@@ -203,6 +245,7 @@ class Benchmark:
 
         sol_prog = ranks[0][1] if len(ranks) > 0 else None
         ranks = [r[0] for r in ranks]
+        
         return ranks, sol_prog
 
     def to_latex_entry(self, ranks, sol_prog):
@@ -269,12 +312,10 @@ class BenchmarkSuite:
             a = json.load(af)
             annotations = len(a)
 
-        # average number of endpoint arguments
+        # number of endpoint arguments
         num_args = [len(x.parameters) for x in self._typed_entries.values()]
 
-        # average number of object size
-        # FIXME: this is wrong, we need to count numbers of nodes in objects
-        # the problem is that we might have mutual recursive definitions
+        # number of object size
         obj_sizes = []
         schemas = self._doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS)
         obj_num = len(schemas)
@@ -337,8 +378,6 @@ class BenchmarkSuite:
                 if names is not None and benchmark.name not in names:
                     continue
 
-                print("Running benchmark", benchmark.name)
-
                 places, transitions, solutions = benchmark.run(
                     self._exp_dir, 
                     self._typed_entries, 
@@ -348,7 +387,14 @@ class BenchmarkSuite:
 
                 if not runtime_config.synthesis_only:
                     start = time.time()
-                    ranks, sol_prog = benchmark.get_rank(
+                    # ranks, sol_prog = benchmark.get_rank(
+                    #     entries,
+                    #     self._configuration,
+                    #     runtime_config,
+                    #     self._log_analyzer,
+                    #     solutions,
+                    # )
+                    ranks, sol_prog = benchmark.get_rust_rank(
                         entries,
                         self._configuration,
                         runtime_config,

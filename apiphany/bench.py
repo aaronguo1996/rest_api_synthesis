@@ -487,6 +487,26 @@ stripe_suite = BenchmarkSuite(
 ##                                  SQUARE                                    ##
 ################################################################################
 
+square_minimal = [
+    Benchmark(
+        "3.1",
+        "List invoices that match location id",
+        {
+            "location_id": types.PrimString("Location.id"),
+        },
+        types.ArrayType(None, types.SchemaObject("Invoice")),
+        [
+            Program(
+                ["location_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/invoices_GET", [("location_id", VarExpr("location_id"))]), False),
+                    ProjectionExpr(VarExpr("x0"), "invoices")
+                ]
+            )
+        ],
+    ),
+]
+
 square_benchmarks = [
     Benchmark(
         "3.1",
