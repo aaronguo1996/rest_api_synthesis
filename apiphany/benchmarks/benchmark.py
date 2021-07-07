@@ -181,7 +181,8 @@ class Benchmark:
         ranks = rust_re(
             log_analyzer, solutions, entries,
             list(self.inputs.items()), target_ix,
-            isinstance(self.output, types.ArrayType))
+            isinstance(self.output, types.ArrayType),
+            runtime_config.filter_num, runtime_config.repeat)
         sol_prog = sol_prog if len(ranks) > 0 else None
 
         return ranks, sol_prog

@@ -39,14 +39,14 @@ impl Runner {
     /// Runs retrospective execution over a set of inputs.
     /// inputs is a map from an input argument name to a list of possible
     /// values for that input.
-    pub fn run(self, target_ix: ProgIx, multiple: bool, slab: &RootSlab) -> Vec<usize> {
+    pub fn run(self, target_ix: ProgIx, multiple: bool, slab: &RootSlab, filter_num: usize, repeat: usize) -> Vec<usize> {
         // Not sure why the list of input solutions would be empty but
         // Apparently it happens lol
         if self.progs.is_empty() {
             return vec![];
         }
 
-        let mut avgs: Vec<usize> = (0..10)
+        let mut avgs: Vec<usize> = (0..filter_num)
             .into_par_iter()
             .map(|_exp| {
                 let mut res = Vec::with_capacity(self.progs.len());
@@ -58,7 +58,7 @@ impl Runner {
                     .map_init(
                         || ThreadSlab::new(slab),
                         |mut t, (ix, prog)| {
-                            let reses: Vec<(Option<ValueIx>, Cost)> = (0..10)
+                            let reses: Vec<(Option<ValueIx>, Cost)> = (0..repeat)
                                 .map(|_i| {
                                     // Make a new execution environment
                                     let mut ex = ExecEnv::new(
@@ -708,29 +708,29 @@ impl Arena {
 //     rng.generate_range(0, weights.len())
 // }
 
-fn weighted_choice(weights: &[usize]) -> usize {
-    let mut rng = tls_rng();
-    let cumulative = weights
-        .iter()
-        .scan(0, |state, &x| {
-            *state = *state + x;
-            Some(*state)
-        })
-        .collect::<SmallVec<[usize; 16]>>();
-    let last = cumulative[cumulative.len() - 1];
-
-    let target = rng.generate_range(0, last);
-
-    match cumulative.binary_search(&target) {
-        Ok(i) => i,
-        Err(i) => i,
-    }
-}
+// fn weighted_choice(weights: &[usize]) -> usize {
+//     let mut rng = tls_rng();
+//     let cumulative = weights
+//         .iter()
+//         .scan(0, |state, &x| {
+//             *state = *state + x;
+//             Some(*state)
+//         })
+//         .collect::<SmallVec<[usize; 16]>>();
+//     let last = cumulative[cumulative.len() - 1];
+// 
+//     let target = rng.generate_range(0, last);
+// 
+//     match cumulative.binary_search(&target) {
+//         Ok(i) => i,
+//         Err(i) => i,
+//     }
+// }
 
 // fn weighted_choice(weights: &[usize]) -> usize {
 //     let n = weights.len();
 //     let avg = weights.iter().sum::<usize>() / n;
-//
+// 
 //     let mut smalls: SmallVec<[(usize, usize); 16]> = weights
 //         .iter()
 //         .copied()
@@ -743,12 +743,12 @@ fn weighted_choice(weights: &[usize]) -> usize {
 //         .enumerate()
 //         .filter(|(_, w)| *w >= avg)
 //         .collect();
-//
+// 
 //     let mut aliases: SmallVec<[(usize, usize); 16]> = smallvec::smallvec![(0, 0); n];
-//
+// 
 //     let mut small = smalls.pop();
 //     let mut large = larges.pop();
-//
+// 
 //     while let (Some(s), Some(mut l)) = (small, large) {
 //         aliases[s.0] = (s.1, l.0);
 //         l = (l.0, l.1 - (avg - s.1));
@@ -760,23 +760,23 @@ fn weighted_choice(weights: &[usize]) -> usize {
 //             large = Some(l);
 //         }
 //     }
-//
+// 
 //     while let Some(s) = small {
 //         aliases[s.0] = (avg, 0);
 //         small = smalls.pop();
 //     }
-//
+// 
 //     while let Some(l) = large {
 //         aliases[l.0] = (n, 0);
 //         large = larges.pop();
 //     }
-//
+// 
 //     // Actually choose!
 //     let mut rng = tls_rng();
 //     let r2 = rng.generate_range(0, avg);
 //     let r1 = r2 * n / avg;
 //     // let r1 = rng.generate_range(0, n);
-//
+// 
 //     let (lim, other) = aliases[r1];
 //     if r1 < lim {
 //         // if r2 < lim {
