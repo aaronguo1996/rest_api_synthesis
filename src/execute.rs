@@ -2,11 +2,11 @@ use crate::{Expr, ExprIx, Prog, ProgIx, RValue, RootSlab, ThreadSlab, Traces, Va
 use hashbrown::HashMap;
 use lasso::{MiniSpur, Rodeo, RodeoResolver};
 use nanorand::{tls_rng, RNG};
+use rand::distributions::WeightedIndex;
 use rand::prelude::*;
 use rayon::prelude::*;
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryInto;
-use rand::distributions::WeightedIndex;
 
 pub type Cost = usize;
 
@@ -39,7 +39,14 @@ impl Runner {
     /// Runs retrospective execution over a set of inputs.
     /// inputs is a map from an input argument name to a list of possible
     /// values for that input.
-    pub fn run(self, target_ix: ProgIx, multiple: bool, slab: &RootSlab, filter_num: usize, repeat: usize) -> Vec<usize> {
+    pub fn run(
+        self,
+        target_ix: ProgIx,
+        multiple: bool,
+        slab: &RootSlab,
+        filter_num: usize,
+        repeat: usize,
+    ) -> Vec<usize> {
         // Not sure why the list of input solutions would be empty but
         // Apparently it happens lol
         if self.progs.is_empty() {
@@ -88,11 +95,7 @@ impl Runner {
                                 if let Some(r) = result {
                                     all_none = false;
 
-                                    if !(t
-                                        .get(r)
-                                        .unwrap()
-                                        .is_empty())
-                                    {
+                                    if !(t.get(r).unwrap().is_empty()) {
                                         all_empty = false;
                                     }
 
@@ -132,6 +135,8 @@ impl Runner {
                                 cost_avg += 10;
                             }
 
+                            // println!("{}", cost_avg);
+
                             (ix, cost_avg)
                         },
                     )
@@ -143,7 +148,10 @@ impl Runner {
                 res.sort_by_key(|x| x.1);
 
                 // println!("min (rank 1): {:?}", &res[0..20]);
-                (tgt_cost, res.iter().position(|x| x.1 == tgt_cost).unwrap() + 1)
+                (
+                    tgt_cost,
+                    res.iter().position(|x| x.1 == tgt_cost).unwrap() + 1,
+                )
             })
             .filter(|x| x.0 < 99999)
             .map(|x| x.1)
@@ -224,7 +232,6 @@ impl<'a> ExecEnv<'a> {
         }
     }
 
-    // TODO: deal with clones. probably some Cow stuff
     pub fn run(&mut self, heap: &mut ThreadSlab) -> Option<(Option<ValueIx>, Cost)> {
         'outer: loop {
             // println!(
@@ -332,7 +339,7 @@ impl<'a> ExecEnv<'a> {
 
                     for path in self.arena.get_str(f).split('.') {
                         // println!("{:?}", tmp);
-                    
+
                         if let Some(v) = tmp.1.get(path, &heap) {
                             tmp = v;
                             self.cost += 1;
@@ -367,7 +374,7 @@ impl<'a> ExecEnv<'a> {
                         self.set_error();
                     } else {
                         self.data.push(id);
-                        
+
                         // Push to call stack.
                         self.call.push(Frame {
                             stack_ix: self.data.len() - 1,
@@ -718,9 +725,9 @@ impl Arena {
 //         })
 //         .collect::<SmallVec<[usize; 16]>>();
 //     let last = cumulative[cumulative.len() - 1];
-// 
+//
 //     let target = rng.generate_range(0, last);
-// 
+//
 //     match cumulative.binary_search(&target) {
 //         Ok(i) => i,
 //         Err(i) => i,
@@ -730,7 +737,7 @@ impl Arena {
 // fn weighted_choice(weights: &[usize]) -> usize {
 //     let n = weights.len();
 //     let avg = weights.iter().sum::<usize>() / n;
-// 
+//
 //     let mut smalls: SmallVec<[(usize, usize); 16]> = weights
 //         .iter()
 //         .copied()
@@ -743,12 +750,12 @@ impl Arena {
 //         .enumerate()
 //         .filter(|(_, w)| *w >= avg)
 //         .collect();
-// 
+//
 //     let mut aliases: SmallVec<[(usize, usize); 16]> = smallvec::smallvec![(0, 0); n];
-// 
+//
 //     let mut small = smalls.pop();
 //     let mut large = larges.pop();
-// 
+//
 //     while let (Some(s), Some(mut l)) = (small, large) {
 //         aliases[s.0] = (s.1, l.0);
 //         l = (l.0, l.1 - (avg - s.1));
@@ -760,23 +767,23 @@ impl Arena {
 //             large = Some(l);
 //         }
 //     }
-// 
+//
 //     while let Some(s) = small {
 //         aliases[s.0] = (avg, 0);
 //         small = smalls.pop();
 //     }
-// 
+//
 //     while let Some(l) = large {
 //         aliases[l.0] = (n, 0);
 //         large = larges.pop();
 //     }
-// 
+//
 //     // Actually choose!
 //     let mut rng = tls_rng();
 //     let r2 = rng.generate_range(0, avg);
 //     let r1 = r2 * n / avg;
 //     // let r1 = rng.generate_range(0, n);
-// 
+//
 //     let (lim, other) = aliases[r1];
 //     if r1 < lim {
 //         // if r2 < lim {

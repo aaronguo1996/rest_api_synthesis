@@ -61,6 +61,29 @@ def build_cmd_parser():
 ##                                  SLACK                                     ##
 ################################################################################
 
+slack_minimal = [
+    Benchmark(
+        "1.5",
+        "Create a channel and invite users",
+        {
+            "user_ids": types.ArrayType(None, types.PrimString("defs_bot_id")),
+            "channel_name": types.PrimString("objs_conversation.name"),
+        },
+        types.ArrayType(None, types.SchemaObject("objs_conversation")),
+        [
+            Program(
+                ["user_ids", "channel_name"],
+                [
+                    AssignExpr("x0", AppExpr("/conversations.create_POST", [("name", VarExpr("channel_name"))]), False),
+                    AssignExpr("x1", VarExpr("user_ids"), True),
+                    AssignExpr("x2", AppExpr("/conversations.invite_POST", [("channel", ProjectionExpr(ProjectionExpr(VarExpr("x0"), "channel"), "id")), ("users", VarExpr("x1"))]), False),
+                    ProjectionExpr(VarExpr("x2"), "channel")
+                ]
+            )
+        ]
+    ),
+]
+
 slack_benchmarks = [
     Benchmark(
         "1.1",
@@ -216,6 +239,30 @@ slack_suite = BenchmarkSuite(
 ################################################################################
 ##                                  STRIPE                                    ##
 ################################################################################
+
+stripe_minimal = [
+    Benchmark(
+        "2.8",
+        "Get email of subscribers to some product",
+        {
+            "product_id": types.PrimString("product.id"),
+        },
+        types.ArrayType(None, types.PrimString("customer.email")),
+        [
+            Program(
+                ["product_id"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/subscriptions_GET", []), False),
+                    AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "data"), True),
+                    AssignExpr("x3", ProjectionExpr(ProjectionExpr(VarExpr("x2"), "items"), "data"), True),
+                    EquiExpr(ProjectionExpr(ProjectionExpr(VarExpr("x3"), "price"), "product"), VarExpr("product_id")),
+                    AssignExpr("x4", AppExpr("/v1/customers/{customer}_GET", [("customer", ProjectionExpr(VarExpr("x2"), "customer"))]), False),
+                    ProjectionExpr(VarExpr("x4"), "email")
+                ]
+            )
+        ]
+    ),
+]
 
 stripe_benchmarks = [
     Benchmark(
