@@ -34,6 +34,8 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         inputs: Vec<(&str, &PyAny)>,
         target_ix: ProgIx,
         multiple: bool,
+        filter_num: usize,
+        repeat: usize,
     ) -> PyResult<Vec<usize>> {
         // First, our imports!
         let program = PyModule::import(py, "program.program")?;
@@ -91,7 +93,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
 
         let t = std::time::Instant::now();
         // And run it on our inputs
-        let res = r.run(target_ix, multiple, &slab);
+        let res = r.run(target_ix, multiple, &slab, filter_num, repeat);
         // println!("interpret time: {}", t.elapsed().as_micros());
 
         Ok(res)
