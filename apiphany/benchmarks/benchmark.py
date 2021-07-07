@@ -557,12 +557,9 @@ class Bencher:
 
                 # Input to output
                 input_vals = ""
-                if len(bench.inputs.items()) > 0:
-                    input_vals += "{"
-                    input_vals += ', '.join([f"{k}: {v}" for k, v in bench.inputs.items()])
-                    input_vals += "}"
-                else:
-                    input_vals += "()"
+                input_vals += "{"
+                input_vals += ', '.join([f"{k}: {v}" for k, v in bench.inputs.items()])
+                input_vals += "}"
                 output_val = f"{bench.output}"
                 
                 res += (f"\emph{{Type query}}: "
