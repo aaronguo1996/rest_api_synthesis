@@ -128,7 +128,7 @@ slack_benchmarks = [
     ),
     Benchmark(
         "1.3",
-        "Get all unread message for a user",
+        "Get all unread messages for a user",
         {
             "user_id": types.PrimString("defs_bot_id")
         },
@@ -822,6 +822,7 @@ def main():
         output=args.output,
         print_api=True,
         print_results=True,
+        print_appendix=True,
         cached_results=False)
 
     # pr.print_stats()

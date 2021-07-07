@@ -113,7 +113,7 @@ class AppExpr(Expression):
 
         val = analyzer.get_trace(self._fun, named_arg_vals)
         if val is None:
-            print("fail to get successful trace for", self._fun, named_arg_vals)
+            # print("fail to get successful trace for", self._fun, named_arg_vals)
             return None, consts.MAX_COST
         else:
             # print("[App] get back", val, "for", self._fun, named_arg_vals)

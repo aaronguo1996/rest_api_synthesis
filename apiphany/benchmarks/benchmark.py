@@ -434,10 +434,13 @@ class Bencher:
         self._suites = suites
         self._config = config
 
-    def run(self, names, cached_results=False, print_api=False, print_results=False, output=None):
+    def run(self, names, cached_results=False, print_api=False, print_results=False, print_appendix=False, output=None):
         place_counts = []
         trans_counts = []
         benchmark_results = []
+
+        if print_appendix:
+            self.print_appendix(output)
         
         for suite in self._suites:
             benchmark_entries, places, transitions = suite.run(
@@ -535,3 +538,37 @@ class Bencher:
             with open(os.path.join(output, "results.tex"), "w") as of:
                 of.write(res)
                 print(f"written to {os.path.join(output, 'results.tex')}")
+
+    def print_appendix(self, output=None):
+        res = ("% auto-generated: ./bench.py, type queries and solutions\n"
+               "\\section{Type Queries and Solutions}\\label{appendix:solutions}\n\n"
+               "This section includes type queries and ``gold standard'' solutions for "
+               "all the tested benchmarks. Additionally, the type queries used here "
+               "correspond directly to the OpenAPI spec of the corresponding API; "
+               "in the paper, these queries are simplified for readability.\n\n"
+               # TODO: hmm
+               "\\setlength{\parindent}{0pt}\n\n")
+
+        for suite in self._suites:
+            res += f"\\subsection{{\\{suite.api}}}\n"
+
+            for bench in suite.benchmarks:
+                res += f"\\emph{{\\textbf{{{bench.name}. {bench.description}}}}}\n\n"
+
+                # Input to output
+                input_vals = "\\T{"
+                input_vals += ', '.join([f"{v}" for k, v in bench.inputs.items()])
+                input_vals += "}"
+                output_val = f"\\T{{{bench.output}}}"
+                
+                res += f"\emph{{Type query}}: ${input_vals} \\to {output_val}$\n\n"
+                
+                # Target solution
+                res += ("\\begin{lstlisting}[style=dsl,basicstyle=\\ttfamily\\footnotesize,xleftmargin=5pt]\n"
+                        f"{bench.solutions[0]}\n"
+                        "\\end{lstlisting}\n\n")
+
+        if output:
+            with open(os.path.join(output, "solutions.tex"), "w") as of:
+                of.write(res)
+                print(f"written to {os.path.join(output, 'solutions.tex')}")
