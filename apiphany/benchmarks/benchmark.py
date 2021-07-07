@@ -73,6 +73,8 @@ class Benchmark:
         self.latex_entry = BenchmarkResult(name, desc)
 
     def run(self, exp_dir, entries, configuration, runtime_config):
+        print(f"Running {self.name}")
+
         bm_dir = os.path.join(exp_dir, self.name)
         # create a directory for the current benchmark
         cached = os.path.exists(bm_dir) and len(os.listdir(bm_dir)) != 0
@@ -84,7 +86,6 @@ class Benchmark:
         if not cached or not runtime_config.cache:
             synthesizer = Synthesizer(configuration, entries, bm_dir)
             synthesizer.init()
-            print("inputs", self.inputs)
             parallel.spawn_encoders(
                 synthesizer,
                 self.inputs, [self.output],
@@ -113,11 +114,11 @@ class Benchmark:
         log_analyzer, solutions):
         all_results = []
         
-        random.seed(229)
+        # random.seed(229)
         with pebble.ThreadPool() as pool:
             for i, p in enumerate(solutions):
                 # print(f"{i}/{len(solutions)}", flush=True)
-                print(p, flush=True)
+                # print(p, flush=True)
 
                 is_target_sol = False
                 for tgt_sol in self.solutions:
@@ -223,8 +224,8 @@ class Benchmark:
                 program_ranks[j].append((i, p, score))
 
         ranks = []
-        tgt_score = None
         for res in program_ranks:
+            tgt_score = None
             res = sorted(res, key=lambda x: x[-1])
             for rank, (_, res_sol, score) in enumerate(res):
                 if (res_sol in self.solutions and
@@ -234,7 +235,7 @@ class Benchmark:
                     break
 
             for rank, (_, res_sol, score) in enumerate(res):
-                if (abs(score - tgt_score) < 1e-2):
+                if (tgt_score is not None and abs(score - tgt_score) < 1e-2):
                     ranks.append((rank + 1, res_sol, score))
 
                     for i, r in enumerate(res):
@@ -311,12 +312,10 @@ class BenchmarkSuite:
             a = json.load(af)
             annotations = len(a)
 
-        # average number of endpoint arguments
+        # number of endpoint arguments
         num_args = [len(x.parameters) for x in self._typed_entries.values()]
 
-        # average number of object size
-        # FIXME: this is wrong, we need to count numbers of nodes in objects
-        # the problem is that we might have mutual recursive definitions
+        # number of object size
         obj_sizes = []
         schemas = self._doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS)
         obj_num = len(schemas)
@@ -388,20 +387,20 @@ class BenchmarkSuite:
 
                 if not runtime_config.synthesis_only:
                     start = time.time()
-                    ranks, sol_prog = benchmark.get_rank(
-                        entries,
-                        self._configuration,
-                        runtime_config,
-                        self._log_analyzer,
-                        solutions,
-                    )
-                    # ranks, sol_prog = benchmark.get_rust_rank(
+                    # ranks, sol_prog = benchmark.get_rank(
                     #     entries,
                     #     self._configuration,
                     #     runtime_config,
                     #     self._log_analyzer,
                     #     solutions,
                     # )
+                    ranks, sol_prog = benchmark.get_rust_rank(
+                        entries,
+                        self._configuration,
+                        runtime_config,
+                        self._log_analyzer,
+                        solutions,
+                    )
                     end = time.time()
                     print("RE time:", end - start)
 
