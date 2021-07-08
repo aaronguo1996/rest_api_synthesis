@@ -94,6 +94,7 @@ class Benchmark:
             )
             
         solutions = []
+        prev_solutions = {}
         for j in range(consts.DEFAULT_LENGTH_LIMIT + 1):
             sol_file = os.path.join(bm_dir, f"solutions_{j}.pkl")
             if os.path.exists(sol_file):
@@ -104,7 +105,13 @@ class Benchmark:
                     print(j)
                     raise Exception(e)
 
-                solutions.append({p:p for p in programs}.keys())
+                solution_at_len = []
+                for p in programs:
+                    if p not in prev_solutions:
+                        solution_at_len.append(p)
+                        
+                prev_solutions.update({p:p for p in programs})
+                solutions.append(solution_at_len)
 
         num_place, num_trans = get_petri_net_data(bm_dir)
 
@@ -420,8 +427,12 @@ class BenchmarkSuite:
                     end = time.time()
                     print("RE time:", end - start)
 
+                    flat_solutions = []
+                    for sol in solutions:
+                        flat_solutions += sol
+
                     latex_entry = benchmark.to_latex_entry(
-                        ranks, sol_prog, end - start, len(solutions))
+                        ranks, sol_prog, end - start, len(flat_solutions))
                     latex_entries.append(latex_entry)
 
 
@@ -521,9 +532,10 @@ class Bencher:
                 print(r.name)
                 ranks = r.ranks
                 if ranks is None:
-                    continue
-
-                median_rank = ranks[len(ranks)//2]
+                    median_rank = None
+                else:
+                    median_rank = ranks[len(ranks)//2]
+                
                 if r.rank_no_re is None:
                     rank_no_re = '-'
                 elif isinstance(r.rank_no_re, tuple):
