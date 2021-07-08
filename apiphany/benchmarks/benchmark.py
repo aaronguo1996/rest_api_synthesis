@@ -500,8 +500,8 @@ class Bencher:
             self.plot_ranks(benchmark_results, output)
 
     def print_api_info(self, places, transitions, output=None):
-        res = ("% auto-generated: ./bench.py, table 1\n"
-            "\\resizebox{\\textwidth}{!}{\\small\\begin{tabular}{l|rrrr|rrrrr|rr}\n"
+        res = (
+            "\\small\\begin{tabular}{l|rrrr|rrrrr|rr}\n"
             "\\toprule\n"
             "& \\multicolumn{4}{c|}{API size} & \\multicolumn{5}{c|}{API Analysis} & \\multicolumn{2}{c}{TTN size} \\\\\n"
             "\\cmidrule(lr){2-5} \\cmidrule(lr){6-10} \\cmidrule(lr){11-12}\n"
@@ -530,7 +530,7 @@ class Bencher:
                 res += "\n"
 
         res += ("\\bottomrule"
-                "\\end{tabular}}")
+                "\\end{tabular}")
 
         # print(res)
 
