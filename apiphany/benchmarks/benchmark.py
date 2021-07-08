@@ -6,7 +6,7 @@ import os
 import shutil
 import pebble
 import time
-import random
+import matplotlib.pyplot as plt
 
 from analyzer import dynamic
 from analyzer.entry import ErrorResponse
@@ -201,7 +201,7 @@ class Benchmark:
         #     list(self.inputs.items()), 0,
         #     isinstance(self.output, types.ArrayType),
         #     runtime_config.filter_num, runtime_config.repeat)
-        sol_prog = sol_prog if len(ranks) > 0 else None
+        sol_prog = sol_prog if len(ranks) > 0 else self.solutions[0]
 
         return ranks, sol_prog
         
@@ -399,10 +399,20 @@ class BenchmarkSuite:
             transitions = d["transitions"]
             latex_entries = d["results"]
 
+            # fixes without rerunning
             for entry in latex_entries:
                 for benchmark in self.benchmarks:
                     if entry.name == benchmark.name:
                         entry.desc = benchmark.description
+                        if entry.ast_size is None:
+                            ns = benchmark.solutions[0].collect_exprs()
+                            entry.ast_size = len(ns)
+                            entry.projects = len(
+                                list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
+                            entry.filters = len(
+                                list(filter(lambda x: isinstance(x, EquiExpr), ns)))
+                            entry.endpoint_calls = len(
+                                list(filter(lambda x: isinstance(x, AppExpr), ns)))
                         break
         else:
             for benchmark in self.benchmarks:
@@ -458,7 +468,13 @@ class Bencher:
         self._suites = suites
         self._config = config
 
-    def run(self, names, cached_results=False, print_api=False, print_results=False, print_appendix=False, output=None):
+    def run(self, names, 
+        cached_results=False, 
+        print_api=False, 
+        print_results=False, 
+        print_appendix=False, 
+        plot_ranks=False, 
+        output=None):
         place_counts = []
         trans_counts = []
         benchmark_results = []
@@ -478,6 +494,9 @@ class Bencher:
 
         if print_results:
             self.print_benchmark_results(benchmark_results, output)
+
+        if plot_ranks:
+            self.plot_ranks(benchmark_results, output)
 
     def print_api_info(self, places, transitions, output=None):
         res = ("% auto-generated: ./bench.py, table 1\n"
@@ -522,11 +541,11 @@ class Bencher:
     def print_benchmark_results(self, results, output=None):
         res = ("% auto-generated: ./bench.py, table 2\n"
                "\\resizebox{\\textwidth}{!}{"
-               "\\begin{tabular}{l|lp{7.5cm}|rr|rrrr|rr}\n"
+               "\\begin{tabular}{l|lp{7.5cm}|rrrr|rr|rr}\n"
                "\\toprule\n"
-               "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{2}{c|}{Candidates} & \\multicolumn{4}{c|}{Solution} & \\multicolumn{2}{c}{Rank} \\\\\n"
-               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-5} \\cmidrule(lr){6-9} \\cmidrule(lr){10-11}\n"
-               "API & ID & Description & $|\\prog|$ & $t_{RE}$ & Size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & w/o RE & w/ RE \\\\\n"
+               "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{4}{c|}{Solution} & \\multicolumn{2}{c|}{Candidates} &  \\multicolumn{2}{c}{Rank} \\\\\n"
+               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9} \\cmidrule(lr){10-11}\n"
+               "API & ID & Description & size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & $|\\prog|$ & $t_{RE}$ & w/o RE & w/ RE \\\\\n"
                "\\midrule")
         res += "\n"
 
@@ -537,7 +556,7 @@ class Bencher:
                 if r is None:
                     continue
 
-                print(r.name)
+                # print(r.name)
                 ranks = r.ranks
                 if ranks is None:
                     median_rank = None
@@ -553,12 +572,12 @@ class Bencher:
                 res += (
                     f"& {r.name} "
                     f"& {r.desc} "
-                    f"& {utils.pretty_none(r.candidates)} "
-                    f"& {utils.pretty_none(r.time / self._config.filter_num)} "
                     f"& {utils.pretty_none(r.ast_size)} "
                     f"& {utils.pretty_none(r.endpoint_calls)} "
                     f"& {utils.pretty_none(r.projects)} "
                     f"& {utils.pretty_none(r.filters)} "
+                    f"& {utils.pretty_none(r.candidates)} "
+                    f"& {utils.pretty_none(r.time / self._config.filter_num)} "
                     f"& {utils.pretty_none(rank_no_re)} "
                     f"& {utils.pretty_none(median_rank)} ")
                 res += r" \\"
@@ -612,3 +631,68 @@ class Bencher:
             with open(os.path.join(output, "solutions.tex"), "w") as of:
                 of.write(res)
                 print(f"written to {os.path.join(output, 'solutions.tex')}")
+
+    def plot_ranks(self, results, output=None):
+        ranks_re = []
+        ranks_no_re = []
+        for i in range(len(self._suites)):
+            bench_results = results[i]
+            for r in bench_results:
+                if r is None:
+                    continue
+
+                ranks = r.ranks
+                if ranks is None:
+                    median_rank = None
+                    continue
+                else:
+                    median_rank = ranks[len(ranks)//2]
+                
+                ranks_re.append(median_rank)
+                ranks_no_re.append(r.rank_no_re)
+
+        cnt_ranks_re = [sum([1 for x in ranks_re if x <= i]) for i in range(0,3000)]
+        cnt_ranks_no_re = [sum([1 for x in ranks_no_re if x <= i]) for i in range(0,3000)]
+
+        # plot core data
+        fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
+        fig.subplots_adjust(wspace=0.05)  # adjust space between axes
+
+        ax1.set_xlim(0, 15)
+        ax2.set_xscale('log')
+        ax2.set_xlim(15, 3000)
+        ax1.set_ylim(0, 25)
+        ax1.set_xlabel("Rank", loc="right")
+        ax1.set_ylabel("# benchmarks")
+        ax1.yaxis.set_ticks(range(0,26,4))
+        ax1.xaxis.set_ticks([0,3,6,9,10,12,15])
+        ax1.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
+        ax1.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
+        ax2.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
+        ax2.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
+        ax1.hlines(26, 0, 15, linestyles='dashed', label="max solved benchmarks", colors="0.8")
+        ax2.hlines(26, 15, 3000, linestyles='dashed', label="max solved benchmarks", colors="0.8")
+        ax2.legend(loc="lower right")
+
+        # set border lines
+        ax1.spines.right.set_visible(False)
+        ax2.spines.left.set_visible(False)
+        ax1.yaxis.tick_left()
+        ax2.yaxis.tick_right()
+        ax2.tick_params(labelright=False)
+
+        # plot break lines
+        d = .5  # proportion of vertical to horizontal extent of the slanted line
+        kwargs = dict(marker=[(-d, -1), (d, 1)], markersize=12,
+                    linestyle="none", color='k', mec='k', mew=1, clip_on=False)
+        ax2.plot([0, 0], [0, 1], transform=ax2.transAxes, **kwargs)
+        ax1.plot([1, 1], [0, 1], transform=ax1.transAxes, **kwargs)
+
+        
+        # plt.show()
+        if output:
+            output_path = os.path.join(output, "ranks.png")
+        else:
+            output_path = "ranks.png"
+
+        plt.savefig(output_path)
