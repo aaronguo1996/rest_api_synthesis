@@ -66,9 +66,10 @@ class APIInfo:
         self.annotations = annotations
 
 class Benchmark:
-    def __init__(self, name, desc, inputs, output, solutions):
+    def __init__(self, name, desc, source, inputs, output, solutions):
         self.name = name
         self.description = desc
+        self.source = source
         self.inputs = inputs
         self.output = output
         self.solutions = solutions
@@ -609,7 +610,7 @@ class Bencher:
             res += f"\\subsection{{\\{suite.api}}}\n"
 
             for bench in suite.benchmarks:
-                res += f"\\emph{{\\textbf{{{bench.name}. {bench.description}}}}}\n\n"
+                res += f"\\textbf{{{bench.name}. {bench.description}}}\n\n"
 
                 # Input to output
                 input_vals = ""
@@ -626,6 +627,14 @@ class Bencher:
                 res += ("\\begin{lstlisting}[style=dsl,basicstyle=\\ttfamily\\footnotesize,xleftmargin=5pt,breaklines=true,postbreak=\\mbox{\\textcolor{red}{$\\hookrightarrow$}\\space}]\n"
                         f"{bench.solutions[0]}\n"
                         "\\end{lstlisting}\n\n")
+
+                # Source
+                if bench.source:
+                    res += ("\\vspace{-0.25em}{\\scriptsize\\emph{Source: \\url{"
+                            f"{bench.source}"
+                            "}}}\n\n")
+                    
+                res += "\\vspace{1em}\n\n}"
 
         if output:
             with open(os.path.join(output, "solutions.tex"), "w") as of:

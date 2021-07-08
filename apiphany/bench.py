@@ -65,6 +65,7 @@ slack_minimal = [
     Benchmark(
         "1.5",
         "Create a channel and invite users",
+        "https://stackoverflow.com/questions/48328380/slack-api-channels-create-followed-by-channels-invite-info-returns-channel-not",
         {
             "user_ids": types.ArrayType(None, types.PrimString("defs_bot_id")),
             "channel_name": types.PrimString("objs_conversation.name"),
@@ -88,6 +89,7 @@ slack_benchmarks = [
     Benchmark(
         "1.1",
         "Retrieve emails of all members in a channel",
+        "https://stackoverflow.com/questions/41564027/slack-api-retrieve-all-member-emails-from-a-slack-channel",
         {
             "channel_name": types.PrimString("objs_conversation.name")
         },
@@ -110,6 +112,7 @@ slack_benchmarks = [
     Benchmark(
         "1.2",
         "Send a message to a user given their email",
+        "https://stackoverflow.com/questions/43733375/slack-api-post-message-via-user-email",
         {
             "email": types.PrimString("objs_user_profile.email")
         },
@@ -129,6 +132,7 @@ slack_benchmarks = [
     Benchmark(
         "1.3",
         "Get the unread messages of a user",
+        "https://stackoverflow.com/questions/64561594/is-it-possible-to-know-the-number-of-unread-slack-messages-a-user-has-with-the-s",
         {
             "user_id": types.PrimString("defs_bot_id")
         },
@@ -149,6 +153,7 @@ slack_benchmarks = [
     Benchmark(
         "1.4",
         "Get all messages associated with a user",
+        "https://github.com/hisabimbola/slack-history-export/blob/e53868d8820ba65e5e726bd5968c80d5eb54c0db/src/utils.js#L27",
         {
             "user_id": types.PrimString("defs_bot_id"),
             "ts": types.PrimString("defs_ts"),
@@ -171,6 +176,7 @@ slack_benchmarks = [
     Benchmark(
         "1.5",
         "Create a channel and invite a list of users",
+        "https://stackoverflow.com/questions/48328380/slack-api-channels-create-followed-by-channels-invite-info-returns-channel-not",
         {
             "user_ids": types.ArrayType(None, types.PrimString("defs_bot_id")),
             "channel_name": types.PrimString("objs_conversation.name"),
@@ -191,6 +197,7 @@ slack_benchmarks = [
     Benchmark(
         "1.6",
         "Reply to a message and update it",
+        None,
         {
             "channel": types.PrimString("defs_channel"),
             "ts": types.PrimString("defs_ts"),
@@ -210,6 +217,7 @@ slack_benchmarks = [
     Benchmark(
         "1.7",
         "Send a message to a channel with the given name",
+        "https://github.com/backspace/slack-statsbot/blob/primary/src/statsbot.js#L45",
         {
             "channel": types.PrimString("objs_conversation.name"),
         },
@@ -244,6 +252,7 @@ stripe_minimal = [
     Benchmark(
         "2.1",
         "Make a subscription to a product for a customer",
+        "https://github.com/stripe-samples/charging-for-multiple-plan-subscriptions/blob/master/server/node/server.js",
         {
             "customer_id": types.PrimString("customer.id"),
             "product_id": types.PrimString("product.id"),
@@ -267,6 +276,7 @@ stripe_benchmarks = [
     Benchmark(
         "2.1",
         "Subscribe to a product for a customer",
+        "https://github.com/stripe-samples/charging-for-multiple-plan-subscriptions/blob/master/server/node/server.js",
         {
             "customer_id": types.PrimString("customer.id"),
             "product_id": types.PrimString("product.id"),
@@ -309,6 +319,7 @@ stripe_benchmarks = [
     Benchmark(
         "2.2",
         "Subscribe to multiple items",
+        "https://github.com/stripe-samples/charging-for-multiple-plan-subscriptions/blob/master/server/node/server.js",
         {
             "customer_id": types.PrimString("customer.id"),
             "product_ids": types.ArrayType(None, types.PrimString("product.id")),
@@ -330,6 +341,7 @@ stripe_benchmarks = [
     Benchmark(
         "2.3",
         "Create a product and invoice a customer",
+        "https://stripe.com/docs/invoicing/prices-guide",
         {
             "product_name": types.PrimString("product.name"),
             "customer_id": types.PrimString("customer.id"),
@@ -372,6 +384,7 @@ stripe_benchmarks = [
     Benchmark(
         "2.4",
         "Retrieve a customer by email",
+        "https://stackoverflow.com/questions/26767150/stripe-is-it-possible-to-search-a-customer-by-their-email",
         {
             "email": types.PrimString("customer.email"),
         },
@@ -391,6 +404,7 @@ stripe_benchmarks = [
     Benchmark(
         "2.5",
         "Get a list of receipts for a customer",
+        "https://stackoverflow.com/questions/24335268/stripe-api-receipts-listing",
         {
             "customer_id": types.PrimString("customer.id"),
         },
@@ -410,6 +424,7 @@ stripe_benchmarks = [
     Benchmark(
         "2.6",
         "Get a refund for a subscription",
+        "https://stackoverflow.com/questions/62403075/stripe-api-get-upcoming-invoice-for-cancelled-subscription?noredirect=1#comment110403008_62403075",
         {
             "subscription": types.PrimString("subscription.id"),
         },
@@ -429,6 +444,7 @@ stripe_benchmarks = [
     Benchmark(
         "2.7",
         "Get the emails of all customers",
+        "https://stackoverflow.com/questions/65545997/python3-stripe-api-to-get-all-customer-email",
         {
         },
         types.ArrayType(None, types.PrimString("customer.email")),
@@ -446,6 +462,7 @@ stripe_benchmarks = [
     Benchmark(
         "2.8",
         "Get the emails of the subscribers of a product",
+        "https://stackoverflow.com/questions/35882771/use-stripe-api-to-return-a-list-of-valid-subscribers",
         {
             "product_id": types.PrimString("product.id"),
         },
@@ -467,6 +484,7 @@ stripe_benchmarks = [
     Benchmark(
         "2.9",
         "Get the last 4 digits of a customer's card",
+        "https://stackoverflow.com/questions/30447026/getting-last4-digits-of-card-using-customer-object-stripe-api-with-php",
         {
             "customer_id": types.PrimString("customer.id"),
         },
@@ -504,6 +522,7 @@ stripe_benchmarks = [
     Benchmark(
         "2.10",
         "Update payment methods for a user's subscriptions",
+        "https://stackoverflow.com/questions/58270828/update-credit-card-details-of-user-for-all-subscriptions-in-stripe-using-api",
         {
             "payment_method": types.SchemaObject("payment_method"),
             "customer_id": types.PrimString("customer.id"),
@@ -537,6 +556,7 @@ square_minimal = [
     Benchmark(
         "3.1",
         "List invoices that match location id",
+        "https://github.com/square/connect-api-examples/blob/4283ac967c31b75dc17aceebd84f649093477e9a/connect-examples/v2/node_invoices/routes/management.js#L40",
         {
             "location_id": types.PrimString("Location.id"),
         },
@@ -557,6 +577,7 @@ square_benchmarks = [
     Benchmark(
         "3.1",
         "List invoices that match a location id",
+        "https://github.com/square/connect-api-examples/blob/4283ac967c31b75dc17aceebd84f649093477e9a/connect-examples/v2/node_invoices/routes/management.js#L40",
         {
             "location_id": types.PrimString("Location.id"),
         },
@@ -574,6 +595,7 @@ square_benchmarks = [
     Benchmark(
         "3.2",
         "List subscriptions by location, customer, and plan",
+        "https://github.com/square/connect-api-examples/blob/4283ac967c31b75dc17aceebd84f649093477e9a/connect-examples/v2/node_subscription/routes/subscription.js#L64",
         {
             "customer_id": types.PrimString("Customer.id"),
             "location_id": types.PrimString("Location.id"),
@@ -608,6 +630,7 @@ square_benchmarks = [
     Benchmark(
         "3.3",
         "Get all items a tax applies to",
+        "https://github.com/square/catalog-api-demo/blob/85b6754c90fa7b66fc5e605ee7a344314537eade/src/main/java/com/squareup/catalog/demo/example/ApplyTaxToAllIItemsExample.java#L126",
         {
             "tax_id": types.PrimString("CatalogObject.id"),
         },
@@ -628,6 +651,7 @@ square_benchmarks = [
     Benchmark(
         "3.4",
         "Get a list of discounts in the catalog",
+        "https://github.com/square/catalog-api-demo/blob/master/src/main/java/com/squareup/catalog/demo/example/ListDiscountsExample.java",
         {
         },
         types.ArrayType(None, types.PrimString("CatalogDiscount")),
@@ -685,6 +709,7 @@ square_benchmarks = [
     Benchmark(
         "3.5",
         "Add order details to order",
+        "https://github.com/square/connect-api-examples/blob/4283ac967c31b75dc17aceebd84f649093477e9a/connect-examples/v2/node_orders-payments/routes/checkout.js#L157",
         {
             "location_id": types.PrimString("Location.id"),
             "order_ids": types.ArrayType(None, types.PrimString("Order.id")),
@@ -707,6 +732,7 @@ square_benchmarks = [
     Benchmark(
         "3.6",
         "Get payment notes of a payment",
+        "https://stackoverflow.com/questions/23252751/square-connect-api-list-payments-endpoint-not-showing-description",
         {
         },
         types.ArrayType(None, types.PrimString("Tender.note")),
@@ -724,6 +750,7 @@ square_benchmarks = [
     Benchmark(
         "3.7",
         "Get order ids of current user's transactions",
+        "https://stackoverflow.com/questions/46910044/getting-compact-information-from-square-connect-api",
         {
             "location_id": types.PrimString("Location.id"),
         },
@@ -742,6 +769,7 @@ square_benchmarks = [
     Benchmark(
         "3.8",
         "Get order names from a transaction id",
+        "https://stackoverflow.com/questions/58047894/square-connect-how-to-retrieve-product-information-from-transaction-id",
         {
             "location_id": types.PrimString("Location.id"),
             "transaction_id": types.PrimString("Order.id"),
@@ -762,6 +790,7 @@ square_benchmarks = [
     Benchmark(
         "3.9",
         "Find customers by name",
+        "https://developer.squareup.com/forums/t/search-customers-by-name/1567",
         {
             "name": types.PrimString("Customer.given_name"),
         },
