@@ -634,7 +634,7 @@ class Bencher:
                             f"{bench.source}"
                             "}}}\n\n")
                     
-                res += "\\vspace{1em}\n\n}"
+                res += "\\vspace{1em}\n\n"
 
         if output:
             with open(os.path.join(output, "solutions.tex"), "w") as of:
