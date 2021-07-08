@@ -503,7 +503,7 @@ stripe_benchmarks = [
     # ),
     Benchmark(
         "2.10",
-        "Update the payment methods for a customer's subscriptions",
+        "Update payment methods for a user's subscriptions",
         {
             "payment_method": types.SchemaObject("payment_method"),
             "customer_id": types.PrimString("customer.id"),
@@ -573,7 +573,7 @@ square_benchmarks = [
     ),
     Benchmark(
         "3.2",
-        "Get a list of subscriptions by location, customer, and plan",
+        "List subscriptions by location, customer, and plan",
         {
             "customer_id": types.PrimString("Customer.id"),
             "location_id": types.PrimString("Location.id"),
@@ -723,7 +723,7 @@ square_benchmarks = [
     ),
     Benchmark(
         "3.7",
-        "Get order ids associated with the current user's transactions",
+        "Get order ids of current user's transactions",
         {
             "location_id": types.PrimString("Location.id"),
         },
