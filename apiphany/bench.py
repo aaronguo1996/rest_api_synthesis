@@ -153,7 +153,7 @@ slack_benchmarks = [
     Benchmark(
         "1.4",
         "Get all messages associated with a user",
-        "https://github.com/hisabimbola/slack-history-export/blob/e53868d8820ba65e5e726bd5968c80d5eb54c0db/src/utils.js#L27",
+        "https://github.com/hisabimbola/slack-history-export/blob/e53868d8820ba65e5e726bd5968c80d5eb54c0db/src/utils.js",
         {
             "user_id": types.PrimString("defs_bot_id"),
             "ts": types.PrimString("defs_ts"),
@@ -217,7 +217,7 @@ slack_benchmarks = [
     Benchmark(
         "1.7",
         "Send a message to a channel with the given name",
-        "https://github.com/backspace/slack-statsbot/blob/primary/src/statsbot.js#L45",
+        "https://github.com/backspace/slack-statsbot/blob/primary/src/statsbot.js",
         {
             "channel": types.PrimString("objs_conversation.name"),
         },
@@ -424,7 +424,7 @@ stripe_benchmarks = [
     Benchmark(
         "2.6",
         "Get a refund for a subscription",
-        "https://stackoverflow.com/questions/62403075/stripe-api-get-upcoming-invoice-for-cancelled-subscription?noredirect=1#comment110403008_62403075",
+        "https://stackoverflow.com/questions/62403075/stripe-api-get-upcoming-invoice-for-cancelled-subscription",
         {
             "subscription": types.PrimString("subscription.id"),
         },
@@ -556,7 +556,7 @@ square_minimal = [
     Benchmark(
         "3.1",
         "List invoices that match location id",
-        "https://github.com/square/connect-api-examples/blob/4283ac967c31b75dc17aceebd84f649093477e9a/connect-examples/v2/node_invoices/routes/management.js#L40",
+        "https://github.com/square/connect-api-examples/blob/4283ac967c31b75dc17aceebd84f649093477e9a/connect-examples/v2/node_invoices/routes/management.js",
         {
             "location_id": types.PrimString("Location.id"),
         },
@@ -577,7 +577,7 @@ square_benchmarks = [
     Benchmark(
         "3.1",
         "List invoices that match a location id",
-        "https://github.com/square/connect-api-examples/blob/4283ac967c31b75dc17aceebd84f649093477e9a/connect-examples/v2/node_invoices/routes/management.js#L40",
+        "https://github.com/square/connect-api-examples/blob/4283ac967c31b75dc17aceebd84f649093477e9a/connect-examples/v2/node_invoices/routes/management.js",
         {
             "location_id": types.PrimString("Location.id"),
         },
@@ -595,7 +595,7 @@ square_benchmarks = [
     Benchmark(
         "3.2",
         "List subscriptions by location, customer, and plan",
-        "https://github.com/square/connect-api-examples/blob/4283ac967c31b75dc17aceebd84f649093477e9a/connect-examples/v2/node_subscription/routes/subscription.js#L64",
+        "https://github.com/square/connect-api-examples/blob/4283ac967c31b75dc17aceebd84f649093477e9a/connect-examples/v2/node_subscription/routes/subscription.js",
         {
             "customer_id": types.PrimString("Customer.id"),
             "location_id": types.PrimString("Location.id"),
@@ -630,7 +630,7 @@ square_benchmarks = [
     Benchmark(
         "3.3",
         "Get all items a tax applies to",
-        "https://github.com/square/catalog-api-demo/blob/85b6754c90fa7b66fc5e605ee7a344314537eade/src/main/java/com/squareup/catalog/demo/example/ApplyTaxToAllIItemsExample.java#L126",
+        "https://github.com/square/catalog-api-demo/blob/85b6754c90fa7b66fc5e605ee7a344314537eade/src/main/java/com/squareup/catalog/demo/example/ApplyTaxToAllIItemsExample.java",
         {
             "tax_id": types.PrimString("CatalogObject.id"),
         },
@@ -709,7 +709,7 @@ square_benchmarks = [
     Benchmark(
         "3.5",
         "Add order details to order",
-        "https://github.com/square/connect-api-examples/blob/4283ac967c31b75dc17aceebd84f649093477e9a/connect-examples/v2/node_orders-payments/routes/checkout.js#L157",
+        "https://github.com/square/connect-api-examples/blob/4283ac967c31b75dc17aceebd84f649093477e9a/connect-examples/v2/node_orders-payments/routes/checkout.js",
         {
             "location_id": types.PrimString("Location.id"),
             "order_ids": types.ArrayType(None, types.PrimString("Order.id")),
