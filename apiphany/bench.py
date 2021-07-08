@@ -823,7 +823,7 @@ def main():
         print_api=True,
         print_results=True,
         print_appendix=True,
-        cached_results=False)
+        cached_results=True)
 
     # pr.print_stats()
 

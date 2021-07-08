@@ -42,6 +42,7 @@ class BenchmarkResult:
         self.name = name
         self.desc = desc
         self.rank_no_re = None
+        self.rank_no_re_rng = None
         self.ranks = None
         self.ast_size = None
         self.projects = None
@@ -109,7 +110,7 @@ class Benchmark:
                 for p in programs:
                     if p not in prev_solutions:
                         solution_at_len.append(p)
-                        
+
                 prev_solutions.update({p:p for p in programs})
                 solutions.append(solution_at_len)
 
@@ -179,7 +180,8 @@ class Benchmark:
             for rank, res_sol in enumerate(sol_at_len):
                 for tgt_sol in self.solutions:
                     if tgt_sol == res_sol and target_ix is None:
-                        self.latex_entry.rank_no_re = (cnt + 1, cnt + len(sol_at_len))
+                        self.latex_entry.rank_no_re = cnt + rank + 1
+                        self.latex_entry.rank_no_re_rng = (cnt + 1, cnt + len(sol_at_len))
                         target_ix = cnt + rank
                         sol_prog = tgt_sol
 
@@ -396,6 +398,12 @@ class BenchmarkSuite:
             places = d["places"]
             transitions = d["transitions"]
             latex_entries = d["results"]
+
+            for entry in latex_entries:
+                for benchmark in self.benchmarks:
+                    if entry.name == benchmark.name:
+                        entry.desc = benchmark.description
+                        break
         else:
             for benchmark in self.benchmarks:
                 if names is not None and benchmark.name not in names:
@@ -473,12 +481,12 @@ class Bencher:
 
     def print_api_info(self, places, transitions, output=None):
         res = ("% auto-generated: ./bench.py, table 1\n"
-            "\\resizebox{\\textwidth}{!}{\\small\\begin{tabular}{l|rrrr|rrrrr|rr}"
-            "\\toprule"
-            "& \\multicolumn{4}{c|}{API size} & \\multicolumn{5}{c|}{API Analysis} & \\multicolumn{2}{c}{TTN size} \\\\"
-            "\\cmidrule(lr){2-5} \\cmidrule(lr){6-10} \\cmidrule(lr){11-12}"
-            "API & $n_{m}$ & $n_{args}$ & $n_{objs}$ & $s_{objs}$ & $n_{init}$ & $cv_{init}$ & $n_{gen}$ & $cv_{gen}$ & $n_{ann}$ & \\# places & \\# trans \\\\"
-            "\\midrule")
+            "\\resizebox{\\textwidth}{!}{\\small\\begin{tabular}{l|rrrr|rrrrr|rr}\n"
+            "\\toprule\n"
+            "& \\multicolumn{4}{c|}{API size} & \\multicolumn{5}{c|}{API Analysis} & \\multicolumn{2}{c}{TTN size} \\\\\n"
+            "\\cmidrule(lr){2-5} \\cmidrule(lr){6-10} \\cmidrule(lr){11-12}\n"
+            "API & $|\\Lambda.f|$ & $n_{args}$ & $|\\Lambda.o|$ & $s_{objs}$ & $|\\witnesses_0|$ & $|\\sema{\\Lambda}_0.f|$ & $|\\witnesses|$ & $|\\sema{\\Lambda}.f|$ & $n_{ann}$ & $|P|$ & $|T|$ \\\\\n"
+            "\\midrule\n")
         res += "\n"
 
         for i, suite in enumerate(self._suites):
@@ -514,11 +522,11 @@ class Bencher:
     def print_benchmark_results(self, results, output=None):
         res = ("% auto-generated: ./bench.py, table 2\n"
                "\\resizebox{\\textwidth}{!}{"
-               "\\begin{tabular}{l|lp{7.5cm}|rr|rrrr|rr}"
-               "\\toprule"
-               "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{2}{c|}{Candidates} & \\multicolumn{4}{c|}{Solution} & \\multicolumn{2}{c}{Rank} \\\\"
-               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-5} \\cmidrule(lr){6-9} \\cmidrule(lr){10-11}"
-               "API & ID & Description & $n_{C}$ & $t_{RE}$ & Size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & w/o RE & w/ RE \\\\"
+               "\\begin{tabular}{l|lp{7.5cm}|rr|rrrr|rr}\n"
+               "\\toprule\n"
+               "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{2}{c|}{Candidates} & \\multicolumn{4}{c|}{Solution} & \\multicolumn{2}{c}{Rank} \\\\\n"
+               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-5} \\cmidrule(lr){6-9} \\cmidrule(lr){10-11}\n"
+               "API & ID & Description & $|\\prog|$ & $t_{RE}$ & Size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & w/o RE & w/ RE \\\\\n"
                "\\midrule")
         res += "\n"
 
@@ -536,23 +544,22 @@ class Bencher:
                 else:
                     median_rank = ranks[len(ranks)//2]
                 
-                if r.rank_no_re is None:
-                    rank_no_re = '-'
-                elif isinstance(r.rank_no_re, tuple):
-                    rank_no_re = f"{r.rank_no_re[0]}-{r.rank_no_re[1]}"
-                else:
-                    rank_no_re = r.rank_no_re
-
+                rank_no_re = r.rank_no_re
+                # if r.rank_no_re_rng is None:
+                #     rank_no_re = None
+                # else:
+                #     rank_no_re = f"{r.rank_no_re_rng[0]}-{r.rank_no_re_rng[1]}"
+                
                 res += (
                     f"& {r.name} "
                     f"& {r.desc} "
                     f"& {utils.pretty_none(r.candidates)} "
-                    f"& {utils.pretty_none(r.time)} "
+                    f"& {utils.pretty_none(r.time / self._config.filter_num)} "
                     f"& {utils.pretty_none(r.ast_size)} "
                     f"& {utils.pretty_none(r.endpoint_calls)} "
                     f"& {utils.pretty_none(r.projects)} "
                     f"& {utils.pretty_none(r.filters)} "
-                    f"& {rank_no_re} "
+                    f"& {utils.pretty_none(rank_no_re)} "
                     f"& {utils.pretty_none(median_rank)} ")
                 res += r" \\"
                 res += "\n"

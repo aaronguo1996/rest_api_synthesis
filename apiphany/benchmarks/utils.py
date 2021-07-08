@@ -166,6 +166,9 @@ def index_entries(entries, skip_fields):
 
 def pretty_none(v):
     if isinstance(v, float):
+        if v < 0.05:
+            return "$<$0.1"
+
         return round(v, 1)
         
     return v if v is not None else '-'
