@@ -369,6 +369,20 @@ class BenchmarkSuite:
         }
         initial_covered_num = len(initial_covered)
 
+        not_covered_benches = 0
+        for benchmark in self.benchmarks:
+            ns = benchmark.solutions[0].collect_exprs()
+            ep_calls = list(filter(lambda x: isinstance(x, AppExpr), ns))
+            eps = [tuple(e._fun.split('_')) for e in ep_calls]
+            eps = [('_'.join(e[:-1]), e[-1]) for e in eps]
+            for ep in eps:
+                if ep not in initial_covered:
+                    print(ep, "is not covered")
+                    not_covered_benches += 1
+                    break
+
+        print(self.api, "has", not_covered_benches, "benchmarks with not covered endpoints")
+
         # covered endpoints
         covered = {
             (x.endpoint, x.method.upper()) for x in self._entries if x.endpoint in endpoints
@@ -570,6 +584,20 @@ class Bencher:
                 # else:
                 #     rank_no_re = f"{r.rank_no_re_rng[0]}-{r.rank_no_re_rng[1]}"
                 
+                if median_rank is not None:
+                    if median_rank <= rank_no_re:
+                        median_rank_str = f"\\textbf{{{median_rank}}}"
+                    else:
+                        median_rank_str = str(median_rank)
+
+                    if rank_no_re <= median_rank:
+                        rank_no_re_str = f"\\textbf{{{rank_no_re}}}"
+                    else:
+                        rank_no_re_str = str(rank_no_re)
+                else:
+                    median_rank_str = utils.pretty_none(median_rank)
+                    rank_no_re_str = utils.pretty_none(rank_no_re)
+
                 res += (
                     f"& {r.name} "
                     f"& {r.desc} "
@@ -579,8 +607,8 @@ class Bencher:
                     f"& {utils.pretty_none(r.filters)} "
                     f"& {utils.pretty_none(r.candidates)} "
                     f"& {utils.pretty_none(r.time / self._config.filter_num)} "
-                    f"& {utils.pretty_none(rank_no_re)} "
-                    f"& {utils.pretty_none(median_rank)} ")
+                    f"& {rank_no_re_str} "
+                    f"& {median_rank_str} ")
                 res += r" \\"
                 res += "\n"
             if i < len(self._suites) - 1:
