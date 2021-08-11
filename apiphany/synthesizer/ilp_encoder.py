@@ -4,9 +4,9 @@ import time
 import gurobipy as gp
 from gurobipy import GRB
 
-from stats.time_stats import TimeStats, STATS_ENCODE, STATS_SEARCH
-from synthesizer.utils import group_params, make_entry_name
-from synthesizer.underapprox import Approximation
+from apiphany.stats.time_stats import TimeStats, STATS_ENCODE, STATS_SEARCH
+from apiphany.synthesizer.utils import group_params, make_entry_name
+from apiphany.synthesizer.underapprox import Approximation
 
 SOLS_PER_SOLVE = 100
 

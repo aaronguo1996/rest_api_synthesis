@@ -2,14 +2,14 @@ import os
 import pickle
 import re
 
-import consts
-from analyzer import parser
-from synthesizer.utils import make_entry_name
-from analyzer.utils import path_to_name
-from analyzer.entry import ErrorResponse
+import apiphany.consts
+from apiphany.analyzer import parser
+from apiphany.synthesizer.utils import make_entry_name
+from apiphany.analyzer.utils import path_to_name
+from apiphany.analyzer.entry import ErrorResponse
 
 def prep_exp_dir(config):
-    exp_name = config[consts.KEY_EXP_NAME]
+    exp_name = config[apiphany.consts.KEY_EXP_NAME]
     exp_dir = os.path.join("../experiment_data/", exp_name)
     if not os.path.exists(exp_dir):
         os.makedirs(exp_dir)
@@ -34,14 +34,14 @@ def update_type(skip_fields, entries, endpoints):
             param.type = match_param.type
 
 def get_initial_witnesses(configuration, exp_dir, base_path, endpoints):
-    trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
-    skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
+    trace_file = os.path.join(exp_dir, apiphany.consts.FILE_TRACE)
+    skip_fields = configuration.get(apiphany.consts.KEY_SKIP_FIELDS)
     log_parser = parser.LogParser(
-        configuration[consts.KEY_LOG_FILE], 
-        configuration[consts.KEY_HOSTNAME],
+        configuration[apiphany.consts.KEY_LOG_FILE], 
+        configuration[apiphany.consts.KEY_HOSTNAME],
         base_path, endpoints)
     entries = log_parser.parse_entries(
-        configuration[consts.KEY_ANALYSIS][consts.KEY_UNINTERESTING],
+        configuration[apiphany.consts.KEY_ANALYSIS][apiphany.consts.KEY_UNINTERESTING],
         skip_fields,
     )
 
@@ -49,17 +49,17 @@ def get_initial_witnesses(configuration, exp_dir, base_path, endpoints):
 
 
 def parse_entries(configuration, exp_dir, base_path, endpoints):
-    trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
-    skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
+    trace_file = os.path.join(exp_dir, apiphany.consts.FILE_TRACE)
+    skip_fields = configuration.get(apiphany.consts.KEY_SKIP_FIELDS)
     if not os.path.exists(trace_file):
         print("Parsing OpenAPI document...")
         # entries = None
         log_parser = parser.LogParser(
-            configuration[consts.KEY_LOG_FILE], 
-            configuration[consts.KEY_HOSTNAME],
+            configuration[apiphany.consts.KEY_LOG_FILE], 
+            configuration[apiphany.consts.KEY_HOSTNAME],
             base_path, endpoints)
         entries = log_parser.parse_entries(
-            configuration[consts.KEY_ANALYSIS][consts.KEY_UNINTERESTING],
+            configuration[apiphany.consts.KEY_ANALYSIS][apiphany.consts.KEY_UNINTERESTING],
             skip_fields,
         )
         # if configuration[consts.KEY_DEBUG]:

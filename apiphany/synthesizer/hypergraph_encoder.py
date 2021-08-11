@@ -3,8 +3,8 @@ import re
 from z3 import Bool, Int, Solver
 from snakes.nets import *
 
-from stats.time_stats import TimeStats, STATS_ENCODE, STATS_SEARCH
-from synthesizer.utils import group_params, make_entry_name
+from apiphany.stats.time_stats import TimeStats, STATS_ENCODE, STATS_SEARCH
+from apiphany.synthesizer.utils import group_params, make_entry_name
 
 class HyperGraphEncoder:
     def __init__(self, path_entries):

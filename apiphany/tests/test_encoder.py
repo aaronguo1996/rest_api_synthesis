@@ -1,7 +1,8 @@
 import unittest
-from synthesizer.petrinet_encoder import *
-from analyzer.entry import TraceEntry, Parameter
-from schemas.schema_type import SchemaType
+
+from apiphany.synthesizer.petrinet_encoder import *
+from apiphany.analyzer.entry import TraceEntry, Parameter
+from apiphany.schemas.schema_type import SchemaType
 
 class EncoderTestCase(unittest.TestCase):
     def setUp(self):

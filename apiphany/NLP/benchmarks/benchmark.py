@@ -8,18 +8,20 @@ import pebble
 import time
 import matplotlib.pyplot as plt
 
-from apiphany.analyzer import dynamic
-from apiphany.analyzer.entry import ErrorResponse
-from apiphany.openapi import defs
-from apiphany.openapi.parser import OpenAPIParser
-from apiphany.openapi.utils import read_doc
-from apiphany.program.program import EquiExpr, ProjectionExpr, AppExpr
-from apiphany.schemas import types
-from apiphany.synthesizer import parallel
-from apiphany.synthesizer.filtering import retrospective_execute, check_results
-from apiphany.synthesizer.synthesizer import Synthesizer
-import apiphany.benchmarks.utils as utils
+from analyzer import dynamic
+from analyzer.entry import ErrorResponse
+from openapi import defs
+from openapi.parser import OpenAPIParser
+from openapi.utils import read_doc
+from program.program import EquiExpr, ProjectionExpr, AppExpr
+from schemas import types
+from synthesizer import parallel
+from synthesizer.filtering import retrospective_execute, check_results
+from synthesizer.synthesizer import Synthesizer
+import benchmarks.utils as utils
+import consts
 
+from multiprocessing import cpu_count
 from apiphany import rust_re
 
 class BenchConfig:

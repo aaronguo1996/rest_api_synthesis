@@ -1,4 +1,4 @@
-from openapi import defs
+from apiphany.openapi import defs
 
 def split_by(p, lst):
     good = [x for x in lst if p(x)]

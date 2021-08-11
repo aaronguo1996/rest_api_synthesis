@@ -1,6 +1,6 @@
 import os
 
-from synthesizer.synthesizer import Synthesizer
+from apiphany.synthesizer.synthesizer import Synthesizer
 
 def init_synthesizer(configuration, entries, exp_dir):
     synthesizer = Synthesizer(configuration, entries, exp_dir)

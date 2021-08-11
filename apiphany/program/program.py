@@ -1,13 +1,12 @@
 import random
 
-from synthesizer.utils import make_entry_name
-from analyzer.multiplicity import MUL_ONE_ONE, MUL_ZERO_MORE, MUL_ZERO_ONE
-from analyzer.dynamic import Goal
-import program.utils as utils
-import consts
-from analyzer.utils import name_to_path
-from schemas import types
-from openapi import defs
+from apiphany.synthesizer.utils import make_entry_name
+from apiphany.analyzer.multiplicity import MUL_ONE_ONE, MUL_ZERO_MORE, MUL_ZERO_ONE
+from apiphany.analyzer.dynamic import Goal
+import apiphany.program.utils as utils
+from apiphany.analyzer.utils import name_to_path
+from apiphany.schemas import types
+from apiphany.openapi import defs
 
 class Expression:
     def __init__(self, typ, signature):

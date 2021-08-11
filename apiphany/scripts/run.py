@@ -8,25 +8,25 @@ import logging
 import random
 from graphviz import Digraph
 
-# analyze traces
-from analyzer import analyzer, dynamic, parser
-from analyzer.ascription import Ascription
-from globs import init_synthesizer
-from openapi import defs
-from openapi.parser import OpenAPIParser
-from openapi.utils import read_doc, get_schema_forest
-from schemas import types
-from synthesizer.constructor import Constructor
-from synthesizer.filtering import retrospective_execute
-from synthesizer.parallel import spawn_encoders
-from synthesizer.synthesizer import Synthesizer
-from synthesizer.utils import make_entry_name
-from witnesses.engine import WitnessGenerator
-from benchmarks.utils import prep_exp_dir, parse_entries
-import consts
+from apiphany.analyzer import analyzer, dynamic, parser
+from apiphany.analyzer.ascription import Ascription
+from apiphany.benchmarks.utils import prep_exp_dir, parse_entries
+from apiphany.globs import init_synthesizer
+from apiphany.NLP.infrastructure.trainer import Trainer
+from apiphany.openapi import defs
+from apiphany.openapi.parser import OpenAPIParser
+from apiphany.openapi.utils import read_doc, get_schema_forest
+from apiphany.schemas import types
+from apiphany.synthesizer.constructor import Constructor
+from apiphany.synthesizer.filtering import retrospective_execute
+from apiphany.synthesizer.parallel import spawn_encoders
+from apiphany.synthesizer.synthesizer import Synthesizer
+from apiphany.synthesizer.utils import make_entry_name
+from apiphany.witnesses.engine import WitnessGenerator
+import apiphany.consts
 
 # test imports
-from tests.run_test import run_test
+from apiphany.tests.run_test import run_test
 
 # definitions of constants
 DEFAULT_DEBUG_OUTPUT = 'debug.log' 
@@ -36,28 +36,25 @@ def build_cmd_parser():
         All arguments
     '''
     parser = argparse.ArgumentParser()
-    parser.add_argument("config_file", nargs='?',
-        help="Path to the configuration file")
-    parser.add_argument("--test", action="store_true",
-        help="Run unit tests")
-    parser.add_argument("--dynamic", action="store_true",
-        help="Run dynamic analysis")
-    parser.add_argument("--filtering", action="store_true",
-        help="Filter or rank results from previous run")
-    parser.add_argument("--synthesis", action="store_true",
-        help="Run synthesis algorithm in single process mode")
-    parser.add_argument("--parallel", action="store_true",
-        help="Run synthesis algorithm in parallel mode")
-    parser.add_argument("--timeout", type=int,
-        help="Timeout limit for synthesis to run")
-    parser.add_argument("--witness", action="store_true",
-        help="Generate witnesses by configuration")
+    parser.add_argument("--config_file", help="Path to the configuration file")
+    parser.add_argument("--test", action="store_true", help="Run unit tests")
+    parser.add_argument("--dynamic", action="store_true", help="Run dynamic analysis")
+    parser.add_argument("--filtering", action="store_true", help="Filter or rank results from previous run")
+    parser.add_argument("--synthesis", action="store_true", help="Run synthesis algorithm in single process mode")
+    parser.add_argument("--parallel", action="store_true", help="Run synthesis algorithm in parallel mode")
+    parser.add_argument("--nlp", action="store_true", help="Run the NLP module")
+    parser.add_argument("--timeout", type=int, help="Timeout limit for synthesis to run")
+    parser.add_argument("--witness", action="store_true", help="Generate witnesses by configuration")
+    parser.add_argument('--exp_name', '-exp', type=str, default='pick an experiment name', required=True)
+    parser.add_argument('--seed', type=int, default=1)
+    parser.add_argument('--use_gpu', action='store_true')
+    parser.add_argument('--which_gpu', type=int, default=0)
     return parser
 
 def run_dynamic(configuration, entries, endpoint, limit=500):
     analysis = dynamic.DynamicAnalysis(
         entries,
-        configuration.get(consts.KEY_SKIP_FIELDS)
+        configuration.get(apiphany.consts.KEY_SKIP_FIELDS)
     )
     seqs = analysis.get_sequences(endpoint=endpoint, limit=limit)
     print(seqs)
@@ -91,19 +88,19 @@ def create_entries(doc, config, ascription):
 def generate_witnesses(
     configuration, doc, doc_entries, hostname, base_path, 
     exp_dir, entries, endpoints):
-    enable_debug = configuration.get(consts.KEY_DEBUG)
+    enable_debug = configuration.get(apiphany.consts.KEY_DEBUG)
 
     print("Analyzing provided log...")
     log_analyzer = analyzer.LogAnalyzer()
-    prefilter = configuration.get(consts.KEY_SYNTHESIS) \
-                            .get(consts.KEY_SYN_PREFILTER)
-    skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
+    prefilter = configuration.get(apiphany.consts.KEY_SYNTHESIS) \
+                            .get(apiphany.consts.KEY_SYN_PREFILTER)
+    skip_fields = configuration.get(apiphany.consts.KEY_SKIP_FIELDS)
 
     log_analyzer.analyze(
         doc_entries,
         entries,
         skip_fields,
-        configuration.get(consts.KEY_BLACKLIST),
+        configuration.get(apiphany.consts.KEY_BLACKLIST),
         prefilter=prefilter)
 
     groups = log_analyzer.analysis_result()
@@ -119,22 +116,22 @@ def generate_witnesses(
     engine = WitnessGenerator(
         doc_entries, hostname, base_path, 
         entries, log_analyzer,
-        configuration[consts.KEY_WITNESS][consts.KEY_TOKEN],
-        configuration[consts.KEY_WITNESS][consts.KEY_VALUE_DICT],
-        configuration[consts.KEY_WITNESS][consts.KEY_ANNOTATION],
+        configuration[apiphany.consts.KEY_WITNESS][apiphany.consts.KEY_TOKEN],
+        configuration[apiphany.consts.KEY_WITNESS][apiphany.consts.KEY_VALUE_DICT],
+        configuration[apiphany.consts.KEY_WITNESS][apiphany.consts.KEY_ANNOTATION],
         exp_dir,
-        configuration[consts.KEY_PATH_TO_DEFS],
-        configuration.get(consts.KEY_SKIP_FIELDS),
-        configuration[consts.KEY_WITNESS][consts.KEY_PLOT_EVERY],
+        configuration[apiphany.consts.KEY_PATH_TO_DEFS],
+        configuration.get(apiphany.consts.KEY_SKIP_FIELDS),
+        configuration[apiphany.consts.KEY_WITNESS][apiphany.consts.KEY_PLOT_EVERY],
     )
 
-    if configuration[consts.KEY_ANALYSIS][consts.KEY_PLOT_GRAPH]:
+    if configuration[apiphany.consts.KEY_ANALYSIS][apiphany.consts.KEY_PLOT_GRAPH]:
         engine.to_graph(endpoints, "dependencies_0")
 
     engine.saturate_all(
-        endpoints, configuration[consts.KEY_WITNESS][consts.KEY_ITERATIONS],
-        configuration[consts.KEY_WITNESS][consts.KEY_TIMEOUT],
-        configuration[consts.KEY_WITNESS][consts.KEY_MAX_OPT])
+        endpoints, configuration[apiphany.consts.KEY_WITNESS][apiphany.consts.KEY_ITERATIONS],
+        configuration[apiphany.consts.KEY_WITNESS][apiphany.consts.KEY_TIMEOUT],
+        configuration[apiphany.consts.KEY_WITNESS][apiphany.consts.KEY_MAX_OPT])
 
     # ascribe types with the new analysis results
     entries = create_entries(doc_entries, configuration, ascription)
@@ -143,15 +140,15 @@ def generate_witnesses(
     constructor = Constructor(doc, log_analyzer)
     projs_and_filters = constructor.construct_graph()
     entries.update(projs_and_filters)
-    with open(os.path.join(exp_dir, consts.FILE_ENTRIES), "wb") as f:
+    with open(os.path.join(exp_dir, apiphany.consts.FILE_ENTRIES), "wb") as f:
         pickle.dump(entries, f)
 
     log_analyzer.index_values_by_type()
     print("Writing graph to file...")
-    with open(os.path.join(exp_dir, consts.FILE_GRAPH), "wb") as f:
+    with open(os.path.join(exp_dir, apiphany.consts.FILE_GRAPH), "wb") as f:
         pickle.dump(log_analyzer, f)
 
-    if configuration[consts.KEY_ANALYSIS][consts.KEY_PLOT_GRAPH]:
+    if configuration[apiphany.consts.KEY_ANALYSIS][apiphany.consts.KEY_PLOT_GRAPH]:
         dot = Digraph(strict=True)
         log_analyzer.to_graph(dot, endpoints=endpoints)
         dot.render(os.path.join("output/", "dependencies"), view=False)
@@ -160,13 +157,36 @@ def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
 
+    if args.nlp:
+        params = vars(args)
+
+        ##################################
+        ### CREATE DIRECTORY FOR LOGGING
+        ##################################
+
+        logdir_prefix = 'bert_'
+
+        ## directory for logging
+        data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../data')
+        if not (os.path.exists(data_path)):
+            os.makedirs(data_path)
+        logdir = logdir_prefix + args.exp_name # + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+        logdir = os.path.join(data_path, logdir)
+        params['logdir'] = logdir
+        if not(os.path.exists(logdir)):
+            os.makedirs(logdir)
+
+        trainer = Trainer(params)
+        trainer.perform_eval()
+        return
+
     configuration = {}
     with open(args.config_file, 'r') as config:
         configuration = json.loads(config.read())
 
     # clear the log file if exists
-    output_file = configuration.get(consts.KEY_OUTPUT)
-    enable_debug = configuration.get(consts.KEY_DEBUG)
+    output_file = configuration.get(apiphany.consts.KEY_OUTPUT)
+    enable_debug = configuration.get(apiphany.consts.KEY_DEBUG)
     if enable_debug and os.path.exists(output_file):
         os.remove(output_file)
 
@@ -174,12 +194,12 @@ def main():
         filename=output_file, level=logging.DEBUG)
 
     print("Reading OpenAPI document...")
-    doc_file = configuration.get(consts.KEY_DOC_FILE)
+    doc_file = configuration.get(apiphany.consts.KEY_DOC_FILE)
     doc = read_doc(doc_file)
     openapi_parser = OpenAPIParser(doc)
     hostname, base_path, doc_entries = openapi_parser.parse()
 
-    endpoints = configuration.get(consts.KEY_ENDPOINTS)
+    endpoints = configuration.get(apiphany.consts.KEY_ENDPOINTS)
     if not endpoints:
         endpoints = doc.get(defs.DOC_PATHS).keys()
 
@@ -190,7 +210,7 @@ def main():
         entries = parse_entries(configuration, exp_dir, base_path, doc_entries)
 
     if args.parallel or args.synthesis:
-        with open(os.path.join(exp_dir, consts.FILE_ENTRIES), "rb") as f:
+        with open(os.path.join(exp_dir, apiphany.consts.FILE_ENTRIES), "rb") as f:
             entries = pickle.load(f)
 
     if args.dynamic:
@@ -203,11 +223,11 @@ def main():
         )
     
     else:
-        with open(os.path.join(exp_dir, consts.FILE_GRAPH), "rb") as f:
+        with open(os.path.join(exp_dir, apiphany.consts.FILE_GRAPH), "rb") as f:
             log_analyzer = pickle.load(f)
         
         if args.test:
-            suites = configuration.get(consts.KEY_TEST_SUITES)
+            suites = configuration.get(apiphany.consts.KEY_TEST_SUITES)
             if not suites:
                 raise Exception("Test suites need to be specified in configuration file")
 
@@ -218,7 +238,7 @@ def main():
 
             dyn_analysis = dynamic.DynamicAnalysis(
                 entries,
-                configuration.get(consts.KEY_SKIP_FIELDS),
+                configuration.get(apiphany.consts.KEY_SKIP_FIELDS),
                 abstraction_level=dynamic.CMP_ENDPOINT_AND_ARG_VALUE
             )
 
@@ -229,7 +249,7 @@ def main():
             for p in solutions:
                 score = retrospective_execute(
                     log_analyzer, entries,
-                    configuration.get(consts.KEY_SKIP_FIELDS),
+                    configuration.get(apiphany.consts.KEY_SKIP_FIELDS),
                     dynamic.BiasType.SIMPLE, p
                 )
                 results.append((p, score))
@@ -251,7 +271,7 @@ def main():
             outputs = [types.SchemaObject("objs_message")]
             spawn_encoders(
                 synthesizer, inputs, outputs,
-                configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
+                configuration[apiphany.consts.KEY_SYNTHESIS][apiphany.consts.KEY_SOLVER_NUM]
             )
         elif args.synthesis:
             synthesizer = Synthesizer(configuration, entries, exp_dir)

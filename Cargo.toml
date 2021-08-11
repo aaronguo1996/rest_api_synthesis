@@ -23,6 +23,7 @@ features = ["extension-module"]
 [lib]
 name = "apiphany"
 crate-type = ["cdylib"]
+path = "rust_re/lib.rs"
 
 [profile.release]
 lto = "fat"

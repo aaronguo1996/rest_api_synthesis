@@ -2,9 +2,9 @@ from collections import defaultdict
 import itertools
 import re
 
-from synthesizer.utils import make_entry_name
-from analyzer.utils import path_to_name
-from program.program import (Program, VarExpr, ProjectionExpr,
+from apiphany.synthesizer.utils import make_entry_name
+from apiphany.analyzer.utils import path_to_name
+from apiphany.program.program import (Program, VarExpr, ProjectionExpr,
                              FilterExpr, AssignExpr, AppExpr)
 
 

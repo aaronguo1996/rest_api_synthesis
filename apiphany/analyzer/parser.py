@@ -2,11 +2,11 @@ import json
 import re
 from urllib.parse import urlparse, unquote
 
-from analyzer.entry import TraceEntry, Parameter
-from analyzer.utils import name_to_path
-from witnesses.utils import add_as_object
-from analyzer import consts as har_consts
-import consts
+from apiphany.analyzer.entry import TraceEntry, Parameter
+from apiphany.analyzer.utils import name_to_path
+from apiphany.witnesses.utils import add_as_object
+from apiphany.analyzer import consts as har_consts
+import apiphany.consts
 
 def match_with_path(path, request_obj, url):
     # print("matching", url, "with", path)
@@ -198,7 +198,7 @@ class LogParser:
             mime_type = e.get(har_consts.HAR_RESPONSE) \
                         .get(har_consts.HAR_CONTENT) \
                         .get(har_consts.HAR_MIME)
-            if (mime_type == consts.JSON_TYPE and
+            if (mime_type == apiphany.consts.JSON_TYPE and
                 self._hostname in e[har_consts.HAR_REQUEST][har_consts.HAR_URL]):
                 entry = self._resolve_entry(skip_fields, e)
                 if entry is not None:
@@ -209,8 +209,8 @@ class LogParser:
     def _sanitize_hostname(self):
         # check whether the provided hostname starts with https://
         # prepend it if not
-        if self._hostname[:consts.HOSTNAME_PREFIX_LEN] != consts.HOSTNAME_PREFIX:
-            self._hostname = consts.HOSTNAME_PREFIX + self._hostname
+        if self._hostname[:apiphany.consts.HOSTNAME_PREFIX_LEN] != apiphany.consts.HOSTNAME_PREFIX:
+            self._hostname = apiphany.consts.HOSTNAME_PREFIX + self._hostname
 
         # check whether the provided hostname ends with /
         # remove it if exists

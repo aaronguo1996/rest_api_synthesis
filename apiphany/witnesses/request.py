@@ -1,10 +1,7 @@
-# from urllib.parse import urlencode
-# from urllib.request import urlopen, Request
 import requests
 import logging
-import json
 
-from openapi import defs
+from apiphany.openapi import defs
 
 class Connection:
     def __init__(self, hostname, base_path):

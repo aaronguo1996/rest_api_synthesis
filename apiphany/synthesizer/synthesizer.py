@@ -3,15 +3,14 @@ import itertools
 import pickle
 import time
 import os
-import shutil
 
-from program.generator import ProgramGenerator
-from program.program import ProgramGraph, all_topological_sorts
-from stats.time_stats import TimeStats, STATS_GRAPH
-from synthesizer.hypergraph_encoder import HyperGraphEncoder
-from synthesizer.petrinet_encoder import PetriNetEncoder
-from synthesizer.ilp_encoder import ILPetriEncoder
-import consts
+from apiphany.program.generator import ProgramGenerator
+from apiphany.program.program import ProgramGraph, all_topological_sorts
+from apiphany.stats.time_stats import TimeStats, STATS_GRAPH
+from apiphany.synthesizer.hypergraph_encoder import HyperGraphEncoder
+from apiphany.synthesizer.petrinet_encoder import PetriNetEncoder
+from apiphany.synthesizer.ilp_encoder import ILPetriEncoder
+import apiphany.consts
 
 
 class Synthesizer:
@@ -25,8 +24,8 @@ class Synthesizer:
         self._program_generator = ProgramGenerator({})
         self._programs = {}
         # flags
-        self._expand_group = config[consts.KEY_SYNTHESIS][consts.KEY_EXPAND_GROUP]
-        self._block_perms = config[consts.KEY_SYNTHESIS][consts.KEY_BLOCK_PERM]
+        self._expand_group = config[apiphany.consts.KEY_SYNTHESIS][apiphany.consts.KEY_EXPAND_GROUP]
+        self._block_perms = config[apiphany.consts.KEY_SYNTHESIS][apiphany.consts.KEY_BLOCK_PERM]
         self._exp_dir = exp_dir
 
     @TimeStats(key=STATS_GRAPH)
@@ -154,12 +153,12 @@ class Synthesizer:
         return programs, perm_indices
 
     def _create_encoder(self):
-        solver = self._config[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_TYPE]
-        if solver == consts.SOLVER_PN_SMT:
+        solver = self._config[apiphany.consts.KEY_SYNTHESIS][apiphany.consts.KEY_SOLVER_TYPE]
+        if solver == apiphany.consts.SOLVER_PN_SMT:
             self._encoder = PetriNetEncoder({})
-        elif solver == consts.SOLVER_HYPER:
+        elif solver == apiphany.consts.SOLVER_HYPER:
             self._encoder = HyperGraphEncoder({})
-        elif solver == consts.SOLVER_PN_ILP:
+        elif solver == apiphany.consts.SOLVER_PN_ILP:
             self._encoder = ILPetriEncoder({})
         else:
             raise Exception("Unknown solver type in config")
@@ -217,7 +216,7 @@ class Synthesizer:
                 self._encoder.block_prev(perms)
                 result = self._encoder.solve()
 
-            if self._encoder._path_len > consts.DEFAULT_LENGTH_LIMIT:
+            if self._encoder._path_len > apiphany.consts.DEFAULT_LENGTH_LIMIT:
                 print("Exceeding the default length limit")
                 break
 

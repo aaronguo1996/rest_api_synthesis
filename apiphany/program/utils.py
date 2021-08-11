@@ -1,6 +1,6 @@
 import collections
 
-from schemas import types
+from apiphany.schemas import types
 
 def find_expr(exprs, expr):
     for e, v in exprs:

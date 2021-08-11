@@ -1,8 +1,8 @@
 import re
 import json
 
-from openapi import defs
-from openapi.preprocess import PreProcessor
+from apiphany.openapi import defs
+from apiphany.openapi.preprocess import PreProcessor
 
 def read_doc(doc_path):
     with open(doc_path, 'r') as f:

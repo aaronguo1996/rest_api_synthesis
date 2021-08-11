@@ -1,11 +1,9 @@
 import re
-import json
 
-from openapi import defs
-import schemas.utils as utils
-from openapi.utils import blacklist
-import consts
-from program.utils import set_default
+from apiphany.openapi import defs
+import apiphany.schemas.utils as utils
+from apiphany.openapi.utils import blacklist
+import apiphany.consts
 
 class BaseType:
     object_lib = {}
@@ -336,7 +334,7 @@ def construct_prim_type(name, schema):
     typ = schema.get(defs.DOC_TYPE)
     ref = schema.get(defs.DOC_REF)
     if ref is not None:
-        obj_name = ref[len(consts.REF_PREFIX):]
+        obj_name = ref[len(apiphany.consts.REF_PREFIX):]
         return SchemaObject(obj_name)
     elif typ == defs.TYPE_INT:
         return PrimInt(name=name)
@@ -406,7 +404,7 @@ def infer_type_for(path_to_defs, skip_fields, value):
         if obj_score > 0:
             # if a candidate match only a small number of fields, do not add
             sz = utils.value_size(value)
-            if obj_score >= sz * consts.OBJ_MATCH_THRESHOLD:
+            if obj_score >= sz * apiphany.consts.OBJ_MATCH_THRESHOLD:
                 obj_candidates.append((obj_type, obj_score))
 
     # return the one with the greatest score

@@ -1,8 +1,8 @@
 import re
 
-from openapi import defs
-from schemas.utils import value_size
-from openapi.utils import blacklist
+from apiphany.openapi import defs
+from apiphany.schemas.utils import value_size
+from apiphany.openapi.utils import blacklist
 
 class SchemaType:
     doc_obj = {}

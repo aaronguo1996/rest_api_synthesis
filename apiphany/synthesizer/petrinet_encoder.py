@@ -5,9 +5,9 @@ from snakes.nets import *
 import time
 import subprocess
 
-from stats.time_stats import TimeStats, STATS_ENCODE, STATS_SEARCH
-from synthesizer.utils import group_params, make_entry_name
-from synthesizer.underapprox import Approximation
+from apiphany.stats.time_stats import TimeStats, STATS_ENCODE, STATS_SEARCH
+from apiphany.synthesizer.utils import group_params, make_entry_name
+from apiphany.synthesizer.underapprox import Approximation
 
 # preprocess the spec file and canonicalize the parameters and responses
 class PetriNetEncoder:

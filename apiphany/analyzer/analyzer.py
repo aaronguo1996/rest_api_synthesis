@@ -1,13 +1,14 @@
 import re
 import logging
-
-from analyzer.entry import ErrorResponse, Parameter
-from analyzer.utils import get_representative, same_type_name
-from openapi import defs
-from synthesizer.utils import make_entry_name
-from schemas import types
-import consts
 import random
+
+from apiphany.analyzer.entry import ErrorResponse, Parameter
+from apiphany.analyzer.utils import get_representative, same_type_name
+from apiphany.openapi import defs
+from apiphany.synthesizer.utils import make_entry_name
+from apiphany.schemas import types
+import apiphany.consts
+
 
 class DSU:
     # TODO: record types for each param here
@@ -195,7 +196,7 @@ class LogAnalyzer:
             self.insert(r)
 
     def analyze(self, paths, entries, skip_fields, blacklist,
-        path_to_defs=consts.REF_PREFIX, prefilter=False):
+        path_to_defs=apiphany.consts.REF_PREFIX, prefilter=False):
         '''
             Match the value of each request argument or response parameter
             in a log entry and union the common ones

@@ -1,11 +1,12 @@
-from tests.test_generator import generator_suite
-from tests.test_analyzer import analyzer_suite
-from tests.test_synthesizer import synthesizer_suite
 import unittest
-from tests.test_analyzer import analyzer_suite
-from tests.test_encoder import encoder_suite
-from tests.test_synthesizer import synthesizer_suite
-from tests.test_generator import generator_suite
+
+from apiphany.tests.test_generator import generator_suite
+from apiphany.tests.test_analyzer import analyzer_suite
+from apiphany.tests.test_synthesizer import synthesizer_suite
+from apiphany.tests.test_analyzer import analyzer_suite
+from apiphany.tests.test_encoder import encoder_suite
+from apiphany.tests.test_synthesizer import synthesizer_suite
+from apiphany.tests.test_generator import generator_suite
 
 ENCODER_SUITE = "encoder"
 SYNTHESIZER_SUITE = "synthesizer"

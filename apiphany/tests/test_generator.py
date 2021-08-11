@@ -1,7 +1,8 @@
 import unittest
-from program.generator import *
-from analyzer.entry import TraceEntry, Parameter
-from schemas.schema_type import SchemaType
+
+from apiphany.program.generator import *
+from apiphany.analyzer.entry import TraceEntry, Parameter
+from apiphany.schemas.schema_type import SchemaType
 
 class GeneratorTestCase(unittest.TestCase):
     def setUp(self):

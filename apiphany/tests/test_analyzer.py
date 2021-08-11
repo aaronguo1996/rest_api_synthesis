@@ -1,6 +1,7 @@
 import unittest
-from analyzer.analyzer import *
-from analyzer.entry import Parameter
+
+from apiphany.analyzer.analyzer import *
+from apiphany.analyzer.entry import Parameter
 
 class AnalyzerTestCase(unittest.TestCase):
     @staticmethod

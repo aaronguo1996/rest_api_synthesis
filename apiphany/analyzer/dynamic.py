@@ -3,10 +3,10 @@ from enum import IntEnum
 import time
 import xeger
 
-from analyzer.entry import ErrorResponse
-from analyzer.multiplicity import MUL_ZERO_MORE
-from analyzer.utils import path_to_name
-from schemas import types
+from apiphany.analyzer.entry import ErrorResponse
+from apiphany.analyzer.multiplicity import MUL_ZERO_MORE
+from apiphany.analyzer.utils import path_to_name
+from apiphany.schemas import types
 
 CMP_ENDPOINT_NAME = 0
 CMP_ENDPOINT_AND_ARG_NAME = 1

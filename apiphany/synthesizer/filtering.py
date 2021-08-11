@@ -1,7 +1,5 @@
-import random
-
-from analyzer import dynamic
-import consts
+from apiphany.analyzer import dynamic
+import apiphany.consts
 
 def retrospective_execute(
     log_analyzer, entries, skip_fields, 
@@ -50,7 +48,7 @@ def check_results(results, multiple):
 
     # check methods always fail
     if all_none:
-        return consts.MAX_COST
+        return apiphany.consts.MAX_COST
 
     # check multiplicity match
     score_avg = sum(scores) / len(scores)

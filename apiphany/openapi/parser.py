@@ -1,8 +1,8 @@
 from urllib.parse import urlparse
 
-from schemas import types
-from openapi import defs
-from analyzer.entry import TraceEntry
+from apiphany.schemas import types
+from apiphany.openapi import defs
+from apiphany.analyzer.entry import TraceEntry
 
 class OpenAPIParser:
     def __init__(self, doc):

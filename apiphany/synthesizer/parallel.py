@@ -5,10 +5,10 @@ import os
 import pebble
 import time
 
-from synthesizer.hypergraph_encoder import HyperGraphEncoder
-from synthesizer.ilp_encoder import ILPetriEncoder
-from synthesizer.petrinet_encoder import PetriNetEncoder
-import consts
+from apiphany.synthesizer.hypergraph_encoder import HyperGraphEncoder
+from apiphany.synthesizer.ilp_encoder import ILPetriEncoder
+from apiphany.synthesizer.petrinet_encoder import PetriNetEncoder
+import apiphany.consts
 
 def run_encoder(synthesizer, inputs, outputs, path_len, solutions):
     input_map = defaultdict(int)
@@ -22,12 +22,12 @@ def run_encoder(synthesizer, inputs, outputs, path_len, solutions):
         output_map[typ_name] += 1
         
     config = synthesizer._config
-    solver_type = config[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_TYPE]
-    if solver_type == consts.SOLVER_PN_SMT:
+    solver_type = config[apiphany.consts.KEY_SYNTHESIS][apiphany.consts.KEY_SOLVER_TYPE]
+    if solver_type == apiphany.consts.SOLVER_PN_SMT:
         encoder = PetriNetEncoder({})
-    elif solver_type == consts.SOLVER_PN_ILP:
+    elif solver_type == apiphany.consts.SOLVER_PN_ILP:
         encoder = ILPetriEncoder({})
-    elif solver_type == consts.SOLVER_HYPER:
+    elif solver_type == apiphany.consts.SOLVER_HYPER:
         encoder = HyperGraphEncoder({})
     else:
         raise Exception("Unknown solver type in config")
@@ -71,13 +71,13 @@ def run_encoder(synthesizer, inputs, outputs, path_len, solutions):
 def spawn_encoders(synthesizer, inputs, outputs, solver_num, timeout=60):
     m = multiprocessing.Manager()
     all_solutions = []
-    for i in range(consts.DEFAULT_LENGTH_LIMIT + 1):
+    for i in range(apiphany.consts.DEFAULT_LENGTH_LIMIT + 1):
         solutions = m.Queue()
         all_solutions.append(solutions)
 
     with pebble.ProcessPool() as pool:
         futures = []
-        for i in range(consts.DEFAULT_LENGTH_LIMIT + 1):
+        for i in range(apiphany.consts.DEFAULT_LENGTH_LIMIT + 1):
             future = pool.schedule(
                 run_encoder, 
                 args=(synthesizer, inputs, outputs, i, all_solutions[i]),

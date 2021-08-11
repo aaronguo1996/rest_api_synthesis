@@ -1,7 +1,7 @@
 from collections import defaultdict
 from re import L
-from openapi import defs
-from analyzer.entry import ErrorResponse
+from apiphany.openapi import defs
+from apiphany.analyzer.entry import ErrorResponse
 
 MUL_ZERO_ONE = 0
 MUL_ZERO_MORE = 1

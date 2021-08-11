@@ -1,6 +1,7 @@
 import unittest
-from synthesizer.synthesizer import *
-from analyzer.entry import TraceEntry, Parameter
+
+from apiphany.synthesizer.synthesizer import *
+from apiphany.analyzer.entry import TraceEntry, Parameter
 
 class SynthesizerTestCase(unittest.TestCase):
     @staticmethod

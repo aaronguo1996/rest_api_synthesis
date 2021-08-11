@@ -1,4 +1,4 @@
-from analyzer.entry import TraceEntry
+from apiphany.analyzer.entry import TraceEntry
 
 class Ascription:
     def __init__(self, analyzer, skip_fields):

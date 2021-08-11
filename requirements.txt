@@ -1,4 +1,4 @@
-graphviz==0.16
+graphviz
 z3-solver
 SNAKES
 # seaborn
@@ -8,3 +8,15 @@ requests
 xeger
 gurobipy
 matplotlib
+tqdm
+boto3
+requests
+regex
+sentencepiece
+sacremoses
+matplotlib
+webencodings
+transformers
+importlib_metadata
+pytz
+maturin

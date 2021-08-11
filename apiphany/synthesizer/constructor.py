@@ -1,12 +1,9 @@
-import jsonref
-import json
-
-from openapi import defs
-from analyzer.entry import Parameter, TraceEntry
-from openapi.utils import blacklist
-from schemas import types
-from synthesizer.utils import make_entry_name
-import consts
+from apiphany.openapi import defs
+from apiphany.analyzer.entry import Parameter, TraceEntry
+from apiphany.openapi.utils import blacklist
+from apiphany.schemas import types
+from apiphany.synthesizer.utils import make_entry_name
+import apiphany.consts
 
 class Constructor:
     def __init__(self, doc, analyzer):
@@ -48,7 +45,7 @@ class Constructor:
                     results[name] = proj
         elif defs.DOC_REF in obj_def:
             ref_path = obj_def.get(defs.DOC_REF)
-            typ_name = ref_path[len(consts.REF_PREFIX):]
+            typ_name = ref_path[len(apiphany.consts.REF_PREFIX):]
             schema = types.get_ref_type(self._doc, typ_name)
             projections = self._create_projection(obj_name, field_name, schema)
             results.update(projections)
@@ -160,7 +157,7 @@ class Constructor:
                     results[name] = efilter
         elif defs.DOC_REF in field_def:
             ref_path = field_def.get(defs.DOC_REF)
-            typ_name = ref_path[len(consts.REF_PREFIX):]
+            typ_name = ref_path[len(apiphany.consts.REF_PREFIX):]
             schema = types.get_ref_type(self._doc, typ_name)
             filters = self._create_filter(obj_name, field_name, schema)
             results.update(filters)

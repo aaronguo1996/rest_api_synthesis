@@ -2,10 +2,10 @@ from collections import defaultdict
 import re
 import random
 
-from openapi import defs
-from schemas import types
-from analyzer.utils import ignore_arg_name
-import consts
+from apiphany.openapi import defs
+from apiphany.schemas import types
+from apiphany.analyzer.utils import ignore_arg_name
+import apiphany.consts
 
 class ErrorResponse:
     def __init__(self, msg):
@@ -371,7 +371,7 @@ class TraceEntry:
                     schema = request_body.get(defs.DOC_SCHEMA)
                     ref_properties = schema.get(defs.DOC_REF)
                     if ref_properties is not None:
-                        typ_name = ref_properties[len(consts.REF_PREFIX):]
+                        typ_name = ref_properties[len(apiphany.consts.REF_PREFIX):]
                         schema = types.get_ref_type(doc, typ_name)
 
                     requires = schema.get(defs.DOC_REQUIRED, [])

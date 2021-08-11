@@ -1,8 +1,8 @@
 from typing import List
 import re
 
-from openapi import defs
-from witnesses.utils import split_by
+from apiphany.openapi import defs
+from apiphany.witnesses.utils import split_by
 
 class EndpointProducer:
     def __init__(self, ep: str, method: str, ep_method_def, path: List[str]):

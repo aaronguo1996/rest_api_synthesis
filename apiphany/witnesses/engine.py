@@ -9,15 +9,15 @@ import random
 import re
 import time
 
-from analyzer.entry import ErrorResponse, Parameter, TraceEntry
-from analyzer.utils import path_to_name, name_to_path
-from openapi import defs
-from schemas import types
-from synthesizer.utils import make_entry_name
-from witnesses.dependencies import DependencyResolver, EndpointProducer, EnumProducer
-from witnesses.request import Connection
-import consts
-import witnesses.utils as utils
+from apiphany.analyzer.entry import ErrorResponse, Parameter, TraceEntry
+from apiphany.analyzer.utils import path_to_name, name_to_path
+from apiphany.openapi import defs
+from apiphany.schemas import types
+from apiphany.synthesizer.utils import make_entry_name
+from apiphany.witnesses.dependencies import DependencyResolver, EndpointProducer, EnumProducer
+from apiphany.witnesses.request import Connection
+import apiphany.consts
+import apiphany.witnesses.utils as utils
 
 RESULT_FILE = os.path.join("output/", "results.pkl")
 
@@ -250,7 +250,7 @@ class SaturationThread(BasicGenerator):
 class WitnessGenerator:
     def __init__(self, openapi_entries, hostname, base_path,
         entries, analyzer, token, val_dict, ann_path, exp_dir,
-        path_to_defs=consts.REF_PREFIX,
+        path_to_defs=apiphany.consts.REF_PREFIX,
         skip_fields=[], plot_freq = 1):
         self._logger = logging.getLogger(__name__)
         # parse the spec into dict
@@ -410,7 +410,7 @@ class WitnessGenerator:
                     except TimeoutError:
                         print("We lacked patience and got a TimeoutError")
 
-            witness_path = os.path.join(self._exp_dir, consts.FILE_TRACE)
+            witness_path = os.path.join(self._exp_dir, apiphany.consts.FILE_TRACE)
             with open(witness_path, 'rb') as f:
                 entries = pickle.load(f)
                 print(len(entries))
