@@ -1,7 +1,7 @@
 {
     "exp_name": "square_api_test",
-    "log_file": "data/logs/dashboard.square.com.har",
-    "doc_file": "data/openapi/square_connect_api_v3.json",
+    "log_file": "apiphany/data/logs/dashboard.square.com.har",
+    "doc_file": "apiphany/data/openapi/square_connect_api_v3.json",
     "enable_debug": true,
     "debug_output": "square_debug.log",
     "hostname": "https://explorer-gateway.squareup.com",
@@ -16,7 +16,7 @@
         "token": "EAAAEH41N4CKYTLKicOK8MCyj5yyTkn4IZOAqZkfIsfAQWJX1uijRbp6Z_jtQe8f",
         "value_dict": {
         },
-        "annotation_path": "configs/square_annotation.json",
+        "annotation_path": "apiphany/configs/square_annotation.json",
         "gen_depth": 3,
         "timeout_total": 600,
         "timeout_per_request": 60,

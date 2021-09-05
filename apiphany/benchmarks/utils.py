@@ -10,7 +10,7 @@ from apiphany.analyzer.entry import ErrorResponse
 
 def prep_exp_dir(config):
     exp_name = config[apiphany.consts.KEY_EXP_NAME]
-    exp_dir = os.path.join("../experiment_data/", exp_name)
+    exp_dir = os.path.join("experiment_data/", exp_name)
     if not os.path.exists(exp_dir):
         os.makedirs(exp_dir)
 

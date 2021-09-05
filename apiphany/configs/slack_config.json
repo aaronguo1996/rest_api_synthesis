@@ -1,7 +1,7 @@
 {
     "exp_name": "slack_api_test",
-    "log_file": "data/logs/app.slack.com.20210104.har",
-    "doc_file": "data/openapi/slack_web_openapi_v2_large_preprocess.json",
+    "log_file": "apiphany/data/logs/app.slack.com.20210104.har",
+    "doc_file": "apiphany/data/openapi/slack_web_openapi_v2_large_preprocess.json",
     "enable_debug": true,
     "debug_output": "slack_debug.log",
     "hostname": "https://apitest-pk79527.slack.com",
@@ -20,7 +20,7 @@
     "witness": {
         "value_dict": {},
         "token": "xoxp-1442946594759-1463848871412-1618073336579-1735b1e1b231339f9677e134350fed4c",
-        "annotation_path": "configs/slack_annotation.json",
+        "annotation_path": "apiphany/configs/slack_annotation.json",
         "gen_depth": 3,
         "timeout_total": 600,
         "timeout_per_request": 60,

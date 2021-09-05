@@ -12,15 +12,26 @@ class Bert(BaseModel):
         self.tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'bert-base-uncased')    # Download vocabulary from S3 and cache.
         self.model = torch.hub.load('huggingface/pytorch-transformers', 'model', 'bert-base-uncased')    # Download model and configuration from S3 and cache.
 
+    def tokenize(self, sentences):
+        return self.tokenizer.encode_plus(
+            text = sentences,
+            max_length = 64,
+            padding = 'max_length',
+            return_tensors = 'pt')['input_ids'][0]
+
+    def __call__(self, x):
+        return self.model(x)
+
     def similarity(self, lhs_sentence, rhs_sentence):
+        length = max(len(lhs_sentence), len(rhs_sentence))
         lhs_tokens = self.tokenizer.encode_plus(
             text = lhs_sentence, 
-            max_length = 32, 
-            padding = 'max_length', # TODO: change it when we switch to a batch query
+            max_length = length, 
+            padding = 'max_length',
             return_tensors = 'pt')
         rhs_tokens = self.tokenizer.encode_plus(
             text = rhs_sentence,
-            max_length = 32, 
+            max_length = length, 
             padding = 'max_length',
             return_tensors = 'pt')
         

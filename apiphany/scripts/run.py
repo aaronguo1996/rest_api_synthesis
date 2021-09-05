@@ -24,6 +24,7 @@ from apiphany.synthesizer.synthesizer import Synthesizer
 from apiphany.synthesizer.utils import make_entry_name
 from apiphany.witnesses.engine import WitnessGenerator
 import apiphany.consts
+from apiphany.benchmarks.suites import slack_suite, stripe_suite, square_suite
 
 # test imports
 from apiphany.tests.run_test import run_test
@@ -45,6 +46,7 @@ def build_cmd_parser():
     parser.add_argument("--nlp", action="store_true", help="Run the NLP module")
     parser.add_argument("--timeout", type=int, help="Timeout limit for synthesis to run")
     parser.add_argument("--witness", action="store_true", help="Generate witnesses by configuration")
+    parser.add_argument("--create_nlp_data", action="store_true")
     parser.add_argument('--exp_name', '-exp', type=str, default='pick an experiment name', required=True)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--use_gpu', action='store_true')
@@ -62,7 +64,7 @@ def run_dynamic(configuration, entries, endpoint, limit=500):
 def create_entries(doc, config, ascription):
     entries = {}
 
-    endpoints = config.get(consts.KEY_ENDPOINTS)
+    endpoints = config.get(apiphany.consts.KEY_ENDPOINTS)
     if not endpoints:
         endpoints = doc.keys()
 
@@ -153,6 +155,30 @@ def generate_witnesses(
         log_analyzer.to_graph(dot, endpoints=endpoints)
         dot.render(os.path.join("output/", "dependencies"), view=False)
 
+def create_sentences(api_name, path_to_openapi, suite):
+    bench_descs = [b.description for b in suite.benchmarks]
+
+    with open(path_to_openapi, 'r') as f:
+        openapi_doc = json.load(f)
+
+    # get component names and descriptions
+    comps = {}
+    endpoints = openapi_doc[defs.DOC_PATHS]
+    for ep, ep_def in endpoints.items():
+        for method, method_def in ep_def.items():
+            comp_name = ep + "_" + method
+            comp_desc = method_def.get(defs.DOC_DESCRIPTION)
+            if comp_desc is None:
+                continue
+
+            comps[comp_name] = comp_desc
+
+    with open(f"apiphany/data/nlp_data/{api_name}_pairs.pkl", "wb+") as f:
+        pickle.dump({
+            "descriptions": bench_descs,
+            "components": comps,
+        }, f)
+
 def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
@@ -164,7 +190,7 @@ def main():
         ### CREATE DIRECTORY FOR LOGGING
         ##################################
 
-        logdir_prefix = 'bert_'
+        logdir_prefix = 'NLP_'
 
         ## directory for logging
         data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../data')
@@ -176,8 +202,19 @@ def main():
         if not(os.path.exists(logdir)):
             os.makedirs(logdir)
 
-        trainer = Trainer(params)
-        trainer.perform_eval()
+        ###################################
+        ### GENERATE DATA FOR BERT TEST ###
+        ###################################
+
+        if args.create_nlp_data:
+            create_sentences("slack", "apiphany/data/openapi/slack_web_openapi_v2_large_preprocess.json", slack_suite)
+            create_sentences("stripe", "apiphany/data/openapi/stripe_spec3_sdk_full.json", stripe_suite)
+            create_sentences("square", "apiphany/data/openapi/square_connect_api_v3.json", square_suite)
+        else:
+            trainer = Trainer(params)
+            trainer.perform_eval()
+            # trainer.test_similarity()
+
         return
 
     configuration = {}

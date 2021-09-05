@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2018"
 authors = ["David Cao <david@cao.sh>"]
 
+[package.metadata.maturin]
+name = "apiphany.rust_re"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

@@ -1,5 +1,5 @@
 
-from globs import get_petri_net_data
+
 import json
 import pickle
 import os
@@ -19,6 +19,8 @@ from apiphany.synthesizer import parallel
 from apiphany.synthesizer.filtering import retrospective_execute, check_results
 from apiphany.synthesizer.synthesizer import Synthesizer
 import apiphany.benchmarks.utils as utils
+from apiphany.globs import get_petri_net_data
+import apiphany.consts
 
 from apiphany import rust_re
 
@@ -90,12 +92,12 @@ class Benchmark:
             parallel.spawn_encoders(
                 synthesizer,
                 self.inputs, [self.output],
-                configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
+                configuration[apiphany.consts.KEY_SYNTHESIS][apiphany.consts.KEY_SOLVER_NUM]
             )
             
         solutions = []
         prev_solutions = {}
-        for j in range(consts.DEFAULT_LENGTH_LIMIT + 1):
+        for j in range(apiphany.consts.DEFAULT_LENGTH_LIMIT + 1):
             sol_file = os.path.join(bm_dir, f"solutions_{j}.pkl")
             if os.path.exists(sol_file):
                 try:
@@ -144,7 +146,7 @@ class Benchmark:
                                     args=(
                                         log_analyzer,
                                         entries,
-                                        configuration.get(consts.KEY_SKIP_FIELDS),
+                                        configuration.get(apiphany.consts.KEY_SKIP_FIELDS),
                                         runtime_config.re_bias_type,
                                         p)
                                 )
@@ -152,7 +154,7 @@ class Benchmark:
                                 future = retrospective_execute(
                                     log_analyzer,
                                     entries,
-                                    configuration.get(consts.KEY_SKIP_FIELDS),
+                                    configuration.get(apiphany.consts.KEY_SKIP_FIELDS),
                                     runtime_config.re_bias_type,
                                     p)
 
@@ -247,7 +249,7 @@ class Benchmark:
             res = sorted(res, key=lambda x: x[-1])
             for rank, (_, res_sol, score) in enumerate(res):
                 if (res_sol in self.solutions and
-                    score < consts.MAX_COST):
+                    score < apiphany.consts.MAX_COST):
                     tgt_score = score
 
                     break
@@ -299,12 +301,12 @@ class BenchmarkSuite:
     def _prep(self, config_file):
         with open(config_file, 'r') as config:
             self._configuration = json.loads(config.read())
-        doc_file = self._configuration.get(consts.KEY_DOC_FILE)
+        doc_file = self._configuration.get(apiphany.consts.KEY_DOC_FILE)
         self._doc = read_doc(doc_file)
         openapi_parser = OpenAPIParser(self._doc)
         _, base_path, doc_entries = openapi_parser.parse()
 
-        endpoints = self._configuration.get(consts.KEY_ENDPOINTS)
+        endpoints = self._configuration.get(apiphany.consts.KEY_ENDPOINTS)
         if not endpoints:
             endpoints = self._doc.get(defs.DOC_PATHS).keys()
 
@@ -321,15 +323,15 @@ class BenchmarkSuite:
             doc_entries
         )
 
-        with open(os.path.join(self._exp_dir, consts.FILE_ENTRIES), "rb") as f:
+        with open(os.path.join(self._exp_dir, apiphany.consts.FILE_ENTRIES), "rb") as f:
             self._typed_entries = pickle.load(f)
 
-        with open(os.path.join(self._exp_dir, consts.FILE_GRAPH), "rb") as f:
+        with open(os.path.join(self._exp_dir, apiphany.consts.FILE_GRAPH), "rb") as f:
             self._log_analyzer = pickle.load(f)
 
     def get_info(self):
         # to get number of annotations, open the annotations file
-        ann_file = self._configuration[consts.KEY_WITNESS][consts.KEY_ANNOTATION]
+        ann_file = self._configuration[apiphany.consts.KEY_WITNESS][apiphany.consts.KEY_ANNOTATION]
         with open(ann_file, 'r') as af:
             a = json.load(af)
             annotations = len(a)
@@ -400,7 +402,7 @@ class BenchmarkSuite:
         transitions = None
         entries = utils.index_entries(
             self._entries,
-            self._configuration.get(consts.KEY_SKIP_FIELDS)
+            self._configuration.get(apiphany.consts.KEY_SKIP_FIELDS)
         )
 
         cache_path = os.path.join(self._exp_dir, "bench_results.pkl")

@@ -1,7 +1,7 @@
 {
     "exp_name": "stripe_api_test",
-    "log_file": "data/logs/dashboard.stripe.com.20210514.har",
-    "doc_file": "data/openapi/stripe_spec3_sdk_full.json",
+    "log_file": "apiphany/data/logs/dashboard.stripe.com.20210514.har",
+    "doc_file": "apiphany/data/openapi/stripe_spec3_sdk_full.json",
     "enable_debug": true,
     "debug_output": "stripe_debug.log",
     "hostname": "https://dashboard.stripe.com",
@@ -22,7 +22,7 @@
         "token": "sk_test_51IDdwaDLm14arRKVBXJFwwGemXMg6OCDQHKKeZjlnEtq1klmwkPGbgxNYUqbIvYWhSRG4N3MR87oo1V1uhqFUSmR00sm0NQsbn",
         "value_dict": {
         },
-        "annotation_path": "configs/stripe_annotation.json",
+        "annotation_path": "apiphany/configs/stripe_annotation.json",
         "timeout_total": 600,
         "timeout_per_request": 60,
         "iterations": 0,

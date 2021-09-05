@@ -31,6 +31,7 @@ DOC_PATTERN = "pattern"
 DOC_ENUM = "enum"
 DOC_URL = "url"
 DOC_SERVERS = "servers"
+DOC_DESCRIPTION = "description"
 
 # definitions of types in OpenAPI
 TYPE_NONE = "none"
