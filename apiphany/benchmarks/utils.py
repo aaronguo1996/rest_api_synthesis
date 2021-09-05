@@ -51,7 +51,8 @@ def get_initial_witnesses(configuration, exp_dir, base_path, endpoints):
 def parse_entries(configuration, exp_dir, base_path, endpoints):
     trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
     skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
-    if not os.path.exists(trace_file):
+    initial_witness_only = configuration.get(consts.KEY_INITIAL_WITNESS_ONLY)
+    if initial_witness_only or not os.path.exists(trace_file):
         print("Parsing OpenAPI document...")
         # entries = None
         log_parser = parser.LogParser(
@@ -68,8 +69,9 @@ def parse_entries(configuration, exp_dir, base_path, endpoints):
         #     for e in entries:
         #         logging.debug(e)
 
-        with open(trace_file, 'wb') as f:
-            pickle.dump(entries, f)
+        if not initial_witness_only:
+            with open(trace_file, 'wb') as f:
+                pickle.dump(entries, f)
     else:
         with open(trace_file, 'rb') as f:
             entries = pickle.load(f)

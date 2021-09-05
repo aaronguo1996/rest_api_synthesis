@@ -851,9 +851,9 @@ def main():
         output=args.output,
         print_api=True,
         print_results=True,
-        print_appendix=True,
-        plot_ranks=True,
-        cached_results=True)
+        print_appendix=False,
+        plot_ranks=False,
+        cached_results=False)
 
     # pr.print_stats()
 

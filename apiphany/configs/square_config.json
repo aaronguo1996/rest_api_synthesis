@@ -6,6 +6,7 @@
     "debug_output": "square_debug.log",
     "hostname": "https://explorer-gateway.squareup.com",
     "path_to_definitions": "#/components/schemas",
+    "initial_witness_only": true,
     "analysis": {
         "plot_only_input": false,
         "plot_graph": true,

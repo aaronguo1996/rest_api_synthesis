@@ -38,6 +38,7 @@ KEY_EXPAND_GROUP = "expand_group"
 KEY_BLOCK_PERM = "block_perms"
 KEY_EXECUTION = "execution"
 KEY_BIAS = "bias_type"
+KEY_INITIAL_WITNESS_ONLY = "initial_witness_only"
 
 SOLVER_PN_SMT = "petri net SMT"
 SOLVER_HYPER = "hypergraph"
