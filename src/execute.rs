@@ -147,7 +147,7 @@ impl Runner {
                     res.iter().position(|x| x.1 == tgt_cost).unwrap() + 1,
                 )
             })
-            .filter(|x| x.0 < 99999)
+            // .filter(|x| x.0 < 99999)
             .map(|x| x.1)
             .collect();
 

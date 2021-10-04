@@ -53,6 +53,8 @@ def build_cmd_parser():
         help="Whether to run retrospective execution on the solution only")
     parser.add_argument("--synthesis-only", action='store_true',
         help="Whether to run ranking")
+    parser.add_argument("--get-place-stats", action='store_true',
+        help="Whether to get place stats")
     parser.set_defaults(filter_sol_only=False)
     return parser
 
@@ -835,7 +837,8 @@ def main():
         args.filter_sol_only,
         args.synthesis_only,
         bias_type_args[args.bias_type],
-        args.parallel)
+        args.parallel,
+        args.get_place_stats)
     b = Bencher(
         [
             slack_suite,
@@ -849,8 +852,8 @@ def main():
     b.run(
         args.names,
         output=args.output,
-        print_api=True,
-        print_results=True,
+        print_api=False,
+        print_results=False,
         print_appendix=False,
         plot_ranks=False,
         cached_results=False)

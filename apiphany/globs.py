@@ -16,7 +16,7 @@ def get_petri_net_data(exp_dir):
             numbers.append(int(line))
             line = f.readline()
 
-    return numbers[0], numbers[1]
+    return numbers[0], numbers[1], numbers[2]
 
 def get_solution_strs(solutions):
     return [r.pretty(0) for r in solutions]

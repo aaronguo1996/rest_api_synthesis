@@ -6,7 +6,7 @@
     "debug_output": "stripe_debug.log",
     "hostname": "https://dashboard.stripe.com",
     "path_to_definitions": "#/components/schemas",
-    "initial_witness_only": true,
+    "initial_witness_only": false,
     "analysis": {
         "plot_only_input": false,
         "plot_graph": true,

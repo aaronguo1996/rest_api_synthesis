@@ -5,7 +5,6 @@ from openapi import defs
 import schemas.utils as utils
 from openapi.utils import blacklist
 import consts
-from program.utils import set_default
 
 class BaseType:
     object_lib = {}

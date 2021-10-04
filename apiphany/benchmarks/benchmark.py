@@ -28,7 +28,8 @@ class BenchConfig:
     def __init__(
         self, cache=False, repeat=5, filter_num=5,
         filter_sol_only=False, synthesis_only=False,
-        bias_type=dynamic.BiasType.SIMPLE, use_parallel=True):
+        bias_type=dynamic.BiasType.SIMPLE, use_parallel=True,
+        get_place_stats=False):
         self.cache = cache
         self.repeat = repeat
         self.filter_num = filter_num
@@ -36,6 +37,7 @@ class BenchConfig:
         self.synthesis_only = synthesis_only
         self.re_bias_type = bias_type
         self.use_parallel = use_parallel
+        self.get_place_stats = get_place_stats
 
 class BenchmarkResult:
     def __init__(self, name, desc):
@@ -50,6 +52,7 @@ class BenchmarkResult:
         self.endpoint_calls = None
         self.time = None
         self.candidates = None
+        self.paths = None
 
 class APIInfo:
     def __init__(self, api, num_args, obj_sizes, obj_num, ep_num, 
@@ -115,9 +118,9 @@ class Benchmark:
                 prev_solutions.update({p:p for p in programs})
                 solutions.append(solution_at_len)
 
-        num_place, num_trans = get_petri_net_data(bm_dir)
+        num_place, num_trans, path_cnt = get_petri_net_data(bm_dir)
 
-        return num_place, num_trans, solutions
+        return num_place, num_trans, path_cnt, solutions
 
     def _run_re(
         self, entries, configuration, runtime_config, 
@@ -268,7 +271,7 @@ class Benchmark:
         
         return ranks, sol_prog
 
-    def to_latex_entry(self, ranks, sol_prog, time, candidates):
+    def to_latex_entry(self, ranks, sol_prog, time, paths, candidates):
         if len(ranks) > 0 and ranks[0] is not None:
             print(f"PASS, Ranks {ranks}")
             self.latex_entry.ranks = ranks
@@ -279,6 +282,7 @@ class Benchmark:
 
         self.latex_entry.time = time
         self.latex_entry.candidates = candidates
+        self.latex_entry.paths = paths
         
         if sol_prog is not None:
             ns = sol_prog.collect_exprs()
@@ -367,6 +371,7 @@ class BenchmarkSuite:
         initial_covered = {
             (x.endpoint, x.method.upper()) for x in self._initial_witnesses if x.endpoint in endpoints
         }
+        # print(initial_covered)
         initial_covered_num = len(initial_covered)
 
         not_covered_benches = 0
@@ -395,6 +400,11 @@ class BenchmarkSuite:
             initial_witness_cnt, initial_covered_num,
             all_witness_cnt - initial_witness_cnt,
             ep_covered, annotations)
+
+    def get_popular_types(self):
+        synthesizer = Synthesizer(self._configuration, self._typed_entries, None)
+        synthesizer.init()
+        parallel.run_encoder(synthesizer, {}, {}, 0, None)
 
     def run(self, runtime_config, names, cached_results=False):
         latex_entries = []
@@ -434,7 +444,7 @@ class BenchmarkSuite:
                 if names is not None and benchmark.name not in names:
                     continue
 
-                places, transitions, solutions = benchmark.run(
+                places, transitions, path_cnt, solutions = benchmark.run(
                     self._exp_dir, 
                     self._typed_entries, 
                     self._configuration,
@@ -465,7 +475,11 @@ class BenchmarkSuite:
                         flat_solutions += sol
 
                     latex_entry = benchmark.to_latex_entry(
-                        ranks, sol_prog, end - start, len(flat_solutions))
+                        ranks, 
+                        sol_prog, 
+                        end - start, 
+                        path_cnt, 
+                        len(flat_solutions))
                     latex_entries.append(latex_entry)
 
 
@@ -498,11 +512,14 @@ class Bencher:
             self.print_appendix(output)
         
         for suite in self._suites:
-            benchmark_entries, places, transitions = suite.run(
-                self._config, names, cached_results)
-            place_counts.append(places)
-            trans_counts.append(transitions)
-            benchmark_results.append(benchmark_entries)
+            if self._config.get_place_stats:
+                suite.get_popular_types()
+            else:
+                benchmark_entries, places, transitions = suite.run(
+                    self._config, names, cached_results)
+                place_counts.append(places)
+                trans_counts.append(transitions)
+                benchmark_results.append(benchmark_entries)
 
         if print_api:
             self.print_api_info(place_counts, trans_counts, output)
@@ -556,11 +573,11 @@ class Bencher:
     def print_benchmark_results(self, results, output=None):
         res = ("% auto-generated: ./bench.py, table 2\n"
                "\\resizebox{\\textwidth}{!}{"
-               "\\begin{tabular}{l|lp{7.5cm}|rrrr|rr|rr}\n"
+               "\\begin{tabular}{l|lp{7.5cm}|rrrr|rrr|rr}\n"
                "\\toprule\n"
-               "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{4}{c|}{Solution} & \\multicolumn{2}{c|}{Candidates} &  \\multicolumn{2}{c}{Rank} \\\\\n"
+               "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{4}{c|}{Solution} & \\multicolumn{3}{c|}{Candidates} &  \\multicolumn{2}{c}{Rank} \\\\\n"
                "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9} \\cmidrule(lr){10-11}\n"
-               "API & ID & Description & size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & $|\\prog|$ & $t_{RE}$ & w/o RE & w/ RE \\\\\n"
+               "API & ID & Description & size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & $|\\pi|$ & $|\\prog|$ & $t_{RE}$ & w/o RE & w/ RE \\\\\n"
                "\\midrule")
         res += "\n"
 
@@ -605,6 +622,7 @@ class Bencher:
                     f"& {utils.pretty_none(r.endpoint_calls)} "
                     f"& {utils.pretty_none(r.projects)} "
                     f"& {utils.pretty_none(r.filters)} "
+                    f"& {utils.pretty_none(r.paths)}"
                     f"& {utils.pretty_none(r.candidates)} "
                     f"& {utils.pretty_none(r.time / self._config.filter_num)} "
                     f"& {rank_no_re_str} "

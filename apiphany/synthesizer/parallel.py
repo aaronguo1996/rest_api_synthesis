@@ -35,13 +35,30 @@ def run_encoder(synthesizer, inputs, outputs, path_len, solutions):
     for name, e in synthesizer._unique_entries.items():
         encoder.add_transition(name, e)
 
+    if solutions is None:
+        # temporary for rebuttal
+        place_counts = {}
+        for p in encoder._net.place():
+            num_pre = len([tr for tr in encoder._net.pre(p.name) if "projection" not in tr and "filter" not in tr])
+            num_post = len([tr for tr in encoder._net.post(p.name) if "projection" not in tr and "filter" not in tr])
+            num_connection = num_pre + num_post
+            place_counts[p.name] = num_connection
+
+        # get the most popular types
+        max_types = sorted(place_counts, key=place_counts.get, reverse=True)
+        print(max_types[:10])
+        
+        return
+
     # write encoder stats to file
+    path_count = 0
     if path_len == 1:
         encoder_path = os.path.join(synthesizer._exp_dir, "encoder.txt")
         with open(encoder_path, "w") as f:
             f.write(str(len(encoder._net.place())))
             f.write("\n")
             f.write(str(len(encoder._net.transition())))
+            f.write("\n")
 
     solution_set = set()
     start = time.time()
@@ -51,6 +68,7 @@ def run_encoder(synthesizer, inputs, outputs, path_len, solutions):
 
         end = time.time()
         # print(path)
+        path_count += 1
         programs, perms = synthesizer._generate_solutions(
             path_len, inputs, outputs, path, end - start
         )
@@ -58,7 +76,7 @@ def run_encoder(synthesizer, inputs, outputs, path_len, solutions):
         for p in set(programs):
             if p not in solution_set:
                 solution_set.add(p)
-                solutions.put(p)
+                solutions.put((path_count, p))
 
         # solution_set = solution_set.union(set(programs))
         
@@ -75,7 +93,7 @@ def spawn_encoders(synthesizer, inputs, outputs, solver_num, timeout=60):
         solutions = m.Queue()
         all_solutions.append(solutions)
 
-    with pebble.ProcessPool() as pool:
+    with pebble.ProcessPool(max_workers=solver_num) as pool:
         futures = []
         for i in range(consts.DEFAULT_LENGTH_LIMIT + 1):
             future = pool.schedule(
@@ -93,16 +111,25 @@ def spawn_encoders(synthesizer, inputs, outputs, solver_num, timeout=60):
             pass
             # print(f"Killed path length {i} due to timeout")
 
+    all_path_cnt = 0
     for i, progs in enumerate(all_solutions):
         # print(i, progs.qsize(), flush=True)
         prog_list = []
+        path_cnt = 0
         while not progs.empty():
             item = progs.get_nowait()
             if item is None:
                 break
 
-            prog_list.append(item)
+            path_cnt, prog = item
+            prog_list.append(prog)
             
         # progs.task_done()
 
         synthesizer._serialize_solutions(i, prog_list)
+        all_path_cnt += path_cnt
+
+    encoder_path = os.path.join(synthesizer._exp_dir, "encoder.txt")
+    with open(encoder_path, "a") as f:
+        f.write(str(all_path_cnt))
+        f.write("\n")
