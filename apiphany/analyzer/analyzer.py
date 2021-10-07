@@ -100,7 +100,7 @@ class DSU:
         return set(result)
 
 class LogAnalyzer:
-    def __init__(self):
+    def __init__(self, infer_semantic_types=True):
         self.value_to_param = {}
         self.type_to_param = {}
         self.dsu = DSU()
@@ -110,6 +110,7 @@ class LogAnalyzer:
         self.type_values = {}
         # temporary field
         self._checked_fields = {}
+        self._infer_semantic_types = infer_semantic_types
 
     # FIXME: this function no longer works, please fix me if you want to use it
     def _add_type_fields(self, r):
@@ -252,12 +253,13 @@ class LogAnalyzer:
         # if isinstance(param.value, int):
         #     print(param)
 
-        # merge by value
-        if param.value not in self.value_to_param:
-            self.value_to_param[param.value] = param
+        if self._infer_semantic_types:
+            # merge by value
+            if param.value not in self.value_to_param:
+                self.value_to_param[param.value] = param
 
-        root = self.value_to_param[param.value]
-        self.dsu.union(root, param)
+            root = self.value_to_param[param.value]
+            self.dsu.union(root, param)
 
         # merge by type
         param_typ = str(param.type)
@@ -267,7 +269,7 @@ class LogAnalyzer:
             param_typ == defs.TYPE_NUM or
             param_typ == defs.TYPE_OBJECT):
             return
-            
+
         if param_typ not in self.type_to_param:
             self.type_to_param[param_typ] = param
 

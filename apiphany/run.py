@@ -52,6 +52,8 @@ def build_cmd_parser():
         help="Timeout limit for synthesis to run")
     parser.add_argument("--witness", action="store_true",
         help="Generate witnesses by configuration")
+    parser.add_argument("--no_semantic", action="store_true",
+        help="Don't infer semantic types during witness generation")
     return parser
 
 def run_dynamic(configuration, entries, endpoint, limit=500):
@@ -90,11 +92,11 @@ def create_entries(doc, config, ascription):
 
 def generate_witnesses(
     configuration, doc, doc_entries, hostname, base_path, 
-    exp_dir, entries, endpoints):
+    exp_dir, entries, endpoints, infer_semantic_types):
     enable_debug = configuration.get(consts.KEY_DEBUG)
 
     print("Analyzing provided log...")
-    log_analyzer = analyzer.LogAnalyzer()
+    log_analyzer = analyzer.LogAnalyzer(infer_semantic_types)
     prefilter = configuration.get(consts.KEY_SYNTHESIS) \
                             .get(consts.KEY_SYN_PREFILTER)
     skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
@@ -199,7 +201,7 @@ def main():
     elif args.witness:
         generate_witnesses(
             configuration, doc, doc_entries, hostname, base_path,
-            exp_dir, entries, endpoints
+            exp_dir, entries, endpoints, not args.no_semantic
         )
     
     else:
