@@ -100,7 +100,7 @@ class DSU:
         return set(result)
 
 class LogAnalyzer:
-    def __init__(self):
+    def __init__(self, uncovered_opt):
         self.value_to_param = {}
         self.type_to_param = {}
         self.dsu = DSU()
@@ -110,6 +110,8 @@ class LogAnalyzer:
         self.type_values = {}
         # temporary field
         self._checked_fields = {}
+        # privates
+        self._uncovered_opt = uncovered_opt
 
     # FIXME: this function no longer works, please fix me if you want to use it
     def _add_type_fields(self, r):
@@ -305,23 +307,23 @@ class LogAnalyzer:
                 rep = group[0].arg_name
 
             # for debug
-            if rep == "oldest_/chat.scheduledMessages.list_GET_oldest" or rep == "defs_ts":
-                group_params = []
-                for param in group:
-                    if param.type is not None:
-                        group_params.append((
-                            param.func_name, 
-                            param.method, 
-                            param.path, 
-                            param.value, 
-                            param.type,
-                            param.type.aliases
-                        ))
+            # if rep == "oldest_/chat.scheduledMessages.list_GET_oldest" or rep == "defs_ts":
+            #     group_params = []
+            #     for param in group:
+            #         if param.type is not None:
+            #             group_params.append((
+            #                 param.func_name, 
+            #                 param.method, 
+            #                 param.path, 
+            #                 param.value, 
+            #                 param.type,
+            #                 param.type.aliases
+            #             ))
 
-                for p in group_params:
-                    print(p)
+            #     for p in group_params:
+            #         print(p)
 
-                print("==================")
+            #     print("==================")
 
     def to_json(self):
         groups = self.analysis_result()
@@ -492,6 +494,19 @@ class LogAnalyzer:
 
         self.value_map = value_map
 
+    def find_representative_for_type(self, typ):
+        # assume the input type is not a union type
+        params = self.dsu._parents.keys()
+        for param in params:
+            if same_type_name(typ, param.type):
+                group = self.dsu.get_group(param)
+                rep = get_representative(group)
+
+                if rep is not None:
+                    return rep
+
+        return typ.name
+
     def find_same_type(self, param):
         if isinstance(param.type, types.UnionType):
             items = param.type.items
@@ -504,15 +519,7 @@ class LogAnalyzer:
         for p in params:
             has_same_name = False
             for item in items:
-                tmp_param = Parameter(
-                    param.method,
-                    param.arg_name,
-                    param.func_name,
-                    param.path,
-                    param.is_required,
-                    param.array_level,
-                    item, param.value)
-                if same_type_name(p, tmp_param):
+                if same_type_name(p.type, item):
                     has_same_name = True
 
             if p == param or has_same_name:
@@ -572,11 +579,12 @@ class LogAnalyzer:
                         #     print("found parameter type", rep)
                     break
             
-            if (param.type.name == defs.TYPE_BOOL or
+            if (self._uncovered_opt == consts.UncoveredOption.EXCLUDE and (
+                param.type.name == defs.TYPE_BOOL or
                 param.type.name == defs.TYPE_INT or
                 param.type.name == defs.TYPE_STRING or
                 param.type.name == defs.TYPE_NUM or
-                param.type.name == defs.TYPE_OBJECT):
+                param.type.name == defs.TYPE_OBJECT)):
                 param.type.name = str(param) # defs.TYPE_UNK
 
         return param

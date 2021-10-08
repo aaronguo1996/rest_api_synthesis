@@ -64,18 +64,18 @@ def path_to_name(path):
 
     return name
 
-def same_type_name(param1, param2):
+def same_type_name(typ1, typ2):
     return (
-        param1.type is not None and
-        param2.type is not None and
-        ((
-            param1.type.name is not None and
-            param2.type.name is not None and
-            param1.type.name == param2.type.name
-        ) or
-        param1.type.name in param2.type.aliases or
-        param2.type.name in param1.type.aliases or
-        len(param1.type.aliases.intersection(param2.type.aliases)) != 0
+        typ1 is not None and 
+        typ2 is not None and (
+            (
+                typ1.name is not None and 
+                typ2.name is not None and 
+                typ1.name == typ2.name
+            ) or
+            typ1.name in typ2.aliases or 
+            typ2.name in typ1.aliases or 
+            len(typ1.aliases.intersection(typ2.aliases)) != 0
         )
     )
 

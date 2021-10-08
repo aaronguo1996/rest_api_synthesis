@@ -61,17 +61,17 @@ class ProgramGenerator:
             for r in returns:
                 program_bodys.append(program_exprs + [r])
 
-        programs = []
+        programs = set()
         for body in program_bodys:
             p = Program(list(inputs.keys()), body)
             p._expressions = p.reachable_expressions({})
             if self._filter_by_names(self._signatures, transitions, inputs, p):
                 # print("Before lifting", p, flush=True)
                 p = p.lift(self._name_counters, self._signatures, target)
-                if p is not None and p not in programs:
+                if p is not None:
                     # print(p)
                     # print(p.to_expression({}))
-                    programs.append(p)
+                    programs.add(p)
 
         # raise Exception
         return programs
@@ -185,8 +185,25 @@ class ProgramGenerator:
                     arg_exprs.append((arg_name, expr))
 
                 old_args_list = [args[:] for args in args_list]
+                new_args_list = []
+                length_exceeded = False
                 for args in args_list:
-                    args.append(arg_exprs)
+                    if len(args) >= 5: # set a upper bound for how many parameter we will use
+                        length_exceeded = True
+                        # replace any of the existing args instead of expanding it
+                        for i in range(len(args)):
+                            tmp_args = args[:]
+                            tmp_args[i] = arg_exprs
+                            new_args_list.append(tmp_args)
+                    else:
+                        args.append(arg_exprs)
+                        new_args_list.append(args)
+
+                # exceeded list elements are added
+                if length_exceeded:
+                    args_list += new_args_list
+                else:
+                    args_list = new_args_list
 
                 # optional arguments can be either added or not
                 if not param.is_required:

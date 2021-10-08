@@ -1,7 +1,9 @@
+from enum import Enum
+
 OBJ_MATCH_THRESHOLD = 0.6
 REF_PREFIX = "#/components/schemas/"
 CUSTOM_PREFIX = "x-"
-DEFAULT_LENGTH_LIMIT = 10
+DEFAULT_LENGTH_LIMIT = 9
 JSON_TYPE = "application/json"
 HOSTNAME_PREFIX = "https://"
 HOSTNAME_PREFIX_LEN = len(HOSTNAME_PREFIX)
@@ -50,3 +52,15 @@ FILE_GRAPH = "graph.pkl"
 
 SPACE = '    '
 MAX_COST = 99999.9
+
+class UncoveredOption(Enum):
+    EXCLUDE = "exclude"
+    DEFAULT_TO_SYNTACTIC = "default-to-syntactic"
+
+    def __str__(self):
+        return self.value
+
+class SearchStatus(Enum):
+    FOUND_EXPECTED = "found-expected"
+    NOT_FOUND = "not-found"
+    TIMEOUT = "timeout"

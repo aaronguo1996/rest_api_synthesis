@@ -96,58 +96,20 @@ class Synthesizer:
         return perms
 
     def _generate_solutions(self, i, inputs, outputs, result, time):
-        programs = []
-
-        # if tuple(result) in self._perms:
-        #     print("duplicate program, excluded", flush=True)
-        #     return programs, [list(range(len(result)))]
+        programs = set()
 
         groups = self._expand_groups(result) 
         for r in itertools.product(*groups):
-            programs += self._program_generator.generate_program(
+            new_programs = self._program_generator.generate_program(
                 r, inputs, outputs[0]
             )
-
-        # print(len(programs), flush=True)
-
-        # all_perms = []
-        # for p in programs:
-        #     # print(p.to_expression({}))
-        #     # write solutions to file
-        #     self._write_solution(i, time, p)
-
-        #     # generate all topological sorts for blocking
-        #     if self._block_perms:
-        #         perms = self._get_topo_sorts(p)
-        #         all_perms += perms
-
-        # # convert permutations into indices
-        # perm_indices = []
-        # if self._block_perms:
-        #     for perms in all_perms:
-        #         indices = []
-        #         for tr in perms:
-        #             for idx, r in enumerate(result):
-        #                 if tr == r[:len(tr)]:
-        #                     indices.append(idx)
-        #                     break
-
-        #         if len(indices) == len(result):
-        #             perm_indices.append(indices)
-        #             permuted = [result[i] for i in indices]
-        #             print("adding", permuted, flush=True)
-        #             self._perms.add(tuple(permuted))
-                
-
-        # # print("Get perms", perm_indices, flush=True)
-        # if not perm_indices:
-        #     perm_indices = [list(range(len(result)))]
+            programs = programs.union(new_programs)
 
         # self._serialize_solutions(i, programs)
         if i not in self._programs:
             self._programs[i] = set()
 
-        self._programs[i] = self._programs[i].union(set(programs))
+        self._programs[i] = self._programs[i].union(programs)
 
         perm_indices = [list(range(len(result)))]
 
@@ -287,7 +249,7 @@ class Synthesizer:
             # "/users.profile.get_GET",
             # "/conversations.members_GET",
             # "/users.lookupByEmail_GET",
-            "/conversations.open_POST",
+            # "/conversations.open_POST",
             # "/chat.postMessage_POST",
             # "projection(objs_conversation, id)_",
             # "projection(objs_conversation, name)_",

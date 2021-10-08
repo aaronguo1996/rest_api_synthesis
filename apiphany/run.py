@@ -7,6 +7,7 @@ import json
 import logging
 import random
 from graphviz import Digraph
+import cProfile
 
 # analyze traces
 from analyzer import analyzer, dynamic, parser
@@ -52,6 +53,11 @@ def build_cmd_parser():
         help="Timeout limit for synthesis to run")
     parser.add_argument("--witness", action="store_true",
         help="Generate witnesses by configuration")
+    parser.add_argument("--uncovered", type=consts.UncoveredOption,
+        choices=list(consts.UncoveredOption),
+        default=consts.UncoveredOption.EXCLUDE,
+        help="Different options to deal with uncovered methods")
+
     return parser
 
 def run_dynamic(configuration, entries, endpoint, limit=500):
@@ -79,22 +85,17 @@ def create_entries(doc, config, ascription):
             for entry in typed_entries:
                 # store results
                 entry_name = make_entry_name(entry.endpoint, entry.method)
-                if endpoint == "/conversations.history":
-                    print(entry_name)
-                    print("*******", [(p.arg_name, p.path, p.is_required, p.type) for p in entry.parameters])
-                    p = entry.response
-                    print("*******", (p.arg_name, p.path, p.is_required, p.type))
                 entries[entry_name] = entry
 
     return entries
 
 def generate_witnesses(
     configuration, doc, doc_entries, hostname, base_path, 
-    exp_dir, entries, endpoints):
+    exp_dir, entries, endpoints, uncovered_opt):
     enable_debug = configuration.get(consts.KEY_DEBUG)
 
     print("Analyzing provided log...")
-    log_analyzer = analyzer.LogAnalyzer()
+    log_analyzer = analyzer.LogAnalyzer(uncovered_opt)
     prefilter = configuration.get(consts.KEY_SYNTHESIS) \
                             .get(consts.KEY_SYN_PREFILTER)
     skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
@@ -199,7 +200,7 @@ def main():
     elif args.witness:
         generate_witnesses(
             configuration, doc, doc_entries, hostname, base_path,
-            exp_dir, entries, endpoints
+            exp_dir, entries, endpoints, args.uncovered
         )
     
     else:
@@ -254,20 +255,24 @@ def main():
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
             )
         elif args.synthesis:
-            synthesizer = Synthesizer(configuration, entries, exp_dir)
-            synthesizer.init()
-            solutions = synthesizer.run_n(
-                [],
-                {
-                    "channel_name": types.PrimString("objs_conversation.name")
-                },
-                [types.ArrayType(None, types.PrimString("objs_user.profile.email"))],
-                10000
-                # configuration[consts.KEY_SYNTHESIS][consts.KEY_SOL_NUM]
-            )
+            with cProfile.Profile() as pr:
+                synthesizer = Synthesizer(configuration, entries, exp_dir)
+                synthesizer.init()
+                solutions = synthesizer.run_n(
+                    [],
+                    {
+                        "channel": types.PrimString("defs_channel"),
+                        "ts": types.PrimString("defs_ts"),
+                    },
+                    [types.SchemaObject("objs_message")],
+                    5000
+                    # configuration[consts.KEY_SYNTHESIS][consts.KEY_SOL_NUM]
+                )
 
-            for prog in [r.pretty(0) for r in solutions]:
-                print(prog)
+                pr.print_stats()
+
+            # for prog in [r.pretty(0) for r in solutions]:
+            #     print(prog)
 
         else:
             # output the results to json file

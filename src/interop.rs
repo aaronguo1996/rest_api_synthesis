@@ -1,4 +1,4 @@
-use crate::{Arena, Expr, ExprIx, Prog, ProgIx, RootSlab, Runner, ValueIx};
+use crate::{Arena, Expr, ExprIx, Prog, RootSlab, Runner, ValueIx};
 use hashbrown::HashMap as HBMap;
 use pyo3::{
     prelude::*,
@@ -28,15 +28,13 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
     fn rust_re(
         py: Python,
         log_analyzer: &PyAny,
-        progs: Vec<&PyAny>,
+        prog: &PyAny,
         // traces: fun -> param_names -> param_val map, response, weight
         traces: HashMap<&str, HashMap<Vec<&str>, Vec<(HashMap<&str, &PyAny>, &PyAny, usize)>>>,
         inputs: Vec<(&str, &PyAny)>,
-        target_ix: ProgIx,
         multiple: bool,
-        filter_num: usize,
         repeat: usize,
-    ) -> PyResult<Vec<usize>> {
+    ) -> PyResult<usize> {
         // First, our imports!
         let program = PyModule::import(py, "program.program")?;
 
@@ -69,7 +67,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
 
         // Then, translate our programs and traces
         // let t = std::time::Instant::now();
-        let progs = translate_progs(&imports, &progs, &mut arena)?;
+        let prog = translate_prog(&imports, &prog, &mut arena)?;
         translate_traces(&imports, traces, &mut arena, &mut slab);
         // println!("py to rs time: {}", t.elapsed().as_micros());
 
@@ -89,11 +87,11 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         }
 
         // Create our Runner!
-        let r = Runner::new(arena, progs, new_inputs);
+        let r = Runner::new(arena, prog, new_inputs);
 
         // let t = std::time::Instant::now();
         // And run it on our inputs
-        let res = r.run(target_ix, multiple, &slab, filter_num, repeat);
+        let res = r.run(multiple, &slab, repeat);
         // println!("interpret time: {}", t.elapsed().as_micros());
 
         Ok(res)

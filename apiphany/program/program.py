@@ -926,17 +926,18 @@ class Program:
         if not isinstance(other, Program):
             return NotImplemented
 
-        if self._inputs == other._inputs:
-            return self.to_expression({}) == other.to_expression({})
-        elif len(self._inputs) == len(other._inputs):
-            subst = {}
-            for i, x in enumerate(other._inputs):
-                if x != self._inputs[i]:
-                    subst[x] = VarExpr(self._inputs[i])
-            other = other.apply_subst(subst)
-            return self.to_expression({}) == other.to_expression({})
-        else:
-            return False
+        return hash(self) == hash(other)
+        # if self._inputs == other._inputs:
+        #     return self.to_expression({}) == other.to_expression({})
+        # elif len(self._inputs) == len(other._inputs):
+        #     subst = {}
+        #     for i, x in enumerate(other._inputs):
+        #         if x != self._inputs[i]:
+        #             subst[x] = VarExpr(self._inputs[i])
+        #     other = other.apply_subst(subst)
+        #     return self.to_expression({}) == other.to_expression({})
+        # else:
+        #     return False
 
     def __hash__(self):
         return hash((tuple(self._inputs), str(self.to_expression({}))))

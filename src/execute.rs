@@ -1,10 +1,10 @@
-use crate::{Expr, ExprIx, Prog, ProgIx, RValue, RootSlab, ThreadSlab, Traces, ValueIx};
+use crate::{Expr, ExprIx, Prog, RValue, RootSlab, ThreadSlab, Traces, ValueIx};
 use hashbrown::HashMap;
 use lasso::{MiniSpur, Rodeo, RodeoResolver};
 use nanorand::{tls_rng, RNG};
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
-use rayon::prelude::*;
+// use rayon::prelude::*;
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryInto;
 
@@ -16,14 +16,14 @@ pub type Cost = usize;
 pub struct Runner {
     arena: Arena,
     /// A list of programs stored in the `arena`.
-    progs: Vec<Prog>,
+    prog: Prog,
     default_inputs: HashMap<MiniSpur, Vec<ValueIx>>,
 }
 
 impl Runner {
     pub fn new(
         mut arena: Arena,
-        progs: Vec<Prog>,
+        prog: Prog,
         default_inputs: HashMap<MiniSpur, Vec<ValueIx>>,
     ) -> Self {
         // Swap arena into read-only mode
@@ -31,7 +31,7 @@ impl Runner {
 
         Self {
             arena,
-            progs,
+            prog,
             default_inputs,
         }
     }
@@ -41,118 +41,78 @@ impl Runner {
     /// values for that input.
     pub fn run(
         self,
-        target_ix: ProgIx,
         multiple: bool,
         slab: &RootSlab,
-        filter_num: usize,
         repeat: usize,
-    ) -> Vec<usize> {
-        // Not sure why the list of input solutions would be empty but
-        // Apparently it happens lol
-        if self.progs.is_empty() {
-            return vec![];
+    ) -> Cost {
+        let mut all_none = true;
+        let mut all_singleton = true;
+        let mut all_multiple = true;
+        let mut all_empty = true;
+
+        let mut costs: Vec<Cost> = Vec::with_capacity(repeat);
+        let mut t = ThreadSlab::new(slab);
+        for _rep in 0..repeat {
+            // Make a new execution environment
+            let mut ex = ExecEnv::new(
+                &self.arena,
+                self.prog.start,
+                self.prog.end,
+                &self.default_inputs,
+            );
+
+            // Run RE!
+            let (result, cost) = ex.run(&mut t).unwrap_or_else(|| (None, 99999));
+
+            if let Some(r) = result {
+                all_none = false;
+
+                if !(t.get(r).unwrap().is_empty()) {
+                    all_empty = false;
+                }
+
+                let mut rr = t.get(r).unwrap();
+
+                while let Some(ra) = rr.as_array() {
+                    if ra.len() == 1 {
+                        rr = t.get(ra[0]).unwrap();
+                    } else {
+                        break;
+                    }
+                }
+
+                if rr.is_array() && rr.as_array().unwrap().len() > 1 {
+                    all_singleton = false;
+                } else {
+                    all_multiple = false;
+                }
+
+                costs.push(cost);
+            }
+
+            t.clear();
         }
 
-        let mut avgs: Vec<usize> = (0..filter_num)
-            .into_par_iter()
-            .map(|_exp| {
-                let mut res = Vec::with_capacity(self.progs.len());
-                // let res;
+        // println!("overall slab size: {}", slab.data.len());
+        // println!("thread slab size: {}", t.data.len());
 
-                self.progs
-                    .par_iter()
-                    .enumerate()
-                    .map(|(ix, prog)| {
-                        let mut all_none = true;
-                        let mut all_singleton = true;
-                        let mut all_multiple = true;
-                        let mut all_empty = true;
+        if all_none {
+            return 99999;
+        }
 
-                        let mut costs: Vec<Cost> = Vec::with_capacity(repeat);
-                        let mut t = ThreadSlab::new(slab);
-                        for _rep in 0..repeat {
-                            // Make a new execution environment
-                            let mut ex = ExecEnv::new(
-                                &self.arena,
-                                prog.start,
-                                prog.end,
-                                &self.default_inputs,
-                            );
+        let mut cost_avg = costs.iter().filter(|c| c < &&99999).sum::<Cost>() / costs.len();
 
-                            // Run RE!
-                            let (result, cost) = ex.run(&mut t).unwrap_or_else(|| (None, 99999));
+        if all_singleton && multiple {
+            cost_avg += 25;
+        } else if all_multiple && !multiple {
+            cost_avg += 50;
+        }
 
-                            if let Some(r) = result {
-                                all_none = false;
+        if all_empty {
+            cost_avg += 10;
+        }
 
-                                if !(t.get(r).unwrap().is_empty()) {
-                                    all_empty = false;
-                                }
-
-                                let mut rr = t.get(r).unwrap();
-
-                                while let Some(ra) = rr.as_array() {
-                                    if ra.len() == 1 {
-                                        rr = t.get(ra[0]).unwrap();
-                                    } else {
-                                        break;
-                                    }
-                                }
-
-                                if rr.is_array() && rr.as_array().unwrap().len() > 1 {
-                                    all_singleton = false;
-                                } else {
-                                    all_multiple = false;
-                                }
-
-                                costs.push(cost);
-                            }
-
-                            t.clear();
-                        }
-
-                        // println!("overall slab size: {}", slab.data.len());
-                        // println!("thread slab size: {}", t.data.len());
-
-                        if all_none {
-                            return (ix, 99999);
-                        }
-
-                        let mut cost_avg = costs.iter().sum::<Cost>() / costs.len();
-
-                        if all_singleton && multiple {
-                            cost_avg += 25;
-                        } else if all_multiple && !multiple {
-                            cost_avg += 50;
-                        }
-
-                        if all_empty {
-                            cost_avg += 10;
-                        }
-
-                        // println!("{}", cost_avg);
-
-                        (ix, cost_avg)
-                    })
-                    .collect_into_vec(&mut res);
-
-                let tgt_cost = res.get(target_ix).unwrap().1;
-
-                // Sort the result by cost and get the cost of the target ix
-                res.sort_by_key(|x| x.1);
-
-                // println!("min (rank 1): {:?}", &res[0..20]);
-                (
-                    tgt_cost,
-                    res.iter().position(|x| x.1 == tgt_cost).unwrap() + 1,
-                )
-            })
-            // .filter(|x| x.0 < 99999)
-            .map(|x| x.1)
-            .collect();
-
-        avgs.sort();
-        avgs
+        cost_avg
     }
 }
 

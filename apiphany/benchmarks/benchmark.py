@@ -78,7 +78,7 @@ class Benchmark:
         self.solutions = solutions
         self.latex_entry = BenchmarkResult(name, desc)
 
-    def run(self, exp_dir, entries, configuration, runtime_config):
+    def run(self, exp_dir, entries, indexed_entries, configuration, analyzer, runtime_config):
         print(f"Running {self.name}")
 
         bm_dir = os.path.join(exp_dir, self.name)
@@ -92,10 +92,23 @@ class Benchmark:
         if not cached or not runtime_config.cache:
             synthesizer = Synthesizer(configuration, entries, bm_dir)
             synthesizer.init()
+            # convert the types before passing into the synthesizer
+            rep_inputs = {}
+            for ip, tip in self.inputs.items():
+                tip.name = analyzer.find_representative_for_type(tip)
+                rep_inputs[ip] = tip
+
+            rep_output = self.output
+            rep_output.name = analyzer.find_representative_for_type(self.output)
+
             parallel.spawn_encoders(
                 synthesizer,
-                self.inputs, [self.output],
-                configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM]
+                analyzer,
+                indexed_entries,
+                runtime_config.repeat,
+                rep_inputs, [rep_output],
+                configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM],
+                self.solutions[0]
             )
             
         solutions = []
@@ -122,156 +135,8 @@ class Benchmark:
 
         return num_place, num_trans, path_cnt, solutions
 
-    def _run_re(
-        self, entries, configuration, runtime_config, 
-        log_analyzer, solutions):
-        all_results = []
-        
-        # random.seed(229)
-        with pebble.ThreadPool() as pool:
-            for i, p in enumerate(solutions):
-                # print(f"{i}/{len(solutions)}", flush=True)
-                # print(p, flush=True)
-
-                is_target_sol = False
-                for tgt_sol in self.solutions:
-                    eq_target = tgt_sol == p
-                    is_target_sol = is_target_sol or eq_target
-
-                if is_target_sol or not runtime_config.filter_sol_only:
-                    reps = []
-                    for j in range(runtime_config.filter_num):
-                        group_results = []
-                        for k in range(runtime_config.repeat):
-                            if runtime_config.use_parallel and len(solutions) > 10000:
-                                future = pool.schedule(
-                                    retrospective_execute,
-                                    args=(
-                                        log_analyzer,
-                                        entries,
-                                        configuration.get(consts.KEY_SKIP_FIELDS),
-                                        runtime_config.re_bias_type,
-                                        p)
-                                )
-                            else:
-                                future = retrospective_execute(
-                                    log_analyzer,
-                                    entries,
-                                    configuration.get(consts.KEY_SKIP_FIELDS),
-                                    runtime_config.re_bias_type,
-                                    p)
-
-                            group_results.append(future)
-
-                        reps.append(group_results)
-
-                    all_results.append(reps)
-
-        return all_results
-
-    def get_rust_rank(
-        self, entries, configuration, runtime_config, 
-        log_analyzer, solutions):
-        found = False
-        target_ix = None
-        sol_prog = None
-        # print("Total solutions:", len(solutions), flush=True)
-        
-        
-        flatten_solutions = []
-        cnt = 0
-        for sol_at_len in solutions:
-            for rank, res_sol in enumerate(sol_at_len):
-                for tgt_sol in self.solutions:
-                    if tgt_sol == res_sol and target_ix is None:
-                        self.latex_entry.rank_no_re = cnt + rank + 1
-                        self.latex_entry.rank_no_re_rng = (cnt + 1, cnt + len(sol_at_len))
-                        target_ix = cnt + rank
-                        sol_prog = tgt_sol
-
-            cnt += len(sol_at_len)
-            flatten_solutions += sol_at_len
-
-        if target_ix is None:
-            return [], None
-
-        ranks = rust_re(
-            log_analyzer, flatten_solutions, entries,
-            list(self.inputs.items()), target_ix,
-            isinstance(self.output, types.ArrayType),
-            runtime_config.filter_num, runtime_config.repeat)
-        # ranks = rust_re(
-        #     log_analyzer, [solutions[target_ix]], entries,
-        #     list(self.inputs.items()), 0,
-        #     isinstance(self.output, types.ArrayType),
-        #     runtime_config.filter_num, runtime_config.repeat)
-        sol_prog = sol_prog if len(ranks) > 0 else self.solutions[0]
-
-        return ranks, sol_prog
-        
-    def get_rank(
-        self, entries, configuration, runtime_config, 
-        log_analyzer, solutions):
-        found = False
-        print("Total solutions:", len(solutions), flush=True)
-        for rank, res_sol in enumerate(solutions):
-            for tgt_sol in self.solutions:
-                if tgt_sol == res_sol:
-                    found = True
-                    self.latex_entry.rank_no_re = rank + 1
-                    break
-
-            if found:
-                break
-
-        all_results = self._run_re(
-            entries, configuration, runtime_config,
-            log_analyzer, solutions)
-
-        program_ranks = [[] for _ in range(runtime_config.repeat)]
-        for i, reps in enumerate(all_results):
-            for j, rep in enumerate(reps):
-                if runtime_config.use_parallel and len(solutions) > 10000:
-                    results = [x.result() for x in rep]
-                else:
-                    results = [x for x in rep]
-
-                score = check_results(
-                    results,
-                    isinstance(self.output, types.ArrayType))
-                if runtime_config.filter_sol_only:
-                    p = self.solutions[0]
-                else:
-                    p = solutions[i]
-
-                program_ranks[j].append((i, p, score))
-
-        ranks = []
-        for res in program_ranks:
-            tgt_score = None
-            res = sorted(res, key=lambda x: x[-1])
-            for rank, (_, res_sol, score) in enumerate(res):
-                if (res_sol in self.solutions and
-                    score < consts.MAX_COST):
-                    tgt_score = score
-
-                    break
-
-            for rank, (_, res_sol, score) in enumerate(res):
-                if (tgt_score is not None and abs(score - tgt_score) < 1e-2):
-                    ranks.append((rank + 1, res_sol, score))
-
-                    for i, r in enumerate(res):
-                        print(i, r[0], r[2], r[1])
-
-                    break
-
-        sol_prog = ranks[0][1] if len(ranks) > 0 else None
-        ranks = [r[0] for r in ranks]
-        
-        return ranks, sol_prog
-
-    def to_latex_entry(self, ranks, sol_prog, time, paths, candidates):
+    def to_latex_entry(self, paths, candidates):
+        # update this
         if len(ranks) > 0 and ranks[0] is not None:
             print(f"PASS, Ranks {ranks}")
             self.latex_entry.ranks = ranks
@@ -410,7 +275,8 @@ class BenchmarkSuite:
         latex_entries = []
         places = None
         transitions = None
-        entries = utils.index_entries(
+        
+        indexed_entries = utils.index_entries(
             self._entries,
             self._configuration.get(consts.KEY_SKIP_FIELDS)
         )
@@ -446,13 +312,15 @@ class BenchmarkSuite:
 
                 places, transitions, path_cnt, solutions = benchmark.run(
                     self._exp_dir, 
-                    self._typed_entries, 
+                    self._typed_entries,
+                    indexed_entries, 
                     self._configuration,
+                    self._log_analyzer,
                     runtime_config
                 )
 
                 if not runtime_config.synthesis_only:
-                    start = time.time()
+                    # start = time.time()
                     # ranks, sol_prog = benchmark.get_rank(
                     #     entries,
                     #     self._configuration,
@@ -460,26 +328,21 @@ class BenchmarkSuite:
                     #     self._log_analyzer,
                     #     solutions,
                     # )
-                    ranks, sol_prog = benchmark.get_rust_rank(
-                        entries,
-                        self._configuration,
-                        runtime_config,
-                        self._log_analyzer,
-                        solutions,
-                    )
-                    end = time.time()
-                    print("RE time:", end - start)
+                    # ranks, sol_prog = benchmark.get_rust_rank(
+                    #     entries,
+                    #     self._configuration,
+                    #     runtime_config,
+                    #     self._log_analyzer,
+                    #     solutions,
+                    # )
+                    # end = time.time()
+                    # print("RE time:", end - start)
 
                     flat_solutions = []
                     for sol in solutions:
                         flat_solutions += sol
 
-                    latex_entry = benchmark.to_latex_entry(
-                        ranks, 
-                        sol_prog, 
-                        end - start, 
-                        path_cnt, 
-                        len(flat_solutions))
+                    latex_entry = benchmark.to_latex_entry(path_cnt, flat_solutions)
                     latex_entries.append(latex_entry)
 
 

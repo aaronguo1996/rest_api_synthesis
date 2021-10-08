@@ -1,7 +1,7 @@
 import unittest
 from synthesizer.petrinet_encoder import *
 from analyzer.entry import TraceEntry, Parameter
-from schemas.schema_type import SchemaType
+from schemas.types import SchemaObject
 
 class EncoderTestCase(unittest.TestCase):
     def setUp(self):
@@ -10,126 +10,126 @@ class EncoderTestCase(unittest.TestCase):
             TraceEntry("/users.list", "GET", None, [], 
                 Parameter(
                     "GET", "users", "/users.list", 
-                    [], True, 1, SchemaType("user", None), [])
+                    [], True, 1, SchemaObject("user", None), [])
             ),
             TraceEntry("/conversations.members", "GET", None, [
                     Parameter(
                         "GET", "channel", "/conversations.members", [], 
-                        True, None, SchemaType("channel.id", None), None)
+                        True, None, SchemaObject("channel.id", None), None)
                 ], 
                 Parameter(
                     "GET", "members", "/conversations.members", 
-                    [], True, 1, SchemaType("user.id", None), [])
+                    [], True, 1, SchemaObject("user.id", None), [])
             ),
             TraceEntry("/conversations.info", "GET", None, [
                     Parameter(
                         "GET", "channel", "/conversations.info", [],
-                        True, None, SchemaType("channel.id", None), None)
+                        True, None, SchemaObject("channel.id", None), None)
                 ],
                 Parameter(
                     "GET", "channel", "/conversations.info", 
-                    [], True, 0, SchemaType("channel", None), [])
+                    [], True, 0, SchemaObject("channel", None), [])
             ),
             TraceEntry("/conversations.list", "GET", None, [],
                 Parameter(
                     "GET", "channel", "/conversations.list", 
-                    [], True, 1, SchemaType("channel", None), [])
+                    [], True, 1, SchemaObject("channel", None), [])
             ),
             TraceEntry("/users.lookupByEmail", "GET", None, [
                     Parameter(
                         "GET", "email", "/users.lookupByEmail", [],
-                        True, None, SchemaType("user.profile.email", None), None)
+                        True, None, SchemaObject("user.profile.email", None), None)
                 ], 
                 Parameter(
                     "GET", "user", "/users.lookupByEmail", 
-                    [], True, 0, SchemaType("user", None), None)
+                    [], True, 0, SchemaObject("user", None), None)
             ),
             TraceEntry("/users.info", "GET", None, [
                     Parameter(
                         "GET", "user", "/users.info", [],
-                        True, None, SchemaType("user.id", None), None)
+                        True, None, SchemaObject("user.id", None), None)
                 ],
                 Parameter(
                     "GET", "user", "/users.info", 
-                    [], True, 0, SchemaType("user", None), [])
+                    [], True, 0, SchemaObject("user", None), [])
             ),
             TraceEntry("projection_channel_id", "", None, [
                     Parameter(
                         "", "", "projection_channel_id", [],
-                        True, None, SchemaType("channel", None), None)
+                        True, None, SchemaObject("channel", None), None)
                 ],
                 Parameter(
                     "", "", "projection_channel_id", 
-                    [], True, 0, SchemaType("channel.id", None), None)
+                    [], True, 0, SchemaObject("channel.id", None), None)
             ),
             TraceEntry("projection_user_email", "", None, [
                     Parameter(
                         "", "", "projection_user_email", [],
-                        True, None, SchemaType("user", None), None)
+                        True, None, SchemaObject("user", None), None)
                 ],
                 Parameter(
                     "", "", "projection_user_email", 
-                    [], True, 0, SchemaType("user.profile.email", None), None)
+                    [], True, 0, SchemaObject("user.profile.email", None), None)
             ),
             TraceEntry("join_1_1", "", None, [ # this works like clone transitions, but allow produce tokens to be leaked
                     Parameter(
                         "", "", "join_1", [],
-                        True, None, SchemaType("channel.name", None), None),
+                        True, None, SchemaObject("channel.name", None), None),
                     Parameter(
                         "", "", "join_1", [],
-                        True, None, SchemaType("channel", None), None),
+                        True, None, SchemaObject("channel", None), None),
                 ],
                 Parameter(
                     "", "", "join_1", [], 
-                    True, 1, SchemaType("channel", None), None),
+                    True, 1, SchemaObject("channel", None), None),
             ),
             TraceEntry("join_1_2", "", None, [ # this works like clone transitions, but allow produce tokens to be leaked
                     Parameter(
                         "", "", "join_1", [],
-                        True, None, SchemaType("channel.name", None), None),
+                        True, None, SchemaObject("channel.name", None), None),
                     Parameter(
                         "", "", "join_1", [],
-                        True, SchemaType("channel", None), None),
+                        True, SchemaObject("channel", None), None),
                 ],
                 Parameter(
                     "", "", "join_1", 
-                    [], True, 1, SchemaType("channel.name", None), None),
+                    [], True, 1, SchemaObject("channel.name", None), None),
             ),
             TraceEntry("join_2_1", "", None, [ # this works like clone transitions, but allow produce tokens to be leaked
                     Parameter(
                         "", "", "join_2", [],
-                        True, None, SchemaType("user.id", None), None),
+                        True, None, SchemaObject("user.id", None), None),
                     Parameter(
                         "", "", "join_2", [],
-                        True, None, SchemaType("user", None), None),
+                        True, None, SchemaObject("user", None), None),
                 ],
                 Parameter(
                     "", "", "join_2", [], 
-                    True, 1, SchemaType("user.id", None), None),
+                    True, 1, SchemaObject("user.id", None), None),
             ),
             TraceEntry("join_2_2", "", None, [ # this works like clone transitions, but allow produce tokens to be leaked
                     Parameter(
                         "", "", "join_2", [],
-                        True, None, SchemaType("user.id", None), None),
+                        True, None, SchemaObject("user.id", None), None),
                     Parameter(
                         "", "", "join_2", [],
-                        True, None, SchemaType("user", None), None),
+                        True, None, SchemaObject("user", None), None),
                 ],
                 Parameter(
                     "", "", "join_2", [], 
-                    True, 1, SchemaType("user", None), None),
+                    True, 1, SchemaObject("user", None), None),
             ),
             TraceEntry("/conversations.history", "GET", None, [
                     Parameter(
                         "GET", "channel", "/conversations.history", [],
-                        True, None, SchemaType("channel.id", None), None),
+                        True, None, SchemaObject("channel.id", None), None),
                     Parameter(
                         "GET", "last_read", "/conversations.history", [],
-                        False, None, SchemaType("ts", None), None)
+                        False, None, SchemaObject("ts", None), None)
                 ],
                 Parameter(
                     "GET", "messages", "/conversations.history", 
-                    [], True, 1, SchemaType("message", None), [])
+                    [], True, 1, SchemaObject("message", None), [])
             ),
         ]
 
