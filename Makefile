@@ -3,10 +3,10 @@
 .PHONY: clean build run
 
 build:
-	maturin develop
+	maturin develop --release --strip
 
 run:
 	cd apiphany && ./bench.py ../../rest-api-synthesis-paper --bench benchmarks/square_benchmark.json
 
 clean:
-	rm -f apiphany/apiphany.cpython-39-darwin.so
+	rm -f apiphany/apiphany.*.so
