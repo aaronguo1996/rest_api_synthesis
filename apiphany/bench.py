@@ -13,6 +13,7 @@
 import argparse
 import random
 import cProfile
+import enum
 
 from benchmarks.benchmark import BenchConfig, Benchmark, BenchmarkSuite, Bencher
 from schemas import types
@@ -25,6 +26,14 @@ bias_type_args = {
     "simple": dynamic.BiasType.SIMPLE,
     "look-ahead": dynamic.BiasType.LOOK_AHEAD
 }
+
+class Ablation(enum.Enum):
+    APIPHANY = 0
+    NOSEMANTIC = 1
+    NOINITWITNESS = 2
+    NOTESTGEN = 3
+    NOARRAYOBLIVIOUS = 4
+    NORE = 5
 
 def build_cmd_parser():
     '''
@@ -57,7 +66,11 @@ def build_cmd_parser():
         help="Whether to run ranking")
     parser.add_argument("--get-place-stats", action='store_true',
         help="Whether to get place stats")
-    parser.set_defaults(filter_sol_only=False)
+    parser.add_argument("--print-results", action="store_true",
+        help="Whether to print results.tex")
+    parser.add_argument("--print-api-info", action="store_true",
+        help="Whether to print api info")
+    parser.set_defaults(filter_sol_only=False, print_results=False, print_api_info=False)
     return parser
 
 
@@ -845,8 +858,8 @@ def main():
         args.exp_name,
         [
             slack_suite,
-            # stripe_suite,
-            # square_suite,
+            stripe_suite,
+            square_suite,
         ],
         config)
 
@@ -855,8 +868,8 @@ def main():
     b.run(
         args.names,
         output=args.output,
-        print_api=False,
-        print_results=False,
+        print_api=args.print_api_info,
+        print_results=args.print_results,
         print_appendix=False,
         plot_ranks=False,
         cached_results=False)

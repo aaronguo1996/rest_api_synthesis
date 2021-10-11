@@ -106,6 +106,17 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         Ok(res)
     }
 
+    #[pyfn(m, "free_up")]
+    fn free_up(_py: Python) -> PyResult<()> {
+        unsafe {
+            SLAB = None;
+            RODEO = None;
+            TRACES = None;
+        }
+
+        Ok(())
+    }
+
     #[pyfn(m, "translate_traces")]
     fn translate_traces(
         py: Python,

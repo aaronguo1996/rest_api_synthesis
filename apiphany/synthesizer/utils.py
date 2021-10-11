@@ -13,3 +13,6 @@ def group_params(params):
 
 def make_entry_name(endpoint, method):
     return endpoint + "_" + method.upper()
+
+def make_type_transition_name(from_type, to_type):
+    return "convert_" + from_type.name + "_" + to_type.name

@@ -452,7 +452,7 @@ class LogAnalyzer:
             vals = candidates
 
             if not vals:
-                print("Not val available for type", typ)
+                # print("Not val available for type", typ)
                 # x = xeger.Xeger()
                 # vals = [x.xeger("^[a-z0-9]{10,}$")]
                 vals = ["fuzz_string"]

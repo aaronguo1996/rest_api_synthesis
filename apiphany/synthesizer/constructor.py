@@ -5,8 +5,9 @@ from openapi import defs
 from analyzer.entry import Parameter, TraceEntry
 from openapi.utils import blacklist
 from schemas import types
-from synthesizer.utils import make_entry_name
+from synthesizer.utils import make_entry_name, make_type_transition_name
 import consts
+from analyzer.utils import get_representative
 
 class Constructor:
     def __init__(self, doc, analyzer):
@@ -284,10 +285,36 @@ class Constructor:
 
         return results
 
+    def _construct_type_trans(self):
+        results = {}
+
+        # for all semantic types, transition to its syntactic type
+        groups = self._analyzer.dsu.groups()
+        for group in groups:
+            rep = get_representative(group)
+            if (self._analyzer._uncovered_opt != consts.UncoveredOption.EXCLUDE and (
+                rep != defs.TYPE_BOOL and
+                rep != defs.TYPE_INT and
+                rep != defs.TYPE_STRING and
+                rep != defs.TYPE_NUM and
+                rep != defs.TYPE_OBJECT)):
+                prim_name = group.type.get_primitive_name()
+                name = make_type_transition_name(rep, prim_name)
+                results[name] = TraceEntry(
+                    name, "", None,
+                    [Parameter("", "in", name, ["in"], True, None, 
+                        types.SchemaObject(rep), None)],
+                    Parameter("", "out", name, ["out"], True, None,
+                        types.SchemaObject(prim_name), None)
+                )
+
+        return results
 
     def construct_graph(self):
         projections = self._create_projections()
         filters = self._create_filters()
+        transitions = self._construct_type_trans()
         entries = dict(projections)
         entries.update(filters)
+        entries.update(transitions)
         return entries

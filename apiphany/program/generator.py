@@ -31,7 +31,7 @@ class ProgramGenerator:
             self._add_typed_var(typ_subst, VarExpr(name, in_typ), in_typ)
 
         for trans in transitions:
-            if "_clone" in trans:
+            if "_clone" in trans or "convert_" in trans:
                 continue
 
             sig = self._signatures.get(trans)

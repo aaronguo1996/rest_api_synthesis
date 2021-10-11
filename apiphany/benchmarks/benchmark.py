@@ -143,29 +143,23 @@ class Benchmark:
         # find the position of the desired solution
         syn_time = None
         re_time = None
-        for rank, (syn_time, sol_prog, re_time, _) in enumerate(sorted_candidates):            
+        solution_found = False
+        for rank, (syn_time, sol_prog, re_time, cost) in enumerate(sorted_candidates):            
             if sol_prog in self.solutions:
                 print("Solution found")
-                print(sol_prog)
+                print(sol_prog, "has cost", cost)
+                solution_found = True
                 break
 
         rank += 1
 
-        if rank < len(sorted_candidates):
+        if solution_found:
             self.latex_entry.ranks = [rank]
             print(f"PASS, Ranks {rank} vs {len(sorted_candidates)}")
             self.latex_entry.mean_rank = rank
             self.latex_entry.median_rank = rank
-        else:
-            print(f"FAIL")
 
-        self.latex_entry.rank_no_re = len(sorted_candidates)
-        self.latex_entry.syn_time = syn_time
-        self.latex_entry.re_time = re_time
-        self.latex_entry.candidates = len(candidates)
-        self.latex_entry.paths = paths
-        
-        if rank < len(sorted_candidates):
+            # collect stats about the solution
             ns = sol_prog.collect_exprs()
             self.latex_entry.ast_size = len(ns)
             self.latex_entry.projects = len(
@@ -174,6 +168,14 @@ class Benchmark:
                 list(filter(lambda x: isinstance(x, EquiExpr), ns)))
             self.latex_entry.endpoint_calls = len(
                 list(filter(lambda x: isinstance(x, AppExpr), ns)))
+        else:
+            print(f"FAIL")
+
+        self.latex_entry.rank_no_re = len(sorted_candidates)
+        self.latex_entry.syn_time = syn_time
+        self.latex_entry.re_time = re_time
+        self.latex_entry.candidates = len(candidates)
+        self.latex_entry.paths = paths            
 
         return self.latex_entry
 

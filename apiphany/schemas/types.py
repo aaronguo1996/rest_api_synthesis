@@ -50,20 +50,32 @@ class BaseType:
     def ignore_array(self):
         return self
 
+    def get_primitive_name(self):
+        raise NotImplementedError
+
 class PrimInt(BaseType):
     def __init__(self, name=defs.TYPE_INT):
         name = defs.TYPE_INT if name is None else name
         super().__init__(name, None)
+
+    def get_primitive_name(self):
+        return defs.TYPE_INT
 
 class PrimBool(BaseType):
     def __init__(self, name=defs.TYPE_BOOL):
         name = defs.TYPE_BOOL if name is None else name
         super().__init__(name, None)
 
+    def get_primitive_name(self):
+        return defs.TYPE_BOOL
+
 class PrimNum(BaseType):
     def __init__(self, name=defs.TYPE_NUM):
         name = defs.TYPE_NUM if name is None else name
         super().__init__(name, None)
+
+    def get_primitive_name(self):
+        return defs.TYPE_NUM
 
 class PrimString(BaseType):
     def __init__(self, name=defs.TYPE_STRING, pattern=None):
@@ -81,6 +93,9 @@ class PrimString(BaseType):
 
         return None, -1
 
+    def get_primitive_name(self):
+        return defs.TYPE_STRING
+
 class PrimEnum(BaseType):
     def __init__(self, name=defs.TYPE_STRING, enums=[]):
         name = defs.TYPE_STRING if name is None else name
@@ -92,6 +107,9 @@ class PrimEnum(BaseType):
             return self, 1
 
         return None, -1
+
+    def get_primitive_name(self):
+        return defs.TYPE_STRING
 
 class SchemaObject(BaseType):
     def __init__(self, name, parent=None):
@@ -127,6 +145,9 @@ class SchemaObject(BaseType):
             raise Exception("Unknown object definition", self.name)
 
         return schema.get_requires()
+
+    def get_primitive_name(self):
+        return defs.TYPE_OBJECT
     
 class ObjectType(BaseType):
     """Ad-hoc objects
@@ -206,6 +227,9 @@ class ObjectType(BaseType):
     def get_requires(self):
         return self.required_fields
 
+    def get_primitive_name(self):
+        return defs.TYPE_OBJECT
+
 class ArrayType(BaseType):
     def __init__(self, name, item_typ, parent=None):
         super().__init__(name, parent)
@@ -255,6 +279,9 @@ class ArrayType(BaseType):
 
     def ignore_array(self):
         return self.item.ignore_array()
+
+    def get_primitive_name(self):
+        return self.item.get_primitive_name()
 
 class UnionType(BaseType):
     def __init__(self, name, items, parent=None):
@@ -327,6 +354,9 @@ class UnionType(BaseType):
             items.append(t.ignore_array())
 
         return UnionType(self.name, items)
+
+    def get_primitive_name(self):
+        return self.items[0].get_primitive_name()
 
 def construct_prim_type(name, schema):
     if not isinstance(schema, dict):
