@@ -14,8 +14,7 @@ pub use execute::{Arena, Runner};
 pub use expr::{Expr, ExprIx, Prog, ProgIx};
 pub use trace::Traces;
 pub use value::{RValue, RootSlab, ThreadSlab, ValueIx};
-
-pub use interop::apiphany;
+pub use interop::{apiphany, RODEO, SLAB};
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;

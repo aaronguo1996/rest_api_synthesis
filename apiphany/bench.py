@@ -33,6 +33,8 @@ def build_cmd_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("output", nargs='?',
         help="Path to output latex table to")
+    parser.add_argument("--exp-name", nargs='?',
+        help="Experiment name")
     parser.add_argument("--repeat", type=int, nargs='?', default=5,
         help="Number of times to repeat filtering")
     parser.add_argument("--filter-num", type=int, nargs='?', default=3,
@@ -840,10 +842,11 @@ def main():
         args.parallel,
         args.get_place_stats)
     b = Bencher(
+        args.exp_name,
         [
             slack_suite,
-            stripe_suite,
-            square_suite,
+            # stripe_suite,
+            # square_suite,
         ],
         config)
 

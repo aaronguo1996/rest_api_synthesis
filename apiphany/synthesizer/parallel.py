@@ -9,7 +9,7 @@ from synthesizer.hypergraph_encoder import HyperGraphEncoder
 from synthesizer.ilp_encoder import ILPetriEncoder
 from synthesizer.petrinet_encoder import PetriNetEncoder
 import consts
-from apiphany import rust_re
+from apiphany import rust_re, translate_traces
 from schemas import types
 
 def run_encoder(synthesizer, analyzer, entries, repeat_time, inputs, outputs, path_len, expected_solution, solutions):
@@ -62,9 +62,12 @@ def run_encoder(synthesizer, analyzer, entries, repeat_time, inputs, outputs, pa
             f.write(str(len(encoder._net.transition())))
             f.write("\n")
 
+    translate_traces(entries)
+
     solution_set = set()
     start = time.time()
     path = encoder.get_length_of(path_len, input_map, output_map)
+    re_time = 0
     while path is not None:
         # print("Finding a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
 
@@ -80,20 +83,22 @@ def run_encoder(synthesizer, analyzer, entries, repeat_time, inputs, outputs, pa
                 solution_set.add(p)
                 re_start = time.time()
                 cost = rust_re(
-                    analyzer, p, entries, 
+                    analyzer, p,
                     list(inputs.items()), 
                     isinstance(outputs[0], types.ArrayType), 
                     repeat_time)
+                re_time += time.time() - re_start
                 solutions.put((
                     path_count, 
                     time.time() - start, 
                     p, 
-                    time.time() - re_start, 
+                    re_time, 
                     cost
                 ))
                 
 
                 if p == expected_solution:
+                    print("Found expected solution", flush=True)
                     solution_set.add(p)
                     return consts.SearchStatus.FOUND_EXPECTED
         
@@ -127,7 +132,7 @@ def collect_parallel_data(synthesizer, all_solutions):
         f.write(str(all_path_cnt))
         f.write("\n")
 
-def spawn_encoders(synthesizer, analyzer, entries, repeat_time, inputs, outputs, solver_num, expected_solution, timeout=120):
+def spawn_encoders(synthesizer, analyzer, entries, repeat_time, inputs, outputs, solver_num, expected_solution, timeout=300):
     m = multiprocessing.Manager()
     all_solutions = []
     for i in range(consts.DEFAULT_LENGTH_LIMIT + 1):

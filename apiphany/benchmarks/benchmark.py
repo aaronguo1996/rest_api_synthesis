@@ -50,7 +50,8 @@ class BenchmarkResult:
         self.projects = None
         self.filters = None
         self.endpoint_calls = None
-        self.time = None
+        self.syn_time = None
+        self.re_time = None
         self.candidates = None
         self.paths = None
 
@@ -136,20 +137,35 @@ class Benchmark:
         return num_place, num_trans, path_cnt, solutions
 
     def to_latex_entry(self, paths, candidates):
-        # update this
-        if len(ranks) > 0 and ranks[0] is not None:
-            print(f"PASS, Ranks {ranks}")
-            self.latex_entry.ranks = ranks
-            # self.latex_entry.mean_rank = sum(ranks) / len(ranks)
-            # self.latex_entry.median_rank = sorted(ranks)[len(ranks)//2]
+        # sort candidates by cost
+        sorted_candidates = sorted(candidates, key=lambda x: x[-1])
+        
+        # find the position of the desired solution
+        syn_time = None
+        re_time = None
+        for rank, (syn_time, sol_prog, re_time, _) in enumerate(sorted_candidates):            
+            if sol_prog in self.solutions:
+                print("Solution found")
+                print(sol_prog)
+                break
+
+        rank += 1
+
+        if rank < len(sorted_candidates):
+            self.latex_entry.ranks = [rank]
+            print(f"PASS, Ranks {rank} vs {len(sorted_candidates)}")
+            self.latex_entry.mean_rank = rank
+            self.latex_entry.median_rank = rank
         else:
             print(f"FAIL")
 
-        self.latex_entry.time = time
-        self.latex_entry.candidates = candidates
+        self.latex_entry.rank_no_re = len(sorted_candidates)
+        self.latex_entry.syn_time = syn_time
+        self.latex_entry.re_time = re_time
+        self.latex_entry.candidates = len(candidates)
         self.latex_entry.paths = paths
         
-        if sol_prog is not None:
+        if rank < len(sorted_candidates):
             ns = sol_prog.collect_exprs()
             self.latex_entry.ast_size = len(ns)
             self.latex_entry.projects = len(
@@ -320,24 +336,6 @@ class BenchmarkSuite:
                 )
 
                 if not runtime_config.synthesis_only:
-                    # start = time.time()
-                    # ranks, sol_prog = benchmark.get_rank(
-                    #     entries,
-                    #     self._configuration,
-                    #     runtime_config,
-                    #     self._log_analyzer,
-                    #     solutions,
-                    # )
-                    # ranks, sol_prog = benchmark.get_rust_rank(
-                    #     entries,
-                    #     self._configuration,
-                    #     runtime_config,
-                    #     self._log_analyzer,
-                    #     solutions,
-                    # )
-                    # end = time.time()
-                    # print("RE time:", end - start)
-
                     flat_solutions = []
                     for sol in solutions:
                         flat_solutions += sol
@@ -356,7 +354,8 @@ class BenchmarkSuite:
         return latex_entries, places, transitions
 
 class Bencher:
-    def __init__(self, suites, config):
+    def __init__(self, exp_name, suites, config):
+        self._exp_name = exp_name
         self._suites = suites
         self._config = config
 
@@ -436,11 +435,11 @@ class Bencher:
     def print_benchmark_results(self, results, output=None):
         res = ("% auto-generated: ./bench.py, table 2\n"
                "\\resizebox{\\textwidth}{!}{"
-               "\\begin{tabular}{l|lp{7.5cm}|rrrr|rrr|rr}\n"
+               "\\begin{tabular}{l|lp{7.5cm}|rrrr|rr}\n"
                "\\toprule\n"
-               "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{4}{c|}{Solution} & \\multicolumn{3}{c|}{Candidates} &  \\multicolumn{2}{c}{Rank} \\\\\n"
-               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9} \\cmidrule(lr){10-11}\n"
-               "API & ID & Description & size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & $|\\pi|$ & $|\\prog|$ & $t_{RE}$ & w/o RE & w/ RE \\\\\n"
+               "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{4}{c|}{Solution} & \\multicolumn{2}{c}{Timing} \\\\\n"
+               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9}\n"
+               "API & ID & Description & size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & $|\\prog|$ & $t_{RE}$ & $t_{syn}$ \\\\\n"
                "\\midrule")
         res += "\n"
 
@@ -487,7 +486,7 @@ class Bencher:
                     f"& {utils.pretty_none(r.filters)} "
                     f"& {utils.pretty_none(r.paths)}"
                     f"& {utils.pretty_none(r.candidates)} "
-                    f"& {utils.pretty_none(r.time / self._config.filter_num)} "
+                    f"& {utils.pretty_none(r.re_time)} "
                     f"& {rank_no_re_str} "
                     f"& {median_rank_str} ")
                 res += r" \\"
@@ -614,3 +613,17 @@ class Bencher:
             output_path = "ranks.png"
 
         plt.savefig(output_path)
+
+    def plot_solved(self, results, output=None):
+        times = []
+        for i in range(len(self._suites)):
+            bench_results = results[i]
+            for r in bench_results:
+                if r is None:
+                    continue
+
+                times.append(r.syn_time)
+
+        # plot core data
+        fig, ax = plt.subplots(1, 1)
+        fig.subplots_adjust(wspace=0.05)  # adjust space between axes

@@ -1,4 +1,4 @@
-use crate::{Expr, ExprIx, Prog, RValue, RootSlab, ThreadSlab, Traces, ValueIx};
+use crate::{Expr, ExprIx, Prog, RValue, RootSlab, ThreadSlab, Traces, ValueIx, RODEO};
 use hashbrown::HashMap;
 use lasso::{MiniSpur, Rodeo, RodeoResolver};
 use nanorand::{tls_rng, RNG};
@@ -630,17 +630,13 @@ impl Arena {
     }
 
     pub fn intern_str(&mut self, s: &str) -> MiniSpur {
-        match &mut self.strs {
-            RWRodeo::Write(r) => r.get_or_intern(s),
-            RWRodeo::Read(_) => panic!("can't write, haven't switched rodeos!"),
-        }
+        let rodeo = unsafe { RODEO.as_mut().unwrap() };
+        rodeo.get_or_intern(s)
     }
 
     pub fn get_str(&self, s: &MiniSpur) -> &str {
-        match &self.strs {
-            RWRodeo::Read(r) => r.resolve(s),
-            RWRodeo::Write(_) => panic!("can't read, haven't switched rodeos!"),
-        }
+        let rodeo = unsafe { RODEO.as_mut().unwrap() };
+        rodeo.resolve(s)
     }
 
     // TODO: Add some type safety? some state machine stuff

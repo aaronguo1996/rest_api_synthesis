@@ -1,4 +1,4 @@
-use crate::{Arena, Expr, ExprIx, Prog, RootSlab, Runner, ValueIx};
+use crate::{Arena, Expr, ExprIx, Prog, RootSlab, Runner, Traces, ValueIx};
 use hashbrown::HashMap as HBMap;
 use pyo3::{
     prelude::*,
@@ -7,6 +7,7 @@ use pyo3::{
 use serde_json::from_str;
 use smallvec::SmallVec;
 use std::{collections::HashMap, convert::TryInto};
+use lasso::{Rodeo, MiniSpur};
 
 /// `Imports` are the set of classes we need in order to translate from Python
 /// to Rust.
@@ -22,6 +23,10 @@ pub struct Imports<'p> {
     pub dumps: &'p PyAny,
 }
 
+pub static mut RODEO: Option<Rodeo<MiniSpur>> = None; // Rodeo::new();
+pub static mut SLAB: Option<RootSlab> = None; // RootSlab::new();
+static mut TRACES: Option<Traces> = None; // Traces::new();
+
 #[pymodule]
 pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
     #[pyfn(m, "rust_re")]
@@ -30,7 +35,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         log_analyzer: &PyAny,
         prog: &PyAny,
         // traces: fun -> param_names -> param_val map, response, weight
-        traces: HashMap<&str, HashMap<Vec<&str>, Vec<(HashMap<&str, &PyAny>, &PyAny, usize)>>>,
+        // traces: Traces, // HashMap<&str, HashMap<Vec<&str>, Vec<(HashMap<&str, &PyAny>, &PyAny, usize)>>>,
         inputs: Vec<(&str, &PyAny)>,
         multiple: bool,
         repeat: usize,
@@ -62,13 +67,16 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         };
 
         // Create our arena
-        let mut slab = RootSlab::new();
         let mut arena = Arena::new();
 
         // Then, translate our programs and traces
         // let t = std::time::Instant::now();
         let prog = translate_prog(&imports, &prog, &mut arena)?;
-        translate_traces(&imports, traces, &mut arena, &mut slab);
+        let traces = unsafe { TRACES.as_mut().unwrap() };
+        for ((f, args), value) in traces.into_iter() {
+            arena.push_trace(*f, args.clone(), value.to_vec());
+        }
+        // translate_traces(&imports, traces, &mut arena, &mut slab);
         // println!("py to rs time: {}", t.elapsed().as_micros());
 
         // Then, using the log analyzer, create our inputs
@@ -80,7 +88,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
                 .extract()?;
             let vals: Vec<ValueIx> = vals
                 .into_iter()
-                .map(|x| jsonify(dumps, x, &mut slab))
+                .map(|x| jsonify(dumps, x))
                 .collect::<PyResult<Vec<_>>>()?;
 
             new_inputs.insert(arena.intern_str(input_name), vals);
@@ -91,71 +99,87 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
 
         // let t = std::time::Instant::now();
         // And run it on our inputs
+        let slab = unsafe { SLAB.as_mut().unwrap() };
         let res = r.run(multiple, &slab, repeat);
         // println!("interpret time: {}", t.elapsed().as_micros());
 
         Ok(res)
     }
 
+    #[pyfn(m, "translate_traces")]
+    fn translate_traces(
+        py: Python,
+        py_traces: HashMap<&str, HashMap<Vec<&str>, Vec<(HashMap<&str, &PyAny>, &PyAny, usize)>>>,
+    ) -> PyResult<()>{
+        // allocate spaces for global variables
+        unsafe {
+            RODEO = Some(Rodeo::new());
+            SLAB = Some(RootSlab::new());
+            TRACES = Some(Traces::new());
+        }
+
+        let rodeo = unsafe { RODEO.as_mut().unwrap() };
+        let traces = unsafe { TRACES.as_mut().unwrap() };
+
+        let json = PyModule::import(py, "json")?;
+        let dumps = json.get("dumps")?;
+
+        for (fun, rest) in py_traces.into_iter() {
+            for (param_names, old_vals) in rest.into_iter() {
+                let fun = rodeo.get_or_intern(&fun);
+                let mut param_names = param_names
+                    .into_iter()
+                    .map(|x| rodeo.get_or_intern(&x))
+                    .collect::<SmallVec<_>>();
+                param_names.sort();
+                let mut vals = Vec::new();
+                for (param_nvs, response, weight) in old_vals {
+                    let param_values = param_nvs
+                        .into_iter()
+                        .map(|(n, v)| {
+                            (
+                                rodeo.get_or_intern(n),
+                                jsonify(dumps, v).unwrap(),
+                            )
+                        })
+                        .collect::<hashbrown::HashMap<_, _>>();
+    
+                    let response = jsonify(dumps, response).unwrap();
+    
+                    vals.push((param_values, response, weight));
+                }
+                traces.insert((fun, param_names), vals);
+            }
+        }
+
+        Ok(())
+    }
+
     Ok(())
 }
 
-fn jsonify(dumps: &PyAny, x: &PyAny, slab: &mut RootSlab) -> PyResult<ValueIx> {
+fn jsonify(dumps: &PyAny, x: &PyAny) -> PyResult<ValueIx> {
     let json = dumps.call1((x,))?.extract()?;
     let val = from_str(json).unwrap();
-
-    Ok(slab.allocate(val))
-}
-
-fn translate_traces<'p>(
-    imports: &Imports<'p>,
-    traces: HashMap<&str, HashMap<Vec<&str>, Vec<(HashMap<&str, &PyAny>, &PyAny, usize)>>>,
-    arena: &mut Arena,
-    slab: &mut RootSlab,
-) {
-    for (fun, rest) in traces.into_iter() {
-        for (param_names, old_vals) in rest.into_iter() {
-            let fun = arena.intern_str(&fun);
-            let mut param_names = param_names
-                .into_iter()
-                .map(|x| arena.intern_str(&x))
-                .collect::<SmallVec<_>>();
-            param_names.sort();
-            let mut vals = Vec::new();
-            for (param_nvs, response, weight) in old_vals {
-                let param_values = param_nvs
-                    .into_iter()
-                    .map(|(n, v)| {
-                        (
-                            arena.intern_str(n),
-                            jsonify(imports.dumps, v, slab).unwrap(),
-                        )
-                    })
-                    .collect::<hashbrown::HashMap<_, _>>();
-
-                let response = jsonify(imports.dumps, response, slab).unwrap();
-
-                vals.push((param_values, response, weight));
-            }
-            arena.push_trace(fun, param_names, vals)
-        }
-    }
-}
-
-fn translate_progs<'p>(
-    imports: &Imports<'p>,
-    py_expr: &[&'p PyAny],
-    arena: &mut Arena,
-) -> PyResult<Vec<Prog>> {
-    let mut res = Vec::new();
-
-    for p in py_expr.iter() {
-        let p = translate_prog(imports, p, arena)?;
-        res.push(p);
-    }
-
+    let slab = unsafe { SLAB.as_mut().unwrap() } ;
+    let res = slab.allocate(val);
     Ok(res)
 }
+
+// fn translate_progs<'p>(
+//     imports: &Imports<'p>,
+//     py_expr: &[&'p PyAny],
+//     arena: &mut Arena,
+// ) -> PyResult<Vec<Prog>> {
+//     let mut res = Vec::new();
+
+//     for p in py_expr.iter() {
+//         let p = translate_prog(imports, p, arena)?;
+//         res.push(p);
+//     }
+
+//     Ok(res)
+// }
 
 fn translate_prog<'p>(
     imports: &Imports<'p>,
