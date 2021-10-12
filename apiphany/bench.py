@@ -870,69 +870,63 @@ def load_exp_results(data_dir, exp_name):
     
 
 def plot_ranks(experiments, data_dir, output=None):
-    ranks_re = []
-    ranks_no_re = []
-    for i in range(len(self._suites)):
-        bench_results = results[i]
-        for r in bench_results:
-            if r is None:
+    # load results for all experiments
+    for exp in experiments:
+        results = load_exp_results(data_dir, exp)
+        ranks_re = []
+        ranks_no_re = []
+        for result in results:
+            if result is None or result.ranks is None:
                 continue
 
-            ranks = r.ranks
-            if ranks is None:
-                median_rank = None
-                continue
-            else:
-                median_rank = ranks[len(ranks)//2]
+            ranks_re.append(result.ranks[0])
+            ranks_no_re.append(result.rank_no_re)
+    
+        cnt_ranks_re = [sum([1 for x in ranks_re if x <= i]) for i in range(0,5000)]
+        cnt_ranks_no_re = [sum([1 for x in ranks_no_re if x <= i]) for i in range(0,5000)]
 
-            ranks_re.append(median_rank)
-            ranks_no_re.append(r.rank_no_re)
+        # plot core data
+        fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
+        fig.subplots_adjust(wspace=0.05)  # adjust space between axes
 
-    cnt_ranks_re = [sum([1 for x in ranks_re if x <= i]) for i in range(0,3000)]
-    cnt_ranks_no_re = [sum([1 for x in ranks_no_re if x <= i]) for i in range(0,3000)]
+        ax1.set_xlim(0, 15)
+        ax2.set_xscale('log')
+        ax2.set_xlim(15, 5000)
+        ax1.set_ylim(0, 28)
+        ax1.set_xlabel("Rank", loc="right")
+        ax1.set_ylabel("# benchmarks")
+        ax1.yaxis.set_ticks(range(0,28,2))
+        ax1.xaxis.set_ticks([0,3,6,9,10,12,15])
+        ax1.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
+        ax1.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
+        ax2.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
+        ax2.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
+        ax1.hlines(26, 0, 15, linestyles='dashed', label="max solved benchmarks", colors="0.8")
+        ax2.hlines(26, 15, 3000, linestyles='dashed', label="max solved benchmarks", colors="0.8")
+        ax2.legend(loc="lower right")
 
-    # plot core data
-    fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
-    fig.subplots_adjust(wspace=0.05)  # adjust space between axes
+        # set border lines
+        ax1.spines.right.set_visible(False)
+        ax2.spines.left.set_visible(False)
+        ax1.yaxis.tick_left()
+        ax2.yaxis.tick_right()
+        ax2.tick_params(labelright=False)
 
-    ax1.set_xlim(0, 15)
-    ax2.set_xscale('log')
-    ax2.set_xlim(15, 3000)
-    ax1.set_ylim(0, 25)
-    ax1.set_xlabel("Rank", loc="right")
-    ax1.set_ylabel("# benchmarks")
-    ax1.yaxis.set_ticks(range(0,26,4))
-    ax1.xaxis.set_ticks([0,3,6,9,10,12,15])
-    ax1.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
-    ax1.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
-    ax2.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
-    ax2.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
-    ax1.hlines(26, 0, 15, linestyles='dashed', label="max solved benchmarks", colors="0.8")
-    ax2.hlines(26, 15, 3000, linestyles='dashed', label="max solved benchmarks", colors="0.8")
-    ax2.legend(loc="lower right")
-
-    # set border lines
-    ax1.spines.right.set_visible(False)
-    ax2.spines.left.set_visible(False)
-    ax1.yaxis.tick_left()
-    ax2.yaxis.tick_right()
-    ax2.tick_params(labelright=False)
-
-    # plot break lines
-    d = .5  # proportion of vertical to horizontal extent of the slanted line
-    kwargs = dict(marker=[(-d, -1), (d, 1)], markersize=12,
-                linestyle="none", color='k', mec='k', mew=1, clip_on=False)
-    ax2.plot([0, 0], [0, 1], transform=ax2.transAxes, **kwargs)
-    ax1.plot([1, 1], [0, 1], transform=ax1.transAxes, **kwargs)
+        # plot break lines
+        d = .5  # proportion of vertical to horizontal extent of the slanted line
+        kwargs = dict(marker=[(-d, -1), (d, 1)], markersize=12,
+                    linestyle="none", color='k', mec='k', mew=1, clip_on=False)
+        ax2.plot([0, 0], [0, 1], transform=ax2.transAxes, **kwargs)
+        ax1.plot([1, 1], [0, 1], transform=ax1.transAxes, **kwargs)
 
 
-    # plt.show()
-    if output:
-        output_path = os.path.join(output, "ranks.png")
-    else:
-        output_path = "ranks.png"
+        # plt.show()
+        if output:
+            output_path = os.path.join(output, f"{exp}_ranks.png")
+        else:
+            output_path = "ranks.png"
 
-    plt.savefig(output_path)
+        plt.savefig(output_path)
 
 def plot_solved(experiments, data_dir, output=None):
     # load results for all experiments
