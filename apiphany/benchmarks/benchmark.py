@@ -26,7 +26,7 @@ from apiphany import rust_re
 
 class BenchConfig:
     def __init__(
-        self, cache=False, repeat=5, filter_num=5,
+        self, cache=False, repeat=15, filter_num=1,
         filter_sol_only=False, synthesis_only=False,
         bias_type=dynamic.BiasType.SIMPLE, use_parallel=True,
         get_place_stats=False):
@@ -181,12 +181,12 @@ class Benchmark:
 
 class BenchmarkSuite:
     def __init__(self, config_file, api, benchmarks):
-        self._prep(config_file)
+        self.config_file = config_file
         self.api = api
         self.benchmarks = benchmarks
 
-    def _prep(self, config_file):
-        with open(config_file, 'r') as config:
+    def prep(self, data_dir, exp_dir):
+        with open(self.config_file, 'r') as config:
             self._configuration = json.loads(config.read())
         doc_file = self._configuration.get(consts.KEY_DOC_FILE)
         self._doc = read_doc(doc_file)
@@ -197,23 +197,23 @@ class BenchmarkSuite:
         if not endpoints:
             endpoints = self._doc.get(defs.DOC_PATHS).keys()
 
-        self._exp_dir = utils.prep_exp_dir(self._configuration)
+        self._suite_dir = utils.prep_exp_dir(data_dir, exp_dir, self._configuration)
         self._entries = utils.parse_entries(
             self._configuration, 
-            self._exp_dir, 
+            self._suite_dir, 
             base_path, 
             doc_entries)
         self._initial_witnesses = utils.get_initial_witnesses(
             self._configuration, 
-            self._exp_dir, 
+            self._suite_dir, 
             base_path, 
             doc_entries
         )
 
-        with open(os.path.join(self._exp_dir, consts.FILE_ENTRIES), "rb") as f:
+        with open(os.path.join(self._suite_dir, consts.FILE_ENTRIES), "rb") as f:
             self._typed_entries = pickle.load(f)
 
-        with open(os.path.join(self._exp_dir, consts.FILE_GRAPH), "rb") as f:
+        with open(os.path.join(self._suite_dir, consts.FILE_GRAPH), "rb") as f:
             self._log_analyzer = pickle.load(f)
 
     def get_info(self):
@@ -299,7 +299,7 @@ class BenchmarkSuite:
             self._configuration.get(consts.KEY_SKIP_FIELDS)
         )
 
-        cache_path = os.path.join(self._exp_dir, "bench_results.pkl")
+        cache_path = os.path.join(self._suite_dir, "bench_results.pkl")
         if cached_results:
             with open(cache_path, "rb") as f:
                 d = pickle.load(f)
@@ -329,7 +329,7 @@ class BenchmarkSuite:
                     continue
 
                 places, transitions, path_cnt, solutions = benchmark.run(
-                    self._exp_dir, 
+                    self._suite_dir, 
                     self._typed_entries,
                     indexed_entries, 
                     self._configuration,
@@ -361,7 +361,7 @@ class Bencher:
         self._suites = suites
         self._config = config
 
-    def run(self, names, 
+    def run(self, data_dir, names, 
         cached_results=False, 
         print_api=False, 
         print_results=False, 
@@ -376,6 +376,7 @@ class Bencher:
             self.print_appendix(output)
         
         for suite in self._suites:
+            suite.prep(data_dir, self._exp_name)
             if self._config.get_place_stats:
                 suite.get_popular_types()
             else:
@@ -550,82 +551,3 @@ class Bencher:
             with open(os.path.join(output, "solutions.tex"), "w") as of:
                 of.write(res)
                 print(f"written to {os.path.join(output, 'solutions.tex')}")
-
-    def plot_ranks(self, results, output=None):
-        ranks_re = []
-        ranks_no_re = []
-        for i in range(len(self._suites)):
-            bench_results = results[i]
-            for r in bench_results:
-                if r is None:
-                    continue
-
-                ranks = r.ranks
-                if ranks is None:
-                    median_rank = None
-                    continue
-                else:
-                    median_rank = ranks[len(ranks)//2]
-                
-                ranks_re.append(median_rank)
-                ranks_no_re.append(r.rank_no_re)
-
-        cnt_ranks_re = [sum([1 for x in ranks_re if x <= i]) for i in range(0,3000)]
-        cnt_ranks_no_re = [sum([1 for x in ranks_no_re if x <= i]) for i in range(0,3000)]
-
-        # plot core data
-        fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
-        fig.subplots_adjust(wspace=0.05)  # adjust space between axes
-
-        ax1.set_xlim(0, 15)
-        ax2.set_xscale('log')
-        ax2.set_xlim(15, 3000)
-        ax1.set_ylim(0, 25)
-        ax1.set_xlabel("Rank", loc="right")
-        ax1.set_ylabel("# benchmarks")
-        ax1.yaxis.set_ticks(range(0,26,4))
-        ax1.xaxis.set_ticks([0,3,6,9,10,12,15])
-        ax1.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
-        ax1.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
-        ax2.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
-        ax2.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
-        ax1.hlines(26, 0, 15, linestyles='dashed', label="max solved benchmarks", colors="0.8")
-        ax2.hlines(26, 15, 3000, linestyles='dashed', label="max solved benchmarks", colors="0.8")
-        ax2.legend(loc="lower right")
-
-        # set border lines
-        ax1.spines.right.set_visible(False)
-        ax2.spines.left.set_visible(False)
-        ax1.yaxis.tick_left()
-        ax2.yaxis.tick_right()
-        ax2.tick_params(labelright=False)
-
-        # plot break lines
-        d = .5  # proportion of vertical to horizontal extent of the slanted line
-        kwargs = dict(marker=[(-d, -1), (d, 1)], markersize=12,
-                    linestyle="none", color='k', mec='k', mew=1, clip_on=False)
-        ax2.plot([0, 0], [0, 1], transform=ax2.transAxes, **kwargs)
-        ax1.plot([1, 1], [0, 1], transform=ax1.transAxes, **kwargs)
-
-        
-        # plt.show()
-        if output:
-            output_path = os.path.join(output, "ranks.png")
-        else:
-            output_path = "ranks.png"
-
-        plt.savefig(output_path)
-
-    def plot_solved(self, results, output=None):
-        times = []
-        for i in range(len(self._suites)):
-            bench_results = results[i]
-            for r in bench_results:
-                if r is None:
-                    continue
-
-                times.append(r.syn_time)
-
-        # plot core data
-        fig, ax = plt.subplots(1, 1)
-        fig.subplots_adjust(wspace=0.05)  # adjust space between axes

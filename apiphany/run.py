@@ -39,6 +39,8 @@ def build_cmd_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("config_file", nargs='?',
         help="Path to the configuration file")
+    parser.add_argument("--data-dir", required=True,
+        help="Path to the directory containing the data")
     parser.add_argument("--test", action="store_true",
         help="Run unit tests")
     parser.add_argument("--dynamic", action="store_true",
@@ -184,7 +186,7 @@ def main():
     if not endpoints:
         endpoints = doc.get(defs.DOC_PATHS).keys()
 
-    exp_dir = prep_exp_dir(configuration)
+    exp_dir = prep_exp_dir(args.data_dir, "default_exp", configuration)
 
     print("Loading witnesses...")
     if args.dynamic or args.witness or args.filtering:

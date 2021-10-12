@@ -8,13 +8,13 @@ from synthesizer.utils import make_entry_name
 from analyzer.utils import path_to_name
 from analyzer.entry import ErrorResponse
 
-def prep_exp_dir(config):
-    exp_name = config[consts.KEY_EXP_NAME]
-    exp_dir = os.path.join("../experiment_data_20210707_2056/", exp_name)
-    if not os.path.exists(exp_dir):
-        os.makedirs(exp_dir)
+def prep_exp_dir(data_dir, exp_dir, config):
+    api_name = config[consts.KEY_EXP_NAME]
+    api_dir = os.path.join(data_dir, exp_dir, api_name)
+    if not os.path.exists(api_dir):
+        os.makedirs(api_dir)
 
-    return exp_dir
+    return api_dir
 
 def update_type(skip_fields, entries, endpoints):
     for e in entries:
