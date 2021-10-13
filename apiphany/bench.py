@@ -68,6 +68,8 @@ def build_cmd_parser():
         help="Whether to run ranking")
     parser.add_argument("--get-place-stats", action='store_true',
         help="Whether to get place stats")
+    parser.add_argument("--coverage", type=float,
+        help="Prune methods and witnesses to get the target coverage")
     parser.add_argument("--print-results", action="store_true",
         help="Whether to print results.tex")
     parser.add_argument("--print-api-info", action="store_true",

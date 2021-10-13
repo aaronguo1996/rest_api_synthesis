@@ -1,12 +1,15 @@
 import os
 import pickle
 import re
+import random
+import math
 
 import consts
 from analyzer import parser
 from synthesizer.utils import make_entry_name
 from analyzer.utils import path_to_name
-from analyzer.entry import ErrorResponse
+from analyzer.entry import ErrorResponse, TraceEntry, Parameter
+from schemas import types
 
 def prep_exp_dir(data_dir, exp_dir, config):
     api_name = config[consts.KEY_EXP_NAME]
@@ -174,3 +177,58 @@ def pretty_none(v):
         return round(v, 1)
         
     return v if v is not None else '-'
+
+def get_petri_net_data(exp_dir):
+    encoder_path = os.path.join(exp_dir, "encoder.txt")
+    with open(encoder_path, "r") as f:
+        numbers = []
+        line = f.readline()
+        while line:
+            numbers.append(int(line))
+            line = f.readline()
+
+    return numbers[0], numbers[1], numbers[2]
+    
+def within_expected_coverage(curr_coverage, target_coverage):
+    return abs(curr_coverage, target_coverage) < 0.025
+
+def to_syntactic_type(param):
+    typ = param.type
+    if typ is None:
+        raise Exception("Parameter", param, "does not have type")
+
+    typ.name = typ.get_primitive_name()
+    return param
+
+def prune_by_coverage(methods, witnesses, typed_entries, coverage):
+    covered = set()
+    for w in witnesses:
+        key = (w.endpoint, w.method.upper())
+        if key in methods:
+            covered.add(key)
+
+    curr_coverage = covered / len(methods)
+    if within_expected_coverage(curr_coverage, coverage):
+        return witnesses, typed_entries
+
+    # drop a random subset of methods to reach the target coverage
+    expected_covered_num = math.floor(coverage * len(methods))
+    sampled_covered = random.choices(list(covered), k=expected_covered_num)
+    
+    sampled_typed_entries = {}
+    for name, e in typed_entries.items():
+        if (e.endpoint, e.method) in sampled_covered:
+            sampled_typed_entries[name] = e
+        else: # default the excluded ones to syntactic types
+            sampled_typed_entries[name] = TraceEntry(
+                e.endpoint, e.method, e.content_type,
+                [to_syntactic_type(p) for p in e.parameters],
+                to_syntactic_type(e.response)
+            )
+
+    sampled_witnesses = []
+    for w in witnesses:
+        if (w.endpoint, w.method.upper()) in sampled_covered:
+            sampled_witnesses.append(w)
+
+    return sampled_witnesses, sampled_typed_entries

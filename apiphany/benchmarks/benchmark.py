@@ -1,11 +1,7 @@
-
-from globs import get_petri_net_data
 import json
 import pickle
 import os
 import shutil
-import pebble
-import time
 import matplotlib.pyplot as plt
 
 from analyzer import dynamic
@@ -29,7 +25,7 @@ class BenchConfig:
         self, cache=False, repeat=15, filter_num=1,
         filter_sol_only=False, synthesis_only=False,
         bias_type=dynamic.BiasType.SIMPLE, use_parallel=True,
-        get_place_stats=False):
+        get_place_stats=False, method_coverage=1):
         self.cache = cache
         self.repeat = repeat
         self.filter_num = filter_num
@@ -38,6 +34,7 @@ class BenchConfig:
         self.re_bias_type = bias_type
         self.use_parallel = use_parallel
         self.get_place_stats = get_place_stats
+        self.method_coverage = method_coverage
 
 class BenchmarkResult:
     def __init__(self, name, desc):
@@ -185,7 +182,7 @@ class BenchmarkSuite:
         self.api = api
         self.benchmarks = benchmarks
 
-    def prep(self, data_dir, exp_dir):
+    def prep(self, data_dir, exp_dir, runtime_config):
         with open(self.config_file, 'r') as config:
             self._configuration = json.loads(config.read())
         doc_file = self._configuration.get(consts.KEY_DOC_FILE)
@@ -207,14 +204,26 @@ class BenchmarkSuite:
             self._configuration, 
             self._suite_dir, 
             base_path, 
-            doc_entries
-        )
+            doc_entries)
 
         with open(os.path.join(self._suite_dir, consts.FILE_ENTRIES), "rb") as f:
             self._typed_entries = pickle.load(f)
 
         with open(os.path.join(self._suite_dir, consts.FILE_GRAPH), "rb") as f:
             self._log_analyzer = pickle.load(f)
+
+        # update the entries and witnesses
+        methods = set()
+        for ep in self._doc.get(defs.DOC_PATHS):
+            for md in ep.keys():
+                methods.add((ep, md))
+
+        methods = self._doc.get(defs.DOC_PATHS)
+        self._entries, self._typed_entries = utils.prune_by_coverage(
+            methods,
+            self._entries, 
+            self._typed_entries, 
+            runtime_config.method_coverage)
 
     def get_info(self):
         # to get number of annotations, open the annotations file
@@ -276,7 +285,10 @@ class BenchmarkSuite:
             (x.endpoint, x.method.upper()) for x in self._entries if x.endpoint in endpoints
         }
         ep_covered = len(covered)
-        all_witness_cnt = len([e for e in self._entries if not isinstance(e.response, ErrorResponse)])
+
+        # witnesses stats
+        all_witnesses = [e for e in self._entries if not isinstance(e.response, ErrorResponse)]
+        all_witness_cnt = len(all_witnesses)
 
         return APIInfo(
             self.api, num_args, obj_sizes, obj_num, ep_num, 
@@ -307,22 +319,6 @@ class BenchmarkSuite:
             places = d["places"]
             transitions = d["transitions"]
             latex_entries = d["results"]
-
-            # fixes without rerunning
-            for entry in latex_entries:
-                for benchmark in self.benchmarks:
-                    if entry.name == benchmark.name:
-                        entry.desc = benchmark.description
-                        if entry.ast_size is None:
-                            ns = benchmark.solutions[0].collect_exprs()
-                            entry.ast_size = len(ns)
-                            entry.projects = len(
-                                list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
-                            entry.filters = len(
-                                list(filter(lambda x: isinstance(x, EquiExpr), ns)))
-                            entry.endpoint_calls = len(
-                                list(filter(lambda x: isinstance(x, AppExpr), ns)))
-                        break
         else:
             for benchmark in self.benchmarks:
                 if names is not None and benchmark.name not in names:
@@ -376,7 +372,7 @@ class Bencher:
             self.print_appendix(output)
         
         for suite in self._suites:
-            suite.prep(data_dir, self._exp_name)
+            suite.prep(data_dir, self._exp_name, self._config)
             if self._config.get_place_stats:
                 suite.get_popular_types()
             else:

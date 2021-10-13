@@ -10,9 +10,8 @@ from graphviz import Digraph
 import cProfile
 
 # analyze traces
-from analyzer import analyzer, dynamic, parser
+from analyzer import analyzer, dynamic
 from analyzer.ascription import Ascription
-from globs import init_synthesizer
 from openapi import defs
 from openapi.parser import OpenAPIParser
 from openapi.utils import read_doc, get_schema_forest
@@ -244,7 +243,8 @@ def main():
                 print(p.pretty())
 
         elif args.parallel:
-            synthesizer = init_synthesizer(configuration, entries, exp_dir)
+            synthesizer = Synthesizer(configuration, entries, exp_dir)
+            synthesizer.init()
             inputs = {
                 # "price": types.SchemaObject("price", None)
                 "email": types.PrimString("objs_user_profile.email"),
