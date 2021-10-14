@@ -108,6 +108,7 @@ class LogAnalyzer:
         self.type_partitions = {}
         self.type_aliases = {}
         self.type_values = {}
+        self.value_map = {}
         # temporary field
         self._checked_fields = {}
         # privates
@@ -505,7 +506,8 @@ class LogAnalyzer:
                 if rep is not None:
                     return rep
 
-        return typ.name
+        # if no representative found, return the primitive type
+        return typ.get_primitive_name()
 
     def find_same_type(self, param):
         if isinstance(param.type, types.UnionType):

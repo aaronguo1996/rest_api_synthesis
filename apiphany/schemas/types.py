@@ -53,6 +53,9 @@ class BaseType:
     def get_primitive_name(self):
         raise NotImplementedError
 
+    def to_syntactic(self):
+        raise NotImplementedError
+
 class PrimInt(BaseType):
     def __init__(self, name=defs.TYPE_INT):
         name = defs.TYPE_INT if name is None else name
@@ -60,6 +63,10 @@ class PrimInt(BaseType):
 
     def get_primitive_name(self):
         return defs.TYPE_INT
+
+    def to_syntactic(self):
+        self.name = defs.TYPE_INT
+        return self
 
 class PrimBool(BaseType):
     def __init__(self, name=defs.TYPE_BOOL):
@@ -69,6 +76,10 @@ class PrimBool(BaseType):
     def get_primitive_name(self):
         return defs.TYPE_BOOL
 
+    def to_syntactic(self):
+        self.name = defs.TYPE_BOOL
+        return self
+
 class PrimNum(BaseType):
     def __init__(self, name=defs.TYPE_NUM):
         name = defs.TYPE_NUM if name is None else name
@@ -76,6 +87,10 @@ class PrimNum(BaseType):
 
     def get_primitive_name(self):
         return defs.TYPE_NUM
+
+    def to_syntactic(self):
+        self.name = defs.TYPE_NUM
+        return self
 
 class PrimString(BaseType):
     def __init__(self, name=defs.TYPE_STRING, pattern=None):
@@ -96,6 +111,10 @@ class PrimString(BaseType):
     def get_primitive_name(self):
         return defs.TYPE_STRING
 
+    def to_syntactic(self):
+        self.name = defs.TYPE_STRING
+        return self
+
 class PrimEnum(BaseType):
     def __init__(self, name=defs.TYPE_STRING, enums=[]):
         name = defs.TYPE_STRING if name is None else name
@@ -110,6 +129,10 @@ class PrimEnum(BaseType):
 
     def get_primitive_name(self):
         return defs.TYPE_STRING
+
+    def to_syntactic(self):
+        self.name = defs.TYPE_STRING
+        return self
 
 class SchemaObject(BaseType):
     def __init__(self, name, parent=None):
@@ -148,6 +171,10 @@ class SchemaObject(BaseType):
 
     def get_primitive_name(self):
         return defs.TYPE_OBJECT
+
+    def to_syntactic(self):
+        self.name = defs.TYPE_OBJECT
+        return self
     
 class ObjectType(BaseType):
     """Ad-hoc objects
@@ -230,6 +257,10 @@ class ObjectType(BaseType):
     def get_primitive_name(self):
         return defs.TYPE_OBJECT
 
+    def to_syntactic(self):
+        self.name = defs.TYPE_OBJECT
+        return self
+
 class ArrayType(BaseType):
     def __init__(self, name, item_typ, parent=None):
         super().__init__(name, parent)
@@ -282,6 +313,10 @@ class ArrayType(BaseType):
 
     def get_primitive_name(self):
         return self.item.get_primitive_name()
+
+    def to_syntactic(self):
+        self.item = self.item.to_syntactic()
+        return self
 
 class UnionType(BaseType):
     def __init__(self, name, items, parent=None):
@@ -357,6 +392,10 @@ class UnionType(BaseType):
 
     def get_primitive_name(self):
         return self.items[0].get_primitive_name()
+
+    def to_syntactic(self):
+        self.items = [t.to_syntactic() for t in self.items]
+        return self
 
 def construct_prim_type(name, schema):
     if not isinstance(schema, dict):

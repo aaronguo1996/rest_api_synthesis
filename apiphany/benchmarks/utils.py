@@ -8,8 +8,8 @@ import consts
 from analyzer import parser
 from synthesizer.utils import make_entry_name
 from analyzer.utils import path_to_name
-from analyzer.entry import ErrorResponse, TraceEntry, Parameter
-from schemas import types
+from analyzer.entry import ErrorResponse, TraceEntry
+from analyzer.analyzer import LogAnalyzer
 
 def prep_exp_dir(data_dir, exp_dir, config):
     api_name = config[consts.KEY_EXP_NAME]
@@ -190,26 +190,32 @@ def get_petri_net_data(exp_dir):
     return numbers[0], numbers[1], numbers[2]
     
 def within_expected_coverage(curr_coverage, target_coverage):
-    return abs(curr_coverage, target_coverage) < 0.025
+    return abs(curr_coverage - target_coverage) < 0.025
 
 def to_syntactic_type(param):
     typ = param.type
     if typ is None:
         raise Exception("Parameter", param, "does not have type")
 
-    typ.name = typ.get_primitive_name()
+    param.type = typ.to_syntactic()
     return param
 
-def prune_by_coverage(methods, witnesses, typed_entries, coverage):
+def prune_by_coverage(paths, configuration, witnesses, typed_entries, coverage):
+    methods = set()
+    for ep, ep_def in paths.items():
+        for md in ep_def.keys():
+            methods.add((ep, md.upper()))
+
     covered = set()
     for w in witnesses:
         key = (w.endpoint, w.method.upper())
         if key in methods:
             covered.add(key)
 
-    curr_coverage = covered / len(methods)
-    if within_expected_coverage(curr_coverage, coverage):
-        return witnesses, typed_entries
+    curr_coverage = len(covered) / len(methods)
+    if curr_coverage <= coverage or within_expected_coverage(curr_coverage, coverage):
+        print("Warning: the provided coverage cannot be reached")
+        return None, witnesses, typed_entries
 
     # drop a random subset of methods to reach the target coverage
     expected_covered_num = math.floor(coverage * len(methods))
@@ -231,4 +237,11 @@ def prune_by_coverage(methods, witnesses, typed_entries, coverage):
         if (w.endpoint, w.method.upper()) in sampled_covered:
             sampled_witnesses.append(w)
 
-    return sampled_witnesses, sampled_typed_entries
+    analyzer = LogAnalyzer(consts.UncoveredOption.DEFAULT_TO_SYNTACTIC)
+    analyzer.analyze(
+        paths, 
+        sampled_witnesses, 
+        configuration.get(consts.KEY_SKIP_FIELDS), 
+        configuration.get(consts.KEY_BLACKLIST))
+
+    return analyzer, sampled_witnesses, sampled_typed_entries

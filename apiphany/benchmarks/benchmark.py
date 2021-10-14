@@ -10,15 +10,11 @@ from openapi import defs
 from openapi.parser import OpenAPIParser
 from openapi.utils import read_doc
 from program.program import EquiExpr, ProjectionExpr, AppExpr
-from schemas import types
 from synthesizer import parallel
-from synthesizer.filtering import retrospective_execute, check_results
 from synthesizer.synthesizer import Synthesizer
 import benchmarks.utils as utils
 import consts
 
-from multiprocessing import cpu_count
-from apiphany import rust_re
 
 class BenchConfig:
     def __init__(
@@ -96,9 +92,11 @@ class Benchmark:
                 tip.name = analyzer.find_representative_for_type(tip)
                 rep_inputs[ip] = tip
 
-            rep_output = self.output
-            rep_output.name = analyzer.find_representative_for_type(self.output)
+            rep_output = self.output.ignore_array()
+            rep_output.name = analyzer.find_representative_for_type(rep_output)
 
+            print("inputs", rep_inputs)
+            print("output", rep_output)
             parallel.spawn_encoders(
                 synthesizer,
                 analyzer,
@@ -129,7 +127,7 @@ class Benchmark:
                 prev_solutions.update({p:p for p in programs})
                 solutions.append(solution_at_len)
 
-        num_place, num_trans, path_cnt = get_petri_net_data(bm_dir)
+        num_place, num_trans, path_cnt = utils.get_petri_net_data(bm_dir)
 
         return num_place, num_trans, path_cnt, solutions
 
@@ -209,21 +207,19 @@ class BenchmarkSuite:
         with open(os.path.join(self._suite_dir, consts.FILE_ENTRIES), "rb") as f:
             self._typed_entries = pickle.load(f)
 
-        with open(os.path.join(self._suite_dir, consts.FILE_GRAPH), "rb") as f:
-            self._log_analyzer = pickle.load(f)
-
         # update the entries and witnesses
-        methods = set()
-        for ep in self._doc.get(defs.DOC_PATHS):
-            for md in ep.keys():
-                methods.add((ep, md))
-
-        methods = self._doc.get(defs.DOC_PATHS)
-        self._entries, self._typed_entries = utils.prune_by_coverage(
-            methods,
+        paths = self._doc.get(defs.DOC_PATHS)
+        prune_result = utils.prune_by_coverage(
+            paths,
+            self._configuration,
             self._entries, 
             self._typed_entries, 
             runtime_config.method_coverage)
+        self._log_analyzer, self._entries, self._typed_entries = prune_result
+
+        if self._log_analyzer is None:
+            with open(os.path.join(self._suite_dir, consts.FILE_GRAPH), "rb") as f:
+                self._log_analyzer = pickle.load(f)
 
     def get_info(self):
         # to get number of annotations, open the annotations file

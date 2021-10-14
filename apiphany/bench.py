@@ -68,7 +68,7 @@ def build_cmd_parser():
         help="Whether to run ranking")
     parser.add_argument("--get-place-stats", action='store_true',
         help="Whether to get place stats")
-    parser.add_argument("--coverage", type=float,
+    parser.add_argument("--method-coverage", type=float,
         help="Prune methods and witnesses to get the target coverage")
     parser.add_argument("--print-results", action="store_true",
         help="Whether to print results.tex")
@@ -974,14 +974,15 @@ def main():
         not args.plot_solved and
         not args.plot_ranks):
         config = BenchConfig(
-            args.cache,
-            args.repeat,
-            args.filter_num,
-            args.filter_sol_only,
-            args.synthesis_only,
-            bias_type_args[args.bias_type],
-            args.parallel,
-            args.get_place_stats)
+            cache=args.cache,
+            repeat=args.repeat,
+            filter_num=args.filter_num,
+            filter_sol_only=args.filter_sol_only,
+            synthesis_only=args.synthesis_only,
+            bias_type=bias_type_args[args.bias_type],
+            use_parallel=args.parallel,
+            get_place_stats=args.get_place_stats,
+            method_coverage=args.method_coverage,)
         b = Bencher(
             args.exp_name,
             [
