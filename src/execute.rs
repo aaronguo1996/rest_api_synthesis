@@ -367,7 +367,7 @@ impl<'a> ExecEnv<'a> {
 
                         // Insert in sorted order of the param name
                         match names.binary_search(&name) {
-                            Ok(_pos) => unreachable!(),
+                            Ok(_pos) => unreachable!(self.arena.get_str(&name)),
                             Err(pos) => {
                                 names.insert(pos, name);
                                 vals.insert(pos, val);

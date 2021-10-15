@@ -54,10 +54,6 @@ def build_cmd_parser():
         help="Timeout limit for synthesis to run")
     parser.add_argument("--witness", action="store_true",
         help="Generate witnesses by configuration")
-    parser.add_argument("--uncovered", type=consts.UncoveredOption,
-        choices=list(consts.UncoveredOption),
-        default=consts.UncoveredOption.EXCLUDE,
-        help="Different options to deal with uncovered methods")
 
     return parser
 
@@ -68,95 +64,6 @@ def run_dynamic(configuration, entries, endpoint, limit=500):
     )
     seqs = analysis.get_sequences(endpoint=endpoint, limit=limit)
     print(seqs)
-
-def create_entries(doc, config, ascription):
-    entries = {}
-
-    endpoints = config.get(consts.KEY_ENDPOINTS)
-    if not endpoints:
-        endpoints = doc.keys()
-
-    for endpoint, ep_def in doc.items():
-        if endpoint not in endpoints:
-            continue
-
-        for _, method_def in ep_def.items():
-            typed_entries = ascription.ascribe_type(method_def)
-
-            for entry in typed_entries:
-                # store results
-                entry_name = make_entry_name(entry.endpoint, entry.method)
-                entries[entry_name] = entry
-
-    return entries
-
-def generate_witnesses(
-    configuration, doc, doc_entries, hostname, base_path, 
-    exp_dir, entries, endpoints, uncovered_opt):
-    enable_debug = configuration.get(consts.KEY_DEBUG)
-
-    print("Analyzing provided log...")
-    log_analyzer = analyzer.LogAnalyzer(uncovered_opt)
-    prefilter = configuration.get(consts.KEY_SYNTHESIS) \
-                            .get(consts.KEY_SYN_PREFILTER)
-    skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
-
-    log_analyzer.analyze(
-        doc_entries,
-        entries,
-        skip_fields,
-        configuration.get(consts.KEY_BLACKLIST),
-        prefilter=prefilter)
-
-    groups = log_analyzer.analysis_result()
-    if enable_debug:
-        logging.debug("========== Start Logging Analyze Results ==========")
-        for g in groups:
-            logging.debug(g)
-
-    ascription = Ascription(log_analyzer, skip_fields)
-    entries = create_entries(doc_entries, configuration, ascription)
-
-    print("Getting more traces...")
-    engine = WitnessGenerator(
-        doc_entries, hostname, base_path, 
-        entries, log_analyzer,
-        configuration[consts.KEY_WITNESS][consts.KEY_TOKEN],
-        configuration[consts.KEY_WITNESS][consts.KEY_VALUE_DICT],
-        configuration[consts.KEY_WITNESS][consts.KEY_ANNOTATION],
-        exp_dir,
-        configuration[consts.KEY_PATH_TO_DEFS],
-        configuration.get(consts.KEY_SKIP_FIELDS),
-        configuration[consts.KEY_WITNESS][consts.KEY_PLOT_EVERY],
-    )
-
-    if configuration[consts.KEY_ANALYSIS][consts.KEY_PLOT_GRAPH]:
-        engine.to_graph(endpoints, "dependencies_0")
-
-    engine.saturate_all(
-        endpoints, configuration[consts.KEY_WITNESS][consts.KEY_ITERATIONS],
-        configuration[consts.KEY_WITNESS][consts.KEY_TIMEOUT],
-        configuration[consts.KEY_WITNESS][consts.KEY_MAX_OPT])
-
-    # ascribe types with the new analysis results
-    entries = create_entries(doc_entries, configuration, ascription)
-
-    print("Writing typed entries to file...")
-    constructor = Constructor(doc, log_analyzer)
-    projs_and_filters = constructor.construct_graph()
-    entries.update(projs_and_filters)
-    with open(os.path.join(exp_dir, consts.FILE_ENTRIES), "wb") as f:
-        pickle.dump(entries, f)
-
-    log_analyzer.index_values_by_type()
-    print("Writing graph to file...")
-    with open(os.path.join(exp_dir, consts.FILE_GRAPH), "wb") as f:
-        pickle.dump(log_analyzer, f)
-
-    if configuration[consts.KEY_ANALYSIS][consts.KEY_PLOT_GRAPH]:
-        dot = Digraph(strict=True)
-        log_analyzer.to_graph(dot, endpoints=endpoints)
-        dot.render(os.path.join("output/", "dependencies"), view=False)
 
 def main():
     cmd_parser = build_cmd_parser()

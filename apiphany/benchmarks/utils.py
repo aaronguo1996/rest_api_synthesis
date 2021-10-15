@@ -200,7 +200,28 @@ def to_syntactic_type(param):
     param.type = typ.to_syntactic()
     return param
 
-def prune_by_coverage(paths, configuration, witnesses, typed_entries, coverage):
+def create_entries(doc, config, ascription):
+    entries = {}
+
+    endpoints = config.get(consts.KEY_ENDPOINTS)
+    if not endpoints:
+        endpoints = doc.keys()
+
+    for endpoint, ep_def in doc.items():
+        if endpoint not in endpoints:
+            continue
+
+        for _, method_def in ep_def.items():
+            typed_entries = ascription.ascribe_type(method_def)
+
+            for entry in typed_entries:
+                # store results
+                entry_name = make_entry_name(entry.endpoint, entry.method)
+                entries[entry_name] = entry
+
+    return entries
+
+def prune_by_coverage(paths, witnesses, coverage):
     methods = set()
     for ep, ep_def in paths.items():
         for md in ep_def.keys():
@@ -215,33 +236,15 @@ def prune_by_coverage(paths, configuration, witnesses, typed_entries, coverage):
     curr_coverage = len(covered) / len(methods)
     if curr_coverage <= coverage or within_expected_coverage(curr_coverage, coverage):
         print("Warning: the provided coverage cannot be reached")
-        return None, witnesses, typed_entries
+        return witnesses
 
     # drop a random subset of methods to reach the target coverage
     expected_covered_num = math.floor(coverage * len(methods))
     sampled_covered = random.choices(list(covered), k=expected_covered_num)
-    
-    sampled_typed_entries = {}
-    for name, e in typed_entries.items():
-        if (e.endpoint, e.method) in sampled_covered:
-            sampled_typed_entries[name] = e
-        else: # default the excluded ones to syntactic types
-            sampled_typed_entries[name] = TraceEntry(
-                e.endpoint, e.method, e.content_type,
-                [to_syntactic_type(p) for p in e.parameters],
-                to_syntactic_type(e.response)
-            )
 
     sampled_witnesses = []
     for w in witnesses:
         if (w.endpoint, w.method.upper()) in sampled_covered:
             sampled_witnesses.append(w)
 
-    analyzer = LogAnalyzer(consts.UncoveredOption.DEFAULT_TO_SYNTACTIC)
-    analyzer.analyze(
-        paths, 
-        sampled_witnesses, 
-        configuration.get(consts.KEY_SKIP_FIELDS), 
-        configuration.get(consts.KEY_BLACKLIST))
-
-    return analyzer, sampled_witnesses, sampled_typed_entries
+    return sampled_witnesses

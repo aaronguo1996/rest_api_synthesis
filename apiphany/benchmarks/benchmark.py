@@ -2,16 +2,19 @@ import json
 import pickle
 import os
 import shutil
-import matplotlib.pyplot as plt
+from graphviz import Digraph
 
-from analyzer import dynamic
+from analyzer import dynamic, analyzer
+from analyzer.ascription import Ascription
 from analyzer.entry import ErrorResponse
 from openapi import defs
 from openapi.parser import OpenAPIParser
 from openapi.utils import read_doc
 from program.program import EquiExpr, ProjectionExpr, AppExpr
 from synthesizer import parallel
+from synthesizer.constructor import Constructor
 from synthesizer.synthesizer import Synthesizer
+from witnesses.engine import WitnessGenerator
 import benchmarks.utils as utils
 import consts
 
@@ -21,7 +24,8 @@ class BenchConfig:
         self, cache=False, repeat=15, filter_num=1,
         filter_sol_only=False, synthesis_only=False,
         bias_type=dynamic.BiasType.SIMPLE, use_parallel=True,
-        get_place_stats=False, method_coverage=1):
+        get_place_stats=False, generate_witness=False, method_coverage=1,
+        uncovered_opt=consts.UncoveredOption.DEFAULT_TO_SYNTACTIC):
         self.cache = cache
         self.repeat = repeat
         self.filter_num = filter_num
@@ -30,7 +34,9 @@ class BenchConfig:
         self.re_bias_type = bias_type
         self.use_parallel = use_parallel
         self.get_place_stats = get_place_stats
+        self.generate_witness = generate_witness
         self.method_coverage = method_coverage
+        self.uncovered_opt = uncovered_opt
 
 class BenchmarkResult:
     def __init__(self, name, desc):
@@ -186,7 +192,7 @@ class BenchmarkSuite:
         doc_file = self._configuration.get(consts.KEY_DOC_FILE)
         self._doc = read_doc(doc_file)
         openapi_parser = OpenAPIParser(self._doc)
-        _, base_path, doc_entries = openapi_parser.parse()
+        hostname, base_path, doc_entries = openapi_parser.parse()
 
         endpoints = self._configuration.get(consts.KEY_ENDPOINTS)
         if not endpoints:
@@ -204,22 +210,80 @@ class BenchmarkSuite:
             base_path, 
             doc_entries)
 
+        paths = self._doc.get(defs.DOC_PATHS)
+        self._entries = utils.prune_by_coverage(
+            paths, self._entries,
+            runtime_config.method_coverage)
+
+        if runtime_config.generate_witness:
+            self.generate_witnesses(
+                doc_entries, hostname, base_path,
+                self._entries, endpoints, 
+                runtime_config.uncovered_opt)
+
         with open(os.path.join(self._suite_dir, consts.FILE_ENTRIES), "rb") as f:
             self._typed_entries = pickle.load(f)
+        
+        with open(os.path.join(self._suite_dir, consts.FILE_GRAPH), "rb") as f:
+            self._log_analyzer = pickle.load(f)
 
-        # update the entries and witnesses
-        paths = self._doc.get(defs.DOC_PATHS)
-        prune_result = utils.prune_by_coverage(
-            paths,
-            self._configuration,
-            self._entries, 
-            self._typed_entries, 
-            runtime_config.method_coverage)
-        self._log_analyzer, self._entries, self._typed_entries = prune_result
+    def generate_witnesses(self, doc_entries, hostname, base_path, 
+        entries, endpoints, uncovered_opt):
+        print("Analyzing provided log...")
+        log_analyzer = analyzer.LogAnalyzer(uncovered_opt)
+        prefilter = self._configuration.get(consts.KEY_SYNTHESIS).get(consts.KEY_SYN_PREFILTER)
+        skip_fields = self._configuration.get(consts.KEY_SKIP_FIELDS)
+        
+        log_analyzer.analyze(
+            doc_entries,
+            entries,
+            skip_fields,
+            self._configuration.get(consts.KEY_BLACKLIST),
+            prefilter=prefilter)
 
-        if self._log_analyzer is None:
-            with open(os.path.join(self._suite_dir, consts.FILE_GRAPH), "rb") as f:
-                self._log_analyzer = pickle.load(f)
+        ascription = Ascription(log_analyzer, skip_fields)
+        entries = utils.create_entries(doc_entries, self._configuration, ascription)
+
+        print("Getting more traces...")
+        engine = WitnessGenerator(
+            doc_entries, hostname, base_path, entries, log_analyzer,
+            self._configuration[consts.KEY_WITNESS][consts.KEY_TOKEN],
+            self._configuration[consts.KEY_WITNESS][consts.KEY_VALUE_DICT],
+            self._configuration[consts.KEY_WITNESS][consts.KEY_ANNOTATION],
+            self._suite_dir,
+            self._configuration[consts.KEY_PATH_TO_DEFS],
+            self._configuration.get(consts.KEY_SKIP_FIELDS),
+            self._configuration[consts.KEY_WITNESS][consts.KEY_PLOT_EVERY],
+        )
+
+        if self._configuration[consts.KEY_ANALYSIS][consts.KEY_PLOT_GRAPH]:
+            engine.to_graph(endpoints, "dependencies_0")
+
+        engine.saturate_all(
+            endpoints, 
+            self._configuration[consts.KEY_WITNESS][consts.KEY_ITERATIONS],
+            self._configuration[consts.KEY_WITNESS][consts.KEY_TIMEOUT],
+            self._configuration[consts.KEY_WITNESS][consts.KEY_MAX_OPT])
+
+        # ascribe types with the new analysis results
+        entries = utils.create_entries(doc_entries, self._configuration, ascription)
+
+        print("Writing typed entries to file...")
+        constructor = Constructor(self._doc, log_analyzer)
+        projs_and_filters = constructor.construct_graph()
+        entries.update(projs_and_filters)
+        with open(os.path.join(self._suite_dir, consts.FILE_ENTRIES), "wb") as f:
+            pickle.dump(entries, f)
+
+        log_analyzer.index_values_by_type()
+        print("Writing graph to file...")
+        with open(os.path.join(self._suite_dir, consts.FILE_GRAPH), "wb") as f:
+            pickle.dump(log_analyzer, f)
+
+        if self._configuration[consts.KEY_ANALYSIS][consts.KEY_PLOT_GRAPH]:
+            dot = Digraph(strict=True)
+            log_analyzer.to_graph(dot, endpoints=endpoints)
+            dot.render(os.path.join("output/", "dependencies"), view=False)
 
     def get_info(self):
         # to get number of annotations, open the annotations file

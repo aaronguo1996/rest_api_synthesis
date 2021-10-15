@@ -24,7 +24,7 @@ def run_encoder(synthesizer, analyzer, entries, repeat_time, inputs, outputs, ex
     for typ in outputs:
         typ_name = str(typ.ignore_array())
         output_map[typ_name] += 1
-        
+
     config = synthesizer._config
     solver_type = config[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_TYPE]
     if solver_type == consts.SOLVER_PN_SMT:
@@ -51,7 +51,7 @@ def run_encoder(synthesizer, analyzer, entries, repeat_time, inputs, outputs, ex
         # get the most popular types
         max_types = sorted(place_counts, key=place_counts.get, reverse=True)
         print(max_types[:10])
-        
+
         return
 
     # write encoder stats to file
@@ -86,25 +86,25 @@ def run_encoder(synthesizer, analyzer, entries, repeat_time, inputs, outputs, ex
                 re_start = time.time()
                 cost = rust_re(
                     analyzer, p,
-                    list(inputs.items()), 
-                    isinstance(outputs[0], types.ArrayType), 
+                    list(inputs.items()),
+                    isinstance(outputs[0], types.ArrayType),
                     repeat_time)
                 re_time += time.time() - re_start
                 solutions.put((path_count, time.time() - start, p, re_time, cost))
-                
+
 
                 if p == expected_solution:
                     print("Found expected solution", flush=True)
                     solution_set.add(p)
                     free_up()
                     return consts.SearchStatus.FOUND_EXPECTED
-        
+
         encoder.block_prev(perms)
         path = encoder.solve()
 
-    print("Finished encoder running for path length", path_len, 
+    print("Finished encoder running for path length", path_len,
         "after time", time.time() - start, flush=True)
-    
+
     free_up()
     return consts.SearchStatus.NOT_FOUND
     # raise Exception("No solution found at this length")
@@ -134,15 +134,18 @@ def collect_parallel_data(synthesizer, all_solutions):
 def spawn_encoders(synthesizer, analyzer, entries, repeat_time, inputs, outputs, solver_num, expected_solution, timeout=60):
     m = multiprocessing.Manager()
     all_solutions = []
-    for i in range(consts.DEFAULT_LENGTH_LIMIT + 1):
+    for _ in range(consts.DEFAULT_LENGTH_LIMIT + 1):
         solutions = m.Queue()
         all_solutions.append(solutions)
-        
-    # def helper(i):
-    #     return run_encoder(synthesizer, analyzer, entries, repeat_time, inputs, outputs, i, expected_solution, all_solutions[i])
 
     pool = multiprocessing.Pool(processes=solver_num)
-    results = pool.imap_unordered(partial(run_encoder, synthesizer, analyzer, entries, repeat_time, inputs, outputs, expected_solution, all_solutions), range(consts.DEFAULT_LENGTH_LIMIT + 1))
+    results = pool.imap_unordered(
+        partial(run_encoder,
+                synthesizer, analyzer, entries,
+                repeat_time, inputs, outputs, expected_solution, all_solutions),
+        range(consts.DEFAULT_LENGTH_LIMIT + 1),
+        # [3]
+    )
     while True:
         try:
             status = results.next(timeout=timeout)
@@ -156,18 +159,6 @@ def spawn_encoders(synthesizer, analyzer, entries, repeat_time, inputs, outputs,
             print("Timeout", flush=True)
             pool.terminate()
             break
-        # except Exception as e:
-        #     print("exception:", e)
-        #     pool.terminate()
-        #     break
-    # for r in results:
-    #     status = r.get(timeout=timeout)
-    #     if status == consts.SearchStatus.FOUND_EXPECTED:
-    #         pool.terminate()
-
-    # for i in range(consts.DEFAULT_LENGTH_LIMIT + 1):
-    #     r = pool.apply_async(run_encoder, args=(synthesizer, analyzer, entries, repeat_time, inputs, outputs, i, expected_solution, all_solutions[i]), callback=callback)
-    #     results.append(r)
 
     pool.close()
     pool.join()

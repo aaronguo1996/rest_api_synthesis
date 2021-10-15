@@ -185,25 +185,16 @@ class ProgramGenerator:
                     arg_exprs.append((arg_name, expr))
 
                 old_args_list = [args[:] for args in args_list]
-                new_args_list = []
-                length_exceeded = False
                 for args in args_list:
                     if len(args) >= 5: # set a upper bound for how many parameter we will use
-                        length_exceeded = True
                         # replace any of the existing args instead of expanding it
                         for i in range(len(args)):
                             tmp_args = args[:]
                             tmp_args[i] = arg_exprs
-                            new_args_list.append(tmp_args)
+                            args_list.append(tmp_args)
                     else:
                         args.append(arg_exprs)
-                        new_args_list.append(args)
-
-                # exceeded list elements are added
-                if length_exceeded:
-                    args_list += new_args_list
-                else:
-                    args_list = new_args_list
+                        args_list.append(args)
 
                 # optional arguments can be either added or not
                 if not param.is_required:
