@@ -12,9 +12,10 @@ import consts
 from analyzer.utils import get_representative
 
 class Constructor:
-    def __init__(self, doc, analyzer):
+    def __init__(self, doc, analyzer, infer_types=True):
         self._doc = doc
         self._analyzer = analyzer
+        self._infer_types = infer_types
 
     def _create_projections(self):
         projections = {}
@@ -85,7 +86,7 @@ class Constructor:
                 )
 
                 is_array = prop.get(defs.DOC_TYPE) == defs.TYPE_ARRAY
-                out_type = types.construct_type(f"{field_name}.{name}", prop)
+                out_type = types.construct_type(f"{field_name}.{name}" if self._infer_types else None, prop)
 
                 # skip uninformative fields
                 if (isinstance(out_type, types.ObjectType) and
@@ -95,8 +96,9 @@ class Constructor:
                 proj_out = Parameter(
                     "", "field", endpoint, ["field"], True, int(is_array), out_type, None
                 )
-                proj_in = self._analyzer.find_same_type(proj_in)
-                proj_out = self._analyzer.find_same_type(proj_out)
+                if self._infer_types:
+                    proj_in = self._analyzer.find_same_type(proj_in)
+                    proj_out = self._analyzer.find_same_type(proj_out)
                 entry = TraceEntry(endpoint, "", None, [proj_in], proj_out)
                 result_key = make_entry_name(endpoint, "")
                 results[result_key] = entry
@@ -208,8 +210,12 @@ class Constructor:
                         "", "obj", endpoint,
                         ["obj"], True, 1, out_type, None
                     )
-                    filter_in = [self._analyzer.find_same_type(fin)
-                        for fin in filter_in]
+
+                    if self._infer_types:
+                        filter_in = [self._analyzer.find_same_type(fin)
+                            for fin in filter_in]
+                        if parts is None:
+                            filter_out = self._analyzer.find_same_type(filter_out)
 
                     entry = TraceEntry(endpoint, "", None, filter_in, filter_out)
                     result_key = make_entry_name(endpoint, "")
@@ -237,9 +243,11 @@ class Constructor:
                 "", "obj", endpoint,
                 ["obj"], True, 1, types.SchemaObject(obj_name), None
             )
-            filter_in = [self._analyzer.find_same_type(fin)
-                for fin in filter_in]
-            filter_out = self._analyzer.find_same_type(filter_out)
+
+            if self._infer_types:
+                filter_in = [self._analyzer.find_same_type(fin)
+                    for fin in filter_in]
+                filter_out = self._analyzer.find_same_type(filter_out)
 
             entry = TraceEntry(endpoint, "", None, filter_in, filter_out)
             result_key = make_entry_name(endpoint, "")

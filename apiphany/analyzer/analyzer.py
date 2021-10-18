@@ -538,7 +538,7 @@ class LogAnalyzer:
 
         return param
 
-    def set_type(self, param):
+    def set_type(self, param, infer_type=True):
         """set type for a given parameter
         if the parameter is an ad-hoc object,
         it will be splitted into several sub-params
@@ -546,6 +546,8 @@ class LogAnalyzer:
         Args:
             param: the request/response parameter to be splitted
         """
+        if not infer_type:
+            return param
         # if param.func_name == "/conversations.members":
         #     print("finding type for parameter", param)
         param_typ = param.type

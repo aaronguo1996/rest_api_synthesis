@@ -3,6 +3,7 @@
     "log_file": "data/logs/app.slack.com.20210104.har",
     "doc_file": "data/openapi/slack_web_openapi_v2_large_preprocess.json",
     "enable_debug": true,
+    "syntactic_only": true,
     "debug_output": "slack_debug.log",
     "hostname": "https://apitest-pk79527.slack.com",
     "path_to_definitions": "#/components/schemas",
