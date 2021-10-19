@@ -151,7 +151,7 @@ def collect_parallel_data(synthesizer, all_solutions):
 
 def spawn_encoders(synthesizer, analyzer, entries, 
     repeat_time, run_re, inputs, outputs, solver_num, expected_solution, 
-    conversion_fair, timeout=150):
+    conversion_fair, timeout=300):
     m = multiprocessing.Manager()
     all_solutions = []
     for _ in range(consts.DEFAULT_LENGTH_LIMIT + 1):
@@ -164,8 +164,8 @@ def spawn_encoders(synthesizer, analyzer, entries,
                 synthesizer, analyzer, entries,
                 repeat_time, run_re, inputs, outputs, expected_solution, conversion_fair,
                 all_solutions),
-        # range(consts.DEFAULT_LENGTH_LIMIT + 1),
-        [1,9]
+        range(consts.DEFAULT_LENGTH_LIMIT + 1),
+        # [1,9]
     )
     while True:
         try:
