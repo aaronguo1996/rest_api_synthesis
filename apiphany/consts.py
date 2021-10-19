@@ -3,7 +3,7 @@ from enum import Enum
 OBJ_MATCH_THRESHOLD = 0.6
 REF_PREFIX = "#/components/schemas/"
 CUSTOM_PREFIX = "x-"
-DEFAULT_LENGTH_LIMIT = 9
+DEFAULT_LENGTH_LIMIT = 10
 JSON_TYPE = "application/json"
 HOSTNAME_PREFIX = "https://"
 HOSTNAME_PREFIX_LEN = len(HOSTNAME_PREFIX)
@@ -52,6 +52,9 @@ FILE_GRAPH = "graph.pkl"
 
 SPACE = '    '
 MAX_COST = 99999.9
+
+EXP_DEFAULT = "default_apiphany"
+DATA_DEFAULT = "experiment_data_20210707_2056"
 
 class UncoveredOption(Enum):
     EXCLUDE = "exclude"

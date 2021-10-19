@@ -20,14 +20,15 @@ class Synthesizer:
         self._groups = {}
         self._group_names = {}
         self._landmarks = []
-        self._unique_entries = {}
         self._entries = entries
         self._program_generator = ProgramGenerator({})
         self._programs = {}
         # flags
         self._expand_group = config[consts.KEY_SYNTHESIS][consts.KEY_EXPAND_GROUP]
         self._block_perms = config[consts.KEY_SYNTHESIS][consts.KEY_BLOCK_PERM]
-        self._exp_dir = exp_dir
+        # public
+        self.unique_entries = {}
+        self.exp_dir = exp_dir
 
     @TimeStats(key=STATS_GRAPH)
     def init(self):
@@ -39,7 +40,7 @@ class Synthesizer:
         return results[0]
 
     def _write_solution(self, idx, t, p):
-        result_path = os.path.join(self._exp_dir, f"results_{idx}.txt")
+        result_path = os.path.join(self.exp_dir, f"results_{idx}.txt")
         with open(result_path, "a+") as f:
             f.write(f"time: {t: .2f}")
             f.write("\n")
@@ -49,8 +50,8 @@ class Synthesizer:
 
     # make this operation all-or-nothing
     def _serialize_solutions(self, idx, progs):
-        solution_path = os.path.join(self._exp_dir, f"solutions_{idx}.pkl")
-        bk_solution_path = os.path.join(self._exp_dir, f"solutions_{idx}_bk.pkl")
+        solution_path = os.path.join(self.exp_dir, f"solutions_{idx}.pkl")
+        bk_solution_path = os.path.join(self.exp_dir, f"solutions_{idx}_bk.pkl")
 
         if os.path.exists(solution_path):
             with open(solution_path, "rb") as f:
@@ -95,7 +96,7 @@ class Synthesizer:
         all_topological_sorts(perms, pgraph, [], {})
         return perms
 
-    def _generate_solutions(self, i, inputs, outputs, result, time):
+    def generate_solutions(self, i, inputs, outputs, result, time):
         programs = set()
 
         groups = self._expand_groups(result) 
@@ -126,8 +127,11 @@ class Synthesizer:
         else:
             raise Exception("Unknown solver type in config")
 
-        for name, e in self._unique_entries.items():
+        for name, e in self.unique_entries.items():
             self._encoder.add_transition(name, e)
+
+    def type_exists(self, typ_name):
+        return self._encoder.type_exists(typ_name)
 
     def run_n(self, landmarks, inputs, outputs, n):
         """Single process version of synthesis
@@ -149,12 +153,23 @@ class Synthesizer:
         input_map = defaultdict(int)
         for _, typ in inputs.items():
             typ_name = str(typ.ignore_array())
+            # double check whether the type name is available in the encoder
+            # if not, default to its primitive type
+            if not self._encoder.type_exists(typ_name):
+                typ_name = typ.get_primitive_name()
+
             input_map[typ_name] += 1
 
         output_map = defaultdict(int)
         for typ in outputs:
             typ_name = str(typ.ignore_array())
+            if not self._encoder.type_exists(typ_name):
+                typ_name = typ.get_primitive_name()
+
             output_map[typ_name] += 1
+
+        print("input_map", input_map)
+        pirnt("output_map", output_map)
 
         start = time.time()
         self._encoder.init(input_map, output_map)
@@ -165,7 +180,7 @@ class Synthesizer:
             result = self._encoder.solve()
             while result is not None:
                 # print("Find path", result, flush=True)
-                programs, perms = self._generate_solutions(
+                programs, perms = self.generate_solutions(
                     0, inputs, outputs, result, 
                     time.time() - start
                 )
@@ -196,7 +211,7 @@ class Synthesizer:
             pickle.dump(solutions, f)
 
         # write petri net data
-        encoder_path = os.path.join(self._exp_dir, "encoder.txt")
+        encoder_path = os.path.join(self.exp_dir, "encoder.txt")
         with open(encoder_path, "w") as f:
             f.write(str(len(self._encoder._net.place())))
             f.write("\n")
@@ -245,7 +260,9 @@ class Synthesizer:
             # "projection(customer, id)_"
             # "projection(payment_source, type)_"
 
+            # "/admin.conversations.search_GET",
             # "/conversations.list_GET",
+            # "projection(objs_user, profile)_",
             # "/users.profile.get_GET",
             # "/conversations.members_GET",
             # "/users.lookupByEmail_GET",
@@ -320,7 +337,7 @@ class Synthesizer:
         for name, e in self._entries.items():
             self._program_generator.add_signature(name, e)
 
-        self._unique_entries = unique_entries
+        self.unique_entries = unique_entries
 
     def _group_transitions(self, transitions):
         # group projections with the same input and output

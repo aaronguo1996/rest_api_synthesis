@@ -506,8 +506,8 @@ class LogAnalyzer:
                 if rep is not None:
                     return rep
 
-        # if no representative found, return the primitive type
-        return typ.get_primitive_name()
+        # if no representative found, return its name
+        return typ.name # typ.get_primitive_name()
 
     def find_same_type(self, param):
         if isinstance(param.type, types.UnionType):

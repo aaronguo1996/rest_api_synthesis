@@ -15,6 +15,7 @@ import enum
 import matplotlib.pyplot as plt
 import os
 import pickle
+import cProfile
 from graphviz import Digraph
 
 from analyzer import dynamic
@@ -69,8 +70,12 @@ def build_cmd_parser():
     # synthesis options
     parser.add_argument("--synthesis-only", action='store_true',
         help="Whether to run ranking")
+    parser.add_argument("--conversion-fair", action='store_true',
+        help="Whether to treat conversion transitions fair")
     
     # retrospective execution options
+    parser.add_argument("--run-re", action='store_true',
+        help="Whether to run retrospective execution")
     parser.add_argument("--repeat", type=int, nargs='?', default=5,
         help="Number of times to repeat filtering")
     parser.add_argument("--filter-num", type=int, nargs='?', default=3,
@@ -98,8 +103,13 @@ def build_cmd_parser():
         help="Whether to plot how many benchmarks are solved vs time for given experiments")
     parser.add_argument("--plot-ranks", nargs='*',
         help="Whether to plot rank vs time for given experiments")
+
+    # default values
     parser.set_defaults(
         filter_sol_only=False,
+        generate_witness=False,
+        method_coverage=1.0,
+        conversion_fair=False,
         print_results=False,
         print_api_info=False,
         cache=False)
@@ -236,15 +246,19 @@ def main():
             generate_witness=args.generate_witness,
             method_coverage=args.method_coverage,
             uncovered_opt=args.uncovered,
+            run_re=args.run_re,
+            conversion_fair=args.conversion_fair,
         )
         b = Bencher(
             args.exp_name,
             [
                 slack_suite,
-                stripe_suite,
-                square_suite,
+                # stripe_suite,
+                # square_suite,
             ],
             config)
+
+        # with cProfile.Profile() as p:
         b.run(
             args.data_dir,
             args.names,
@@ -254,6 +268,8 @@ def main():
             print_appendix=False,
             plot_ranks=False,
             cached_results=False)
+
+            # p.print_stats()
 
 if __name__ == '__main__':
     main()

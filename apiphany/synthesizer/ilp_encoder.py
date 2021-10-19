@@ -28,6 +28,7 @@ class ILPetriEncoder:
         self._cf = None
         self._soln_ix = None
         self._finals = None
+        self._conversions = gp.tupledict()
 
         # encode place and transition names into integers
         self._place_names = []
@@ -61,13 +62,19 @@ class ILPetriEncoder:
 
         return res
 
-    def get_length_of(self, path_len, inputs, outputs):
+    def get_length_of(self, path_len, inputs, outputs, conversion_fair=False):
         self.init(inputs, outputs)
         while self._path_len < path_len:
             self.increment()
         self.set_final(outputs)
 
+        if not conversion_fair:
+            self.set_objective()
+
         return self.solve()
+
+    def type_exists(self, typ_name):
+        return self._net.has_place(typ_name)
 
     def solve(self):
         # previous run failed; assume everything's been incremented and rerun the solver
@@ -77,9 +84,9 @@ class ILPetriEncoder:
             self._model.setParam(GRB.Param.SolutionNumber, 0)
             start = time.time()
             self._model.optimize()
-            # print("running solver | sols:", self._model.solCount, 
-            #     "| len:", self._path_len, 
-            #     "| solve time:", time.time() - start)
+            print("running solver | sols:", self._model.solCount, 
+                "| len:", self._path_len, 
+                "| solve time:", time.time() - start)
         # uncomment for batch/tiled blocking
         # elif self._soln_ix >= SOLS_PER_SOLVE:
         #     # run the solver
@@ -203,6 +210,9 @@ class ILPetriEncoder:
             self._fires[(t_idx, ck)] = self._model.addVar(
                 name=f'fires[{t_idx},{ck}]',
                 vtype=GRB.BINARY)
+            if "convert_" in trans_name:
+                self._conversions[(t_idx, ck)] = self._fires[(t_idx, ck)]
+
 
             # This transition can be fired some non-negative number of times.
             self._model.addConstr(
@@ -398,3 +408,8 @@ class ILPetriEncoder:
         self._finals = typs
         self._reset_finals(self._path_len)
 
+    def set_objective(self):
+        self._model.setObjective(
+            self._conversions.sum(),
+            GRB.MINIMIZE)
+        # self._model.addConstr(self._conversions.sum() == 0, name='no convert')

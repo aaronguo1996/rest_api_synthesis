@@ -17,6 +17,9 @@ class Expression:
     def __repr__(self):
         return self.__str__()
 
+    def __hash__(self):
+        return hash(self.__str__())
+
     def apply_subst(self):
         raise NotImplementedError
 
@@ -1251,7 +1254,9 @@ def insert_binds(counter, var, arg_typ):
     # if two types match with each other
     if (var_typ is not None and
         arg_typ is not None and
-        str(var_typ) == str(arg_typ)):
+        (str(var_typ) == str(arg_typ) or
+        var_typ.get_primitive_name() == str(arg_typ) or
+        str(var_typ) == arg_typ.get_primitive_name())):
         # print("No binding, real var type", var.type, ", expect arg type", arg_typ)
         return [], var.var
 

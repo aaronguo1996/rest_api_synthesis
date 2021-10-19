@@ -31,14 +31,17 @@ class ProgramGenerator:
             self._add_typed_var(typ_subst, VarExpr(name, in_typ), in_typ)
 
         for trans in transitions:
-            if "_clone" in trans or "convert_" in trans:
-                continue
+            if "_clone" in trans:
+                continue    
 
             sig = self._signatures.get(trans)
             if not sig:
                 raise Exception(f"Unknown transition name {trans}")
 
-            if re.search(r"projection\(.*, .*\)", sig.endpoint):
+            if "convert_" in trans:
+                # copy expressions with semantic types to corresponding syntactic types
+                self._to_syntactic_mapping(typ_subst, sig)
+            elif re.search(r"projection\(.*, .*\)", sig.endpoint):
                 self._generate_projection(typ_subst, expr_subst, sig)
             elif re.search(r"filter\(.*, .*\)", sig.endpoint):
                 self._generate_filter(typ_subst, expr_subst, sig)
@@ -65,6 +68,7 @@ class ProgramGenerator:
         for body in program_bodys:
             p = Program(list(inputs.keys()), body)
             p._expressions = p.reachable_expressions({})
+            # print(p)
             if self._filter_by_names(self._signatures, transitions, inputs, p):
                 # print("Before lifting", p, flush=True)
                 p = p.lift(self._name_counters, self._signatures, target)
@@ -76,11 +80,17 @@ class ProgramGenerator:
         # raise Exception
         return programs
 
+    def _to_syntactic_mapping(self, typ_subst, sig):
+        from_typ = str(sig.parameters[0].type)
+        to_typ = str(sig.response.type)
+        exprs = typ_subst.get(from_typ, [])
+        typ_subst[to_typ] = [k for k,_ in itertools.groupby(sorted(typ_subst.get(to_typ, []) + exprs, key=str))]
+
     def _filter_by_names(self, signatures, transitions, inputs, result):
         name_counts = defaultdict(int)
         name_counts.clear()
         for tr in transitions:
-            if "_clone" in tr:
+            if "_clone" in tr or "convert_" in tr:
                 continue
             elif re.search(r"projection\(.*, .*\)", tr):
                 sig = signatures.get(tr)
@@ -164,6 +174,7 @@ class ProgramGenerator:
             typ = param.type
             typ_name = str(typ.ignore_array())
             if param.is_required and typ_name not in typ_subst:
+                print(typ_subst)
                 raise Exception(
                     f"Given path is spurious, "
                     f"no program can be generated for {sig.endpoint}"
@@ -171,6 +182,9 @@ class ProgramGenerator:
 
             exprs = typ_subst.get(typ_name)
             if exprs is not None:
+                if exprs == []:
+                    print("Find no expression for type", typ_name)
+
                 # print("Find expressions for type", typ)
                 arg_exprs = []
                 for expr in exprs:
@@ -185,16 +199,16 @@ class ProgramGenerator:
                     arg_exprs.append((arg_name, expr))
 
                 old_args_list = [args[:] for args in args_list]
-                for args in args_list:
-                    if len(args) >= 5: # set a upper bound for how many parameter we will use
+                for i, args in enumerate(old_args_list):
+                    if len(args) >= 4: 
+                        # set a upper bound for how many parameter we will use
                         # replace any of the existing args instead of expanding it
                         for i in range(len(args)):
                             tmp_args = args[:]
                             tmp_args[i] = arg_exprs
                             args_list.append(tmp_args)
                     else:
-                        args.append(arg_exprs)
-                        args_list.append(args)
+                        args_list[i].append(arg_exprs)
 
                 # optional arguments can be either added or not
                 if not param.is_required:

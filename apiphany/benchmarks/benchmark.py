@@ -1,3 +1,4 @@
+import cProfile
 import json
 import pickle
 import os
@@ -25,7 +26,8 @@ class BenchConfig:
         filter_sol_only=False, synthesis_only=False,
         bias_type=dynamic.BiasType.SIMPLE, use_parallel=True,
         get_place_stats=False, generate_witness=False, method_coverage=1,
-        uncovered_opt=consts.UncoveredOption.DEFAULT_TO_SYNTACTIC):
+        uncovered_opt=consts.UncoveredOption.DEFAULT_TO_SYNTACTIC, run_re=False,
+        conversion_fair=False,):
         self.cache = cache
         self.repeat = repeat
         self.filter_num = filter_num
@@ -37,6 +39,8 @@ class BenchConfig:
         self.generate_witness = generate_witness
         self.method_coverage = method_coverage
         self.uncovered_opt = uncovered_opt
+        self.run_re = run_re
+        self.conversion_fair = conversion_fair
 
 class BenchmarkResult:
     def __init__(self, name, desc):
@@ -101,17 +105,21 @@ class Benchmark:
             rep_output = self.output.ignore_array()
             rep_output.name = analyzer.find_representative_for_type(rep_output)
 
-            print("inputs", rep_inputs)
-            print("output", rep_output)
+            # print("inputs", rep_inputs)
+            # print("output", rep_output)
+            # with cProfile.Profile() as p:
             parallel.spawn_encoders(
                 synthesizer,
                 analyzer,
                 indexed_entries,
                 runtime_config.repeat,
+                runtime_config.run_re,
                 rep_inputs, [rep_output],
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM],
-                self.solutions[0]
+                self.solutions[0],
+                runtime_config.conversion_fair,
             )
+                # p.sort_stats("cumulative").print_stats(999999)
             
         solutions = []
         prev_solutions = {}
@@ -417,7 +425,7 @@ class Bencher:
         self._suites = suites
         self._config = config
 
-    def run(self, data_dir, names, 
+    def run(self, data_dir, names,
         cached_results=False, 
         print_api=False, 
         print_results=False, 
@@ -431,6 +439,11 @@ class Bencher:
         if print_appendix:
             self.print_appendix(output)
         
+        exp_dir = os.path.join(data_dir, self._exp_name)
+        if not os.path.exists(exp_dir):
+            src_dir = os.path.join("../", consts.DATA_DEFAULT, consts.EXP_DEFAULT)
+            shutil.copytree(src_dir, exp_dir)
+
         for suite in self._suites:
             suite.prep(data_dir, self._exp_name, self._config)
             if self._config.get_place_stats:

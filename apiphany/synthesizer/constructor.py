@@ -1,5 +1,7 @@
 import jsonref
 import json
+import copy
+import random
 
 from openapi import defs
 from analyzer.entry import Parameter, TraceEntry
@@ -285,27 +287,47 @@ class Constructor:
 
         return results
 
-    def _construct_type_trans(self):
+    def _construct_type_trans(self, projections):
         results = {}
 
         # for all semantic types, transition to its syntactic type
+        semantic_types = {}
+
+        # semantic types appear in the union-find results
         groups = self._analyzer.dsu.groups()
         for group in groups:
             rep = get_representative(group)
+            if rep is not None:
+                param = random.choice(list(group))
+                while param.type is None or param.type.name is None:
+                    param = random.choice(list(group))
+                    
+                semantic_types[rep] = param
+
+        # semantic types appear in the projections (this should subsumes those in filters)
+        for proj in projections.values():
+            for param in proj.parameters + [proj.response]:
+                if param.type.name is not None:
+                    semantic_types[param.type.name] = param
+
+        for name, param in semantic_types.items():
             if (self._analyzer._uncovered_opt != consts.UncoveredOption.EXCLUDE and (
-                rep != defs.TYPE_BOOL and
-                rep != defs.TYPE_INT and
-                rep != defs.TYPE_STRING and
-                rep != defs.TYPE_NUM and
-                rep != defs.TYPE_OBJECT)):
-                prim_name = group.type.get_primitive_name()
-                name = make_type_transition_name(rep, prim_name)
-                results[name] = TraceEntry(
-                    name, "", None,
-                    [Parameter("", "in", name, ["in"], True, None, 
-                        types.SchemaObject(rep), None)],
-                    Parameter("", "out", name, ["out"], True, None,
-                        types.SchemaObject(prim_name), None)
+                name != defs.TYPE_BOOL and
+                name != defs.TYPE_INT and
+                name != defs.TYPE_STRING and
+                name != defs.TYPE_NUM and
+                name != defs.TYPE_OBJECT)):
+                prim_name = param.type.get_primitive_name()
+                out_type = copy.deepcopy(param.type)
+                out_type = out_type.to_syntactic()
+
+                trans_name = make_type_transition_name(name, prim_name)
+                results[trans_name] = TraceEntry(
+                    trans_name, "", None,
+                    [Parameter("", "in", trans_name, ["in"], True, None, 
+                        param.type, None)],
+                    Parameter("", "out", trans_name, ["out"], True, None,
+                        out_type, None)
                 )
 
         return results
@@ -313,7 +335,7 @@ class Constructor:
     def construct_graph(self):
         projections = self._create_projections()
         filters = self._create_filters()
-        transitions = self._construct_type_trans()
+        transitions = self._construct_type_trans(projections)
         entries = dict(projections)
         entries.update(filters)
         entries.update(transitions)
