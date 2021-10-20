@@ -37,6 +37,14 @@ impl RValue {
         }
     }
 
+    pub fn is_none(&self) -> bool {
+        match self {
+            RValue::Null => true,
+            RValue::String(s) => s.is_empty(),
+            _ => false,
+        }
+    }
+
     pub fn as_array(&self) -> Option<&SmallVec<[ValueIx; 4]>> {
         match self {
             RValue::Array(a) => Some(a),

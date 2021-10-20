@@ -303,7 +303,7 @@ impl<'a> ExecEnv<'a> {
                         }
                     }
 
-                    if let RValue::Null = tmp.1 {
+                    if tmp.1.is_none() {
                         self.set_error();
                         continue 'outer;
                     }

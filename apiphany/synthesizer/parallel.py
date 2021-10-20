@@ -16,8 +16,8 @@ from schemas import types
 
 
 def run_encoder(synthesizer, analyzer, entries, 
-    repeat_time, run_re, inputs, outputs, expected_solution, conversion_fair, 
-    all_solutions, path_len):
+    repeat_time, run_re, inputs, outputs, is_array_output,
+    expected_solution, conversion_fair, all_solutions, path_len):
     solutions = all_solutions[path_len]
     config = synthesizer._config
     solver_type = config[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_TYPE]
@@ -58,8 +58,16 @@ def run_encoder(synthesizer, analyzer, entries,
         # temporary for rebuttal
         place_counts = {}
         for p in encoder._net.place():
-            num_pre = len([tr for tr in encoder._net.pre(p.name) if "projection" not in tr and "filter" not in tr])
-            num_post = len([tr for tr in encoder._net.post(p.name) if "projection" not in tr and "filter" not in tr])
+            num_pre = 0
+            for tr in encoder._net.pre(p.name):
+                if "projection" not in tr and "filter" not in tr:
+                    num_pre += 1
+
+            num_post = 0
+            for tr in encoder._net.post(p.name):
+                if "projection" not in tr and "filter" not in tr:
+                    num_post += 1
+
             num_connection = num_pre + num_post
             place_counts[p.name] = num_connection
 
@@ -103,7 +111,7 @@ def run_encoder(synthesizer, analyzer, entries,
                     cost = rust_re(
                         analyzer, p,
                         list(inputs.items()),
-                        isinstance(outputs[0], types.ArrayType),
+                        is_array_output,
                         repeat_time)
                 else:
                     cost = None
@@ -154,8 +162,8 @@ def collect_parallel_data(synthesizer, all_solutions):
         f.write("\n")
 
 def spawn_encoders(synthesizer, analyzer, entries, 
-    repeat_time, run_re, inputs, outputs, solver_num, expected_solution, 
-    conversion_fair, timeout=300):
+    repeat_time, run_re, inputs, outputs, is_array_output,
+    solver_num, expected_solution, conversion_fair, timeout=300):
     m = multiprocessing.Manager()
     all_solutions = []
     for _ in range(consts.DEFAULT_LENGTH_LIMIT + 1):
@@ -166,7 +174,8 @@ def spawn_encoders(synthesizer, analyzer, entries,
     results = pool.imap_unordered(
         partial(run_encoder,
                 synthesizer, analyzer, entries,
-                repeat_time, run_re, inputs, outputs, expected_solution, conversion_fair,
+                repeat_time, run_re, inputs, outputs, is_array_output,
+                expected_solution, conversion_fair,
                 all_solutions),
         range(consts.DEFAULT_LENGTH_LIMIT + 1),
         # [1,9]

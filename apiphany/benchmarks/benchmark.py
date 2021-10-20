@@ -18,6 +18,7 @@ from synthesizer.synthesizer import Synthesizer
 from witnesses.engine import WitnessGenerator
 import benchmarks.utils as utils
 import consts
+from schemas import types
 
 
 class BenchConfig:
@@ -101,6 +102,7 @@ class Benchmark:
                 tip.name = analyzer.find_representative_for_type(tip)
                 rep_inputs[ip] = tip
 
+            is_array_output = isinstance(self.output, types.ArrayType)
             rep_output = self.output.ignore_array()
             rep_output.name = analyzer.find_representative_for_type(rep_output)
 
@@ -113,7 +115,7 @@ class Benchmark:
                 indexed_entries,
                 runtime_config.repeat,
                 not runtime_config.synthesis_only,
-                rep_inputs, [rep_output],
+                rep_inputs, [rep_output], is_array_output,
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM],
                 self.solutions[0],
                 runtime_config.conversion_fair,

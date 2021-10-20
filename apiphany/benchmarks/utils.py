@@ -129,7 +129,7 @@ def index_entries(entries, skip_fields):
     index_result = {}
     for e in entries:
         if (isinstance(e.response, ErrorResponse) or
-            e.response.value is None):
+            not e.response.value):
             continue
 
         ep = e.endpoint
@@ -161,7 +161,7 @@ def index_entries(entries, skip_fields):
             if v == e.response.value:
                 found = True
 
-        if not found:
+        if not found and e.response.value:
             weight = get_obj_weight(e.response.value)
             index_result[fun][param_names].append(
                 (param_values, e.response.value, weight)

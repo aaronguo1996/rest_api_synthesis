@@ -68,7 +68,7 @@ def build_cmd_parser():
         help="Whether to treat conversion transitions fair")
     
     # retrospective execution options
-    parser.add_argument("--repeat", type=int, nargs='?', default=5,
+    parser.add_argument("--repeat", type=int, nargs='?', default=15,
         help="Number of times to repeat filtering")
     parser.add_argument("--filter-num", type=int, nargs='?', default=3,
         help="Number of times to run filtering")

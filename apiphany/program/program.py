@@ -240,8 +240,8 @@ class AppExpr(Expression):
         # match the expected type with its actual type
         for name, arg in self._args:
             param = self.lookup_param(name)
-            print("param type", param.type)
-            print("arg type", arg.type)
+            # print("param type", param.type)
+            # print("arg type", arg.type)
             if str(arg.type) != str(param.type):
                 return True
 
