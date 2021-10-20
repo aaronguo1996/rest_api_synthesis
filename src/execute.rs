@@ -292,7 +292,7 @@ impl<'a> ExecEnv<'a> {
                     let mut tmp = (x, heap.get(x)?);
 
                     for path in self.arena.get_str(f).split('.') {
-                        // println!("{:?}", tmp);
+                        println!("{:?}", tmp);
 
                         if let Some(v) = tmp.1.get(path, &heap) {
                             tmp = v;
@@ -308,7 +308,7 @@ impl<'a> ExecEnv<'a> {
                         continue 'outer;
                     }
 
-                    // println!("{:?}", tmp);
+                    println!("{:?}", tmp);
                     self.data.push(tmp.0);
 
                     self.ip += 1;
@@ -619,12 +619,22 @@ impl Arena {
         };
 
         if !responses.is_empty() {
+            println!(
+                "trace found for: {:?}\nnames: {:?}\nvals: {:?}",
+                self.get_str(&f),
+                args
+                    .iter()
+                    .map(|x| self.get_str(x))
+                    .collect::<Vec<_>>(),
+                vals
+            );
             let dist = WeightedIndex::new(&weights).unwrap();
             let mut rng = thread_rng();
             Some(responses[dist.sample(&mut rng)])
 
             // Some(responses[weighted_choice(&weights)])
         } else {
+            println!("trace not found for {:?} and {:?}", args, vals);
             None
         }
     }

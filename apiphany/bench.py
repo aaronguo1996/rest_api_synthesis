@@ -16,16 +16,10 @@ import matplotlib.pyplot as plt
 import os
 import pickle
 import cProfile
-from graphviz import Digraph
 
 from analyzer import dynamic
-from analyzer.ascription import Ascription
 from benchmarks.benchmark import BenchConfig, Bencher
 from benchmarks.suites import slack_suite, stripe_suite, square_suite
-from synthesizer.constructor import Constructor
-from synthesizer.utils import make_entry_name
-from witnesses.engine import WitnessGenerator
-import analyzer
 import consts
 
 bias_type_args = {
@@ -74,8 +68,6 @@ def build_cmd_parser():
         help="Whether to treat conversion transitions fair")
     
     # retrospective execution options
-    parser.add_argument("--run-re", action='store_true',
-        help="Whether to run retrospective execution")
     parser.add_argument("--repeat", type=int, nargs='?', default=5,
         help="Number of times to repeat filtering")
     parser.add_argument("--filter-num", type=int, nargs='?', default=3,
@@ -246,7 +238,6 @@ def main():
             generate_witness=args.generate_witness,
             method_coverage=args.method_coverage,
             uncovered_opt=args.uncovered,
-            run_re=args.run_re,
             conversion_fair=args.conversion_fair,
         )
         b = Bencher(

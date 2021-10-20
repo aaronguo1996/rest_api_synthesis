@@ -26,7 +26,7 @@ class BenchConfig:
         filter_sol_only=False, synthesis_only=False,
         bias_type=dynamic.BiasType.SIMPLE, use_parallel=True,
         get_place_stats=False, generate_witness=False, method_coverage=1,
-        uncovered_opt=consts.UncoveredOption.DEFAULT_TO_SYNTACTIC, run_re=False,
+        uncovered_opt=consts.UncoveredOption.DEFAULT_TO_SYNTACTIC,
         conversion_fair=False,):
         self.cache = cache
         self.repeat = repeat
@@ -39,7 +39,6 @@ class BenchConfig:
         self.generate_witness = generate_witness
         self.method_coverage = method_coverage
         self.uncovered_opt = uncovered_opt
-        self.run_re = run_re
         self.conversion_fair = conversion_fair
 
 class BenchmarkResult:
@@ -113,7 +112,7 @@ class Benchmark:
                 analyzer,
                 indexed_entries,
                 runtime_config.repeat,
-                runtime_config.run_re,
+                not runtime_config.synthesis_only,
                 rep_inputs, [rep_output],
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM],
                 self.solutions[0],
@@ -154,6 +153,8 @@ class Benchmark:
         re_time = None
         solution_found = False
         for rank, (syn_time, sol_prog, re_time, cost) in enumerate(sorted_candidates):            
+            print(rank, cost)
+            print(sol_prog)
             if sol_prog in self.solutions:
                 print("Solution found")
                 print(sol_prog, "has cost", cost)
@@ -406,6 +407,7 @@ class BenchmarkSuite:
                     for sol in solutions:
                         flat_solutions += sol
 
+                    flat_solutions = list({s[1]:s for s in flat_solutions}.values())
                     latex_entry = benchmark.to_latex_entry(path_cnt, flat_solutions)
                     latex_entries.append(latex_entry)
 
