@@ -35,6 +35,9 @@ class Expression:
     def collect_exprs(self):
         raise NotImplementedError
 
+    def has_conversion(self):
+        return False
+
 class AppExpr(Expression):
     def __init__(self, fun, args, typ=None, sig=None):
         super().__init__(typ, sig)
@@ -70,7 +73,7 @@ class AppExpr(Expression):
 
     def apply_subst(self, subst):
         args = [(x, arg.apply_subst(subst)) for x, arg in self._args]
-        return AppExpr(self._fun, args, self.type)
+        return AppExpr(self._fun, args, self.type, self.signature)
 
     def collect_exprs(self):
         res = [self]
@@ -174,7 +177,7 @@ class AppExpr(Expression):
                 args.append((name, arg_expr))
                 exprs.extend(arg_exprs)
 
-            app_expr = AppExpr(self._fun, args, self.type)
+            app_expr = AppExpr(self._fun, args, self.type, self.signature)
 
             let_x = counter.get("x", 0)
             counter["x"] += 1
@@ -191,21 +194,23 @@ class AppExpr(Expression):
 
         return exprs, let_var
 
+    def lookup_param(self, name):
+        path = name_to_path(name)
+        params = self.signature.parameters
+        for param in params:
+            if param.path == path:
+                return param
+
     def lift(self, counter, signatures):
         sig = self.signature
-        sig_params = sig.parameters
         
         arguments = []
         exprs = []
         for name, arg in self._args:
-            path = name_to_path(name)
-            for param in sig_params:
-                if path == param.path:
-                    break
-
-            arg_binds, x = insert_binds(counter, arg, param.type)
+            param = self.lookup_param(name)
+            arg_binds, x, xt = insert_binds(counter, arg, param.type)
             exprs += arg_binds
-            arguments.append((name, VarExpr(x, param.type)))
+            arguments.append((name, VarExpr(x, xt)))
 
         app_expr = AppExpr(self._fun, arguments, sig.response.type, sig)        
         return exprs, app_expr
@@ -230,6 +235,17 @@ class AppExpr(Expression):
             size += sz
 
         return (num_endpoints + 1), num_projections, (size + 1)
+
+    def has_conversion(self):
+        # match the expected type with its actual type
+        for name, arg in self._args:
+            param = self.lookup_param(name)
+            print("param type", param.type)
+            print("arg type", arg.type)
+            if str(arg.type) != str(param.type):
+                return True
+
+        return False
 
 class VarExpr(Expression):
     def __init__(self, x, typ=None, sig=None):
@@ -331,6 +347,7 @@ class ProjectionExpr(Expression):
             self._obj.apply_subst(subst),
             self._field,
             self.type,
+            self.signature,
         )
 
     def collect_exprs(self):
@@ -387,7 +404,7 @@ class ProjectionExpr(Expression):
             proj_expr = var
         else:
             exprs, obj_expr = self._obj.to_multiline(signatures, subst, counter)
-            proj_expr = ProjectionExpr(obj_expr, self._field, self.type)
+            proj_expr = ProjectionExpr(obj_expr, self._field, self.type, self.signature)
 
             proj_trans = f"projection({self._obj.type}, {self._field})"
             proj_name = make_entry_name(proj_trans, "")
@@ -409,11 +426,11 @@ class ProjectionExpr(Expression):
         proj_sig = self.signature
         
         param = proj_sig.parameters[0]
-        arg_binds, x = insert_binds(counter, self._obj, param.type)
+        arg_binds, x, xt = insert_binds(counter, self._obj, param.type)
         proj_expr = ProjectionExpr(
             VarExpr(x, param.type),
             self._field,
-            proj_sig.response.type,
+            xt,
             proj_sig)
         return arg_binds, proj_expr
 
@@ -672,8 +689,8 @@ class FilterExpr(Expression):
         # print("filter sig", [p.type for p in filter_sig.parameters], filter_sig.response.type)
         
         obj_param = filter_sig.parameters[0]
-        obj_binds, obj_x = insert_binds(counter, self._obj, obj_param.type)
-        obj_expr = VarExpr(obj_x, obj_param.type)
+        obj_binds, obj_x, xt = insert_binds(counter, self._obj, obj_param.type)
+        obj_expr = VarExpr(obj_x, xt)
 
         fields = self._field.split('.')
         in_typ = obj_param.type
@@ -694,10 +711,10 @@ class FilterExpr(Expression):
 
         val_param = filter_sig.parameters[1]
         # print("val param type", val_param.type, flush=True)
-        lhs_binds, lhs_x = insert_binds(counter, in_obj, val_param.type)
-        in_obj = VarExpr(lhs_x, val_param.type)
-        val_binds, val_x = insert_binds(counter, self._val, val_param.type)
-        val = VarExpr(val_x, val_param.type)
+        lhs_binds, lhs_x, lhs_t = insert_binds(counter, in_obj, val_param.type)
+        in_obj = VarExpr(lhs_x, lhs_t)
+        val_binds, val_x, val_t = insert_binds(counter, self._val, val_param.type)
+        val = VarExpr(val_x, val_t)
 
         filter_expr = EquiExpr(in_obj, val)
 
@@ -859,6 +876,9 @@ class AssignExpr(Expression):
         binds.append(expr)
         return binds
 
+    def has_conversion(self):
+        return self._rhs.has_conversion()
+
 class ProgramGraph:
     def __init__(self):
         self._adj = {}
@@ -946,6 +966,13 @@ class Program:
 
     def __repr__(self):
         return self.__str__()
+
+    def has_conversion(self):
+        for expr in self._expressions:
+            if expr.has_conversion():
+                return True
+
+        return False
 
     def to_expression(self, subst={}):
         exprs = []
@@ -1075,7 +1102,7 @@ class Program:
                 exprs += lifted_exprs
             else: # return statement
                 # FIXME: is this correct?
-                binds, x = insert_binds(counter, expr, target.ignore_array())
+                binds, x, _ = insert_binds(counter, expr, target.ignore_array())
                 exprs += binds
                 exprs.append(VarExpr(x, target))
 
@@ -1231,9 +1258,13 @@ def insert_lists(counter, var, arg_typ):
     # if two types match with each other
     if (var_typ is not None and
         arg_typ is not None and
-        str(var_typ) == str(arg_typ)):
+        (
+            str(var_typ) == str(arg_typ) or
+            var_typ.get_primitive_name() == str(arg_typ) or
+            str(var_typ) == arg_typ.get_primitive_name()
+        )):
         # print("No binding, real var type", var.type, ", expect arg type", arg_typ)
-        return binds, var.var
+        return binds, var.var, var.type
 
     # print("[insert_lists] lifting", var_typ, "into type", arg_typ)
     if isinstance(arg_typ, types.ArrayType):
@@ -1242,8 +1273,8 @@ def insert_lists(counter, var, arg_typ):
         bind_typ = types.ArrayType(None, var_typ)
         bind = AssignExpr(f"x{let_x}", ListExpr(var, bind_typ), False)
         subvar = VarExpr(f"x{let_x}", bind_typ)
-        inner_binds, x = insert_lists(counter, subvar, arg_typ)
-        return ([bind] + inner_binds), x
+        inner_binds, x, xt = insert_lists(counter, subvar, arg_typ)
+        return ([bind] + inner_binds), x, xt
     else:
         raise Exception("cannot lift a non-array type", var_typ, type(var_typ), arg_typ, type(arg_typ))
 
@@ -1253,11 +1284,13 @@ def insert_binds(counter, var, arg_typ):
     # if two types match with each other
     if (var_typ is not None and
         arg_typ is not None and
-        (str(var_typ) == str(arg_typ) or
-        var_typ.get_primitive_name() == str(arg_typ) or
-        str(var_typ) == arg_typ.get_primitive_name())):
+        (
+            str(var_typ) == str(arg_typ) or
+            var_typ.get_primitive_name() == str(arg_typ) or
+            str(var_typ) == arg_typ.get_primitive_name()
+        )):
         # print("No binding, real var type", var.type, ", expect arg type", arg_typ)
-        return [], var.var
+        return [], var.var, var.type
 
     # print("[insert_binds] lifting", var_typ, "into type", arg_typ)
     if isinstance(var_typ, types.ArrayType):
@@ -1266,7 +1299,7 @@ def insert_binds(counter, var, arg_typ):
         counter["x"] += 1
         bind = AssignExpr(f"x{let_x}", var, True)
         subvar = VarExpr(f"x{let_x}", var_typ.item)
-        inner_binds, x = insert_binds(counter, subvar, arg_typ)
-        return ([bind] + inner_binds), x
+        inner_binds, x, xt = insert_binds(counter, subvar, arg_typ)
+        return ([bind] + inner_binds), x, xt
     else:
         return insert_lists(counter, var, arg_typ)

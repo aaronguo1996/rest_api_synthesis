@@ -167,10 +167,6 @@ def index_entries(entries, skip_fields):
                 (param_values, e.response.value, weight)
             )
 
-        if fun == "/users.profile.set_POST" and "name" in param_names and "profile" in param_names:
-            print(index_result[fun][param_names])
-            raise Exception("found")
-
     return index_result
 
 def pretty_none(v):

@@ -153,7 +153,7 @@ class Benchmark:
         re_time = None
         solution_found = False
         for rank, (syn_time, sol_prog, re_time, cost) in enumerate(sorted_candidates):            
-            print(rank, cost)
+            print(rank, cost, sol_prog.has_conversion())
             print(sol_prog)
             if sol_prog in self.solutions:
                 print("Solution found")

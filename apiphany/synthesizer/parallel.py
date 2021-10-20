@@ -139,6 +139,10 @@ def collect_parallel_data(synthesizer, all_solutions):
                 break
 
             path_cnt, syn_time, prog, re_time, cost = item
+            # penalize programs with conversions from semantic to syntactic
+            if prog.has_conversion():
+                cost += 10
+
             prog_list.append((syn_time, prog, re_time, cost))
 
         synthesizer._serialize_solutions(i, prog_list)
