@@ -106,6 +106,12 @@ def compare_program_strings(progstr_a, progstr_b):
 def avg(lst):
     return sum(lst) / len(lst)
 
+def median(lst):
+    if len(lst) % 2 == 0:
+        return (lst[len(lst) // 2 - 1] + lst[len(lst) // 2]) / 2
+    else:
+        return lst[len(lst) // 2]
+
 def get_obj_weight(obj):
     """
     weighs simply by calculating number of fields in object/list recursively

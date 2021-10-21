@@ -23,17 +23,18 @@ from schemas import types
 
 class BenchConfig:
     def __init__(
-        self, cache=False, repeat=15, filter_num=1,
-        filter_sol_only=False, synthesis_only=False,
+        self, cache=False, repeat_exp=3, repeat_re=15,
+        filter_sol_only=False, synthesis_only=False, witness_only=False,
         bias_type=dynamic.BiasType.SIMPLE, use_parallel=True,
         get_place_stats=False, generate_witness=False, method_coverage=1,
         uncovered_opt=consts.UncoveredOption.DEFAULT_TO_SYNTACTIC,
         conversion_fair=False,):
         self.cache = cache
-        self.repeat = repeat
-        self.filter_num = filter_num
+        self.repeat_exp = repeat_exp
+        self.repeat_re = repeat_re
         self.filter_sol_only = filter_sol_only
         self.synthesis_only = synthesis_only
+        self.witness_only = witness_only
         self.re_bias_type = bias_type
         self.use_parallel = use_parallel
         self.get_place_stats = get_place_stats
@@ -113,7 +114,7 @@ class Benchmark:
                 synthesizer,
                 analyzer,
                 indexed_entries,
-                runtime_config.repeat,
+                runtime_config.repeat_re,
                 not runtime_config.synthesis_only,
                 rep_inputs, [rep_output], is_array_output,
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM],
@@ -155,8 +156,8 @@ class Benchmark:
         re_time = None
         solution_found = False
         for rank, (syn_time, sol_prog, re_time, cost) in enumerate(sorted_candidates):            
-            print(rank, cost, sol_prog.has_conversion())
-            print(sol_prog)
+            # print(rank, cost, sol_prog.has_conversion())
+            # print(sol_prog)
             if sol_prog in self.solutions:
                 print("Solution found")
                 print(sol_prog, "has cost", cost)
@@ -210,6 +211,25 @@ class BenchmarkSuite:
             endpoints = self._doc.get(defs.DOC_PATHS).keys()
 
         self._suite_dir = utils.prep_exp_dir(data_dir, exp_dir, self._configuration)
+        # create subdirs for different runs
+        if not runtime_config.witness_only:
+            oldest_dir = None
+            oldest_ts = None
+            for i in range(runtime_config.repeat_exp):
+                self._iter_dir = os.path.join(self._suite_dir, f"iter_{i}")
+                if not os.path.exists(self._iter_dir):
+                    os.makedirs(self._iter_dir)
+                    oldest_dir = None
+                    break
+                else:
+                    mtime = os.path.getmtime(self._iter_dir)
+                    if oldest_ts is None or mtime < oldest_ts:
+                        oldest_dir = self._iter_dir
+                        oldest_ts = mtime
+
+            if oldest_dir is not None:
+                self._iter_dir = oldest_dir
+
         self._entries = utils.parse_entries(
             self._configuration, 
             self._suite_dir, 
@@ -373,6 +393,9 @@ class BenchmarkSuite:
         parallel.run_encoder(synthesizer, {}, {}, 0, None)
 
     def run(self, runtime_config, names, cached_results=False):
+        if runtime_config.witness_only:
+            return None, None, None
+
         latex_entries = []
         places = None
         transitions = None
@@ -382,7 +405,7 @@ class BenchmarkSuite:
             self._configuration.get(consts.KEY_SKIP_FIELDS)
         )
 
-        cache_path = os.path.join(self._suite_dir, "bench_results.pkl")
+        cache_path = os.path.join(self._iter_dir, "bench_results.pkl")
         if cached_results:
             with open(cache_path, "rb") as f:
                 d = pickle.load(f)
@@ -396,7 +419,7 @@ class BenchmarkSuite:
                     continue
 
                 places, transitions, path_cnt, solutions = benchmark.run(
-                    self._suite_dir, 
+                    self._iter_dir, 
                     self._typed_entries,
                     indexed_entries, 
                     self._configuration,
@@ -444,9 +467,22 @@ class Bencher:
             self.print_appendix(output)
         
         exp_dir = os.path.join(data_dir, self._exp_name)
+        # copy trace files before actual runs
         if not os.path.exists(exp_dir):
-            src_dir = os.path.join("../", consts.DATA_DEFAULT, consts.EXP_DEFAULT)
-            shutil.copytree(src_dir, exp_dir)
+            os.makedirs(exp_dir)
+        
+        for api in consts.APIS:
+            src_file = os.path.join(
+                "../", 
+                consts.DATA_DEFAULT, 
+                consts.EXP_DEFAULT,
+                api,
+                consts.FILE_TRACE)
+            dst_dir = os.path.join(exp_dir, api)
+            if not os.path.exists(dst_dir):
+                os.makedirs(dst_dir)
+                dst_file = os.path.join(dst_dir, consts.FILE_TRACE)
+                shutil.copy(src_file, dst_file)
 
         for suite in self._suites:
             suite.prep(data_dir, self._exp_name, self._config)

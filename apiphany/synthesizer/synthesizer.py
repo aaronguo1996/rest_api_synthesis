@@ -264,7 +264,7 @@ class Synthesizer:
             # "/conversations.list_GET",
             # "projection(objs_user, profile)_",
             # "/users.profile.get_GET",
-            "/users.profile.set_POST",
+            # "/users.profile.set_POST",
             # "/conversations.members_GET",
             # "/users.lookupByEmail_GET",
             # "/conversations.open_POST",

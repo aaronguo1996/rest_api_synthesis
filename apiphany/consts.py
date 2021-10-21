@@ -49,12 +49,15 @@ SOLVER_PN_ILP = "petri net ILP"
 FILE_TRACE = "traces.pkl"
 FILE_ENTRIES = "entries.pkl"
 FILE_GRAPH = "graph.pkl"
+FILE_RESULTS = "bench_results.pkl"
 
 SPACE = '    '
 MAX_COST = 99999.9
 
 EXP_DEFAULT = "default_apiphany"
 DATA_DEFAULT = "experiment_data_20210707_2056"
+
+APIS = ["slack_api_test", "stripe_api_test", "square_api_test"]
 
 class UncoveredOption(Enum):
     EXCLUDE = "exclude"

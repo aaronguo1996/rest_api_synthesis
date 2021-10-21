@@ -15,11 +15,13 @@ import enum
 import matplotlib.pyplot as plt
 import os
 import pickle
+import math
 import cProfile
 
 from analyzer import dynamic
-from benchmarks.benchmark import BenchConfig, Bencher
+from benchmarks.benchmark import BenchConfig, Bencher, BenchmarkResult
 from benchmarks.suites import slack_suite, stripe_suite, square_suite
+from benchmarks import utils
 import consts
 
 bias_type_args = {
@@ -44,14 +46,18 @@ def build_cmd_parser():
         help="Path to output latex table to")
     parser.add_argument("--data-dir", required=True,
         help="Path to data directory")
-    parser.add_argument("--exp-name", default="default_apiphany",
+    parser.add_argument("--exp-name", required=True,
         help="Experiment name")
     parser.add_argument("--bench", nargs='?',
         help="Path to benchmark file or directory (by default runs all in benchmarks)")
     parser.add_argument("--names", nargs="+",
         help="Benchmark name list")
+    parser.add_argument("--repeat-exp", default=3, type=int,
+        help="Number of times to repeat each experiment")
 
     # witness generation
+    parser.add_argument("--generate-witness-only", action="store_true",
+        help="Only generate witness files")
     parser.add_argument("--generate-witness", action="store_true",
         help="Whether to generate witness")
     parser.add_argument("--method-coverage", type=float,
@@ -68,10 +74,8 @@ def build_cmd_parser():
         help="Whether to treat conversion transitions fair")
     
     # retrospective execution options
-    parser.add_argument("--repeat", type=int, nargs='?', default=15,
-        help="Number of times to repeat filtering")
-    parser.add_argument("--filter-num", type=int, nargs='?', default=3,
-        help="Number of times to run filtering")
+    parser.add_argument("--repeat-re", type=int, nargs='?', default=15,
+        help="Number of times to repeat retrospective execution")
     parser.add_argument("--bias-type", default='simple',
         choices=list(bias_type_args.keys()) ,dest='bias_type',
         help="Bias type for retrospective execution")
@@ -99,6 +103,7 @@ def build_cmd_parser():
     # default values
     parser.set_defaults(
         filter_sol_only=False,
+        generate_witness_only=False,
         generate_witness=False,
         method_coverage=1.0,
         conversion_fair=False,
@@ -109,16 +114,37 @@ def build_cmd_parser():
 
 
 
-def load_exp_results(data_dir, exp_name):
+def load_exp_results(data_dir, exp_name, repeat_exp=3):
     all_entries = []
-    apis = ["slack_api_test", "stripe_api_test", "square_api_test"]
-    for api in apis:
-        cache_path = os.path.join(data_dir, exp_name, api, "bench_results.pkl")
-        with open(cache_path, "rb") as f:
-            d = pickle.load(f)
+    
+    for api in consts.APIS:
+        api_dir = os.path.join(data_dir, exp_name, api, "iter_0")
+        if not os.path.exists(api_dir):
+            continue
 
-        latex_entries = d["results"]
-        all_entries += latex_entries
+        latex_entries = None
+        for i in range(repeat_exp):
+            cache_path = os.path.join(
+                data_dir, exp_name, api, f"iter_{i}", consts.FILE_RESULTS)
+            with open(cache_path, "rb") as f:
+                d = pickle.load(f)
+
+            if latex_entries is None:
+                latex_entries = [[] for _ in range(len(d["results"]))]
+
+            for j, res in enumerate(d["results"]):
+                latex_entries[j].append(res)
+
+        entries = []
+        for reps in latex_entries:
+            entry = reps[0]
+            entry.syn_time = utils.avg([rep.syn_time for rep in reps])
+            entry.re_time = utils.avg([rep.re_time for rep in reps])
+            ranks = [rep.ranks[0] for rep in reps if rep.ranks is not None]
+            entry.ranks = ranks if ranks else None
+            entries.append(entry)
+
+        all_entries += entries
 
     # print(all_entries)
     return all_entries
@@ -134,11 +160,11 @@ def plot_ranks(experiments, data_dir, output=None):
             if result is None or result.ranks is None:
                 continue
 
-            ranks_re.append(result.ranks[0])
+            ranks_re.append(utils.median(result.ranks))
             ranks_no_re.append(result.rank_no_re)
     
-        cnt_ranks_re = [sum([1 for x in ranks_re if x <= i]) for i in range(0,5000)]
-        cnt_ranks_no_re = [sum([1 for x in ranks_no_re if x <= i]) for i in range(0,5000)]
+        cnt_ranks_re = [sum([1 for x in ranks_re if x <= i]) for i in range(0,50000)]
+        cnt_ranks_no_re = [sum([1 for x in ranks_no_re if x <= i]) for i in range(0,50000)]
 
         # plot core data
         fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
@@ -146,7 +172,7 @@ def plot_ranks(experiments, data_dir, output=None):
 
         ax1.set_xlim(0, 15)
         ax2.set_xscale('log')
-        ax2.set_xlim(15, 5000)
+        ax2.set_xlim(15, 50000)
         ax1.set_ylim(0, 28)
         ax1.set_xlabel("Rank", loc="right")
         ax1.set_ylabel("# benchmarks")
@@ -157,7 +183,7 @@ def plot_ranks(experiments, data_dir, output=None):
         ax2.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
         ax2.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
         ax1.hlines(26, 0, 15, linestyles='dashed', label="max solved benchmarks", colors="0.8")
-        ax2.hlines(26, 15, 3000, linestyles='dashed', label="max solved benchmarks", colors="0.8")
+        ax2.hlines(26, 15, 50000, linestyles='dashed', label="max solved benchmarks", colors="0.8")
         ax2.legend(loc="lower right")
 
         # set border lines
@@ -200,22 +226,27 @@ def plot_solved(experiments, data_dir, output=None):
     # plot core data
     fig, ax = plt.subplots(1, 1)
     ax.set_ylim(0, 28)
-    ax.set_xlim(0, 60)
+    ax.set_xlim(0, 300)
     ax.yaxis.set_ticks(range(0,28,2))
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("# solved benchmarks")
 
     for exp, xs in times_dict.items():
         ys = list(range(len(xs)+1))
-        ax.plot([0]+xs+[60], ys+[len(xs)], label=exp)
+        ax.plot([0]+xs+[300], ys+[len(xs)], label=exp)
 
-    ax.hlines(26, 0, 60, linestyles='dashed', label="max solved benchmarks", colors="0.8")
+    ax.hlines(26, 0, 300, linestyles='dashed', label="max solved benchmarks", colors="0.8")
     ax.legend(loc="lower right")
     plt.savefig(os.path.join(output, "solved.png"))
 
 def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
+
+    if args.exp_name == consts.EXP_DEFAULT:
+        raise Exception(
+            "Experiment name", consts.EXP_DEFAULT, 
+            "is reserved, please provide a different one.")
 
     if args.plot_all or args.plot_solved:
         plot_solved(args.plot_solved, args.data_dir, args.output)
@@ -228,10 +259,11 @@ def main():
         not args.plot_ranks):
         config = BenchConfig(
             cache=args.cache,
-            repeat=args.repeat,
-            filter_num=args.filter_num,
+            repeat_exp=args.repeat_exp,
+            repeat_re=args.repeat_re,
             filter_sol_only=args.filter_sol_only,
             synthesis_only=args.synthesis_only,
+            witness_only=args.generate_witness_only,
             bias_type=bias_type_args[args.bias_type],
             use_parallel=args.parallel,
             get_place_stats=args.get_place_stats,
@@ -250,15 +282,18 @@ def main():
             config)
 
         # with cProfile.Profile() as p:
-        b.run(
-            args.data_dir,
-            args.names,
-            output=args.output,
-            print_api=args.print_api_info,
-            print_results=args.print_results,
-            print_appendix=False,
-            plot_ranks=False,
-            cached_results=False)
+        for i in range(args.repeat_exp):
+            print(f"Running iteration #{i}")
+
+            b.run(
+                args.data_dir,
+                args.names,
+                output=args.output,
+                print_api=args.print_api_info,
+                print_results=args.print_results,
+                print_appendix=False,
+                plot_ranks=False,
+                cached_results=False)
 
             # p.print_stats()
 
