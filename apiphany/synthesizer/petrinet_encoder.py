@@ -8,6 +8,7 @@ import subprocess
 from stats.time_stats import TimeStats, STATS_ENCODE, STATS_SEARCH
 from synthesizer.utils import group_params, make_entry_name
 from synthesizer.underapprox import Approximation
+import consts
 
 # preprocess the spec file and canonicalize the parameters and responses
 class PetriNetEncoder:
@@ -368,7 +369,7 @@ class PetriNetEncoder:
     def _add_copy_transitions(self):
         places = self._net.place()
         for place in places:
-            trans_name = place.name + "_clone"
+            trans_name = consts.PREFIX_CLONE + place.name
             trans_idx = len(self._trans_to_variable)
             self._trans_to_variable[trans_name] = trans_idx
             self._variable_to_trans.append(trans_name)

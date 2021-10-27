@@ -13,7 +13,7 @@ slack_minimal = [
         "Create a channel and invite users",
         "https://stackoverflow.com/questions/48328380/slack-api-channels-create-followed-by-channels-invite-info-returns-channel-not",
         {
-            "user_ids": types.ArrayType(None, types.PrimString("defs_bot_id")),
+            "user_ids": types.ArrayType(None, types.PrimString("defs_user_id")),
             "channel_name": types.PrimString("objs_conversation.name"),
         },
         types.ArrayType(None, types.SchemaObject("objs_conversation")),
@@ -80,7 +80,7 @@ slack_benchmarks = [
         "Get the unread messages of a user",
         "https://stackoverflow.com/questions/64561594/is-it-possible-to-know-the-number-of-unread-slack-messages-a-user-has-with-the-s",
         {
-            "user_id": types.PrimString("defs_bot_id")
+            "user_id": types.PrimString("defs_user_id")
         },
         types.ArrayType(None, types.ArrayType(None, types.SchemaObject("objs_message"))),
         [
@@ -101,7 +101,7 @@ slack_benchmarks = [
         "Get all messages associated with a user",
         "https://github.com/hisabimbola/slack-history-export/blob/e53868d8820ba65e5e726bd5968c80d5eb54c0db/src/utils.js",
         {
-            "user_id": types.PrimString("defs_bot_id"),
+            "user_id": types.PrimString("defs_user_id"),
             "ts": types.PrimString("defs_ts"),
         },
         types.ArrayType(None, types.SchemaObject("objs_message")),
@@ -124,7 +124,7 @@ slack_benchmarks = [
         "Create a channel and invite a list of users",
         "https://stackoverflow.com/questions/48328380/slack-api-channels-create-followed-by-channels-invite-info-returns-channel-not",
         {
-            "user_ids": types.ArrayType(None, types.PrimString("defs_bot_id")),
+            "user_ids": types.ArrayType(None, types.PrimString("defs_user_id")),
             "channel_name": types.PrimString("objs_conversation.name"),
         },
         types.ArrayType(None, types.SchemaObject("objs_conversation")),

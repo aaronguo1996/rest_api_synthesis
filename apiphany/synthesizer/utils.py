@@ -1,4 +1,5 @@
 from collections import defaultdict
+import consts
 
 def group_types(types):
     type_dict = defaultdict(int)
@@ -15,4 +16,4 @@ def make_entry_name(endpoint, method):
     return endpoint + "_" + method.upper()
 
 def make_type_transition_name(from_type, to_type):
-    return "convert_" + from_type + "_" + to_type
+    return consts.PREFIX_CONVERT + from_type + "_" + to_type

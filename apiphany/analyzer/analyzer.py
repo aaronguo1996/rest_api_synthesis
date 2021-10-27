@@ -41,20 +41,12 @@ class DSU:
             self._nexts[y] = y
             self._values[y] = set([y.value])
 
-        # hard code rules for Slack, FIXME: check the type
-        if (("name" in y.arg_name and y.type and "objs_message" in y.type.name) or 
-            ("name" in x.arg_name and x.type and "objs_message" in x.type.name)):
-            return
-
-        xr, yr = self.find(x), self.find(y)
-        # xr_rep = get_representative(self.get_group(xr))
-        # yr_rep = get_representative(self.get_group(yr))
-        # if ((xr_rep == "plan.amount" and yr_rep == "line_item.period.end") or
-        #     (yr_rep == "plan.amount" and xr_rep == "line_item.period.end")):
+        # # hard code rules for Slack, FIXME: check the type
+        # if (("name" in y.arg_name and y.type and "objs_message" in y.type.name) or 
+        #     ("name" in x.arg_name and x.type and "objs_message" in x.type.name)):
         #     return
 
-        # if (xr_rep == "plan.amount" or yr_rep == "plan.amount"):
-        #     print(x, x.value, xr_rep, y, y.value, yr_rep, flush=True)
+        xr, yr = self.find(x), self.find(y)
 
         self._values[xr].add(x.value)
         self._values[yr].add(y.value)
@@ -247,8 +239,7 @@ class LogAnalyzer:
         # but add them as separate nodes, they are meaningless
         if ((isinstance(param.value, int) and (param.value <= 1000)) or
             (isinstance(param.value, float) and (param.value <= 1000)) or
-            isinstance(param.value, bool) or
-            "balance_transaction.source" in str(param.type)):
+            isinstance(param.value, bool)):
             self.dsu.union(param, param)
             return
 
@@ -497,6 +488,10 @@ class LogAnalyzer:
 
     def find_representative_for_type(self, typ):
         # assume the input type is not a union type
+        if isinstance(typ, types.ArrayType):
+            typ.item.name = self.find_representative_for_type(typ.item)
+            return typ
+
         params = self.dsu._parents.keys()
         for param in params:
             if same_type_name(typ, param.type):

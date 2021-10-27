@@ -6,7 +6,7 @@ from synthesizer.utils import make_entry_name
 from analyzer.utils import path_to_name
 from program.program import (Program, VarExpr, ProjectionExpr,
                              FilterExpr, AssignExpr, AppExpr)
-
+import consts
 
 class ProgramGenerator:
     def __init__(self, signatures):
@@ -31,14 +31,14 @@ class ProgramGenerator:
             self._add_typed_var(typ_subst, VarExpr(name, in_typ), in_typ)
 
         for trans in transitions:
-            if "_clone" in trans:
+            if consts.PREFIX_CLONE in trans:
                 continue    
 
             sig = self._signatures.get(trans)
             if not sig:
                 raise Exception(f"Unknown transition name {trans}")
 
-            if "convert_" in trans:
+            if consts.PREFIX_CONVERT in trans:
                 # copy expressions with semantic types to corresponding syntactic types
                 self._to_syntactic_mapping(typ_subst, sig)
             elif re.search(r"projection\(.*, .*\)", sig.endpoint):
@@ -81,8 +81,8 @@ class ProgramGenerator:
         return programs
 
     def _to_syntactic_mapping(self, typ_subst, sig):
-        from_typ = str(sig.parameters[0].type)
-        to_typ = str(sig.response.type)
+        from_typ = str(sig.parameters[0].type.ignore_array())
+        to_typ = str(sig.response.type.ignore_array())
         exprs = typ_subst.get(from_typ, [])
         typ_subst[to_typ] = [k for k,_ in itertools.groupby(sorted(typ_subst.get(to_typ, []) + exprs, key=str))]
 
@@ -90,7 +90,7 @@ class ProgramGenerator:
         name_counts = defaultdict(int)
         name_counts.clear()
         for tr in transitions:
-            if "_clone" in tr or "convert_" in tr:
+            if consts.PREFIX_CLONE in tr or consts.PREFIX_CONVERT in tr:
                 continue
             elif re.search(r"projection\(.*, .*\)", tr):
                 sig = signatures.get(tr)

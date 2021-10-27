@@ -7,6 +7,7 @@ from gurobipy import GRB
 from stats.time_stats import TimeStats, STATS_ENCODE, STATS_SEARCH
 from synthesizer.utils import group_params, make_entry_name
 from synthesizer.underapprox import Approximation
+import consts
 
 SOLS_PER_SOLVE = 100
 
@@ -38,14 +39,14 @@ class ILPetriEncoder:
         self._block = []
 
     @TimeStats(key=STATS_ENCODE)
-    def init(self, inputs, outputs):
+    def init(self, inputs, outputs, prim_as_return=False):
         self._model.reset()
         self._path_len = 0
 
         # variables and constraints
         self._add_copy_transitions()
 
-        self._run_approximation(inputs, outputs)
+        self._run_approximation(inputs, outputs, prim_as_return)
 
         self._add_initial_vars()
         self._add_initial_constrs(inputs)
@@ -62,10 +63,7 @@ class ILPetriEncoder:
 
         return res
 
-    def get_length_of(self, path_len, inputs, outputs, conversion_fair=False):
-        self.init(inputs, outputs)
-        while self._path_len < path_len:
-            self.increment()
+    def get_length_of(self, outputs, conversion_fair=False):
         self.set_final(outputs)
 
         if not conversion_fair:
@@ -152,28 +150,31 @@ class ILPetriEncoder:
         self._model.remove(self._block)
         self._block = []
 
-    def _run_approximation(self, inputs, output):
+    def _run_approximation(self, inputs, output, prim_as_return=False):
         # print("before approximation:", len(self._net.transition()))
         # on top of the input types,
         # we also need to add output types of transitions with no required args
-        self._reachables = set()
-        input_places = list(inputs.keys())
-        null_places = []
-        for trans, e in self._entries.items():
-            no_required = True
-            for p in e.parameters:
-                if p.is_required:
-                    no_required = False
-                    break
+        if not prim_as_return:
+            self._reachables = set()
+            input_places = list(inputs.keys())
+            null_places = []
+            for trans, e in self._entries.items():
+                no_required = True
+                for p in e.parameters:
+                    if p.is_required:
+                        no_required = False
+                        break
 
-            if no_required:
-                null_places.append(str(e.response.type.ignore_array()))
-                self._reachables.add(trans)
+                if no_required:
+                    null_places.append(str(e.response.type.ignore_array()))
+                    self._reachables.add(trans)
 
-        reachables = self._approx.approx_reachability(
-            input_places + null_places, output
-        )
-        self._reachables = self._reachables.union(reachables)
+            reachables = self._approx.approx_reachability(
+                input_places + null_places, output
+            )
+            self._reachables = self._reachables.union(reachables)
+        else:
+            self._reachables = set(self._entries.keys()) # everything is reachable
 
         for trans in self._net.transition():
             if trans.name not in self._reachables:
@@ -210,7 +211,7 @@ class ILPetriEncoder:
             self._fires[(t_idx, ck)] = self._model.addVar(
                 name=f'fires[{t_idx},{ck}]',
                 vtype=GRB.BINARY)
-            if "convert_" in trans_name:
+            if consts.PREFIX_CONVERT in trans_name:
                 self._conversions[(t_idx, ck)] = self._fires[(t_idx, ck)]
 
 
@@ -359,7 +360,7 @@ class ILPetriEncoder:
         places = self._net.place()
         for place in places:
             # copy transitions
-            trans_name = place.name + "_clone"
+            trans_name = consts.PREFIX_CLONE + place.name
             self._net.add_transition(Transition(trans_name))
             self._net.add_input(place.name, trans_name, Value(1))
             self._net.add_output(place.name, trans_name, Value(2))

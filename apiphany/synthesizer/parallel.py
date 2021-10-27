@@ -14,10 +14,52 @@ import consts
 from apiphany import rust_re, translate_traces, free_up
 from schemas import types
 
+def get_results(synthesizer, analyzer, encoder, 
+    repeat_time, run_re, inputs, outputs, output_map, 
+    is_array_output, expected_solution, conversion_fair, solutions, path_len,
+    start, re_time, path_count):
+    solution_set = set()
+    path = encoder.get_length_of(output_map, conversion_fair)
+    while path is not None:
+        # print("Finding a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
+
+        end = time.time()
+        # print(path)
+        path_count += 1
+        programs, perms = synthesizer.generate_solutions(
+            path_len, inputs, outputs, path, end - start
+        )
+
+        for p in set(programs):
+            if p not in solution_set:
+                solution_set.add(p)
+                re_start = time.time()
+                if run_re:
+                    cost = rust_re(
+                        analyzer, p,
+                        list(inputs.items()),
+                        is_array_output,
+                        repeat_time)
+                else:
+                    cost = None
+                re_time += time.time() - re_start
+                solutions.put((path_count, time.time() - start, p, re_time, cost))
+
+
+                if p == expected_solution:
+                    # print("Found expected solution", flush=True)
+                    solution_set.add(p)
+                    free_up()
+                    return consts.SearchStatus.FOUND_EXPECTED
+
+        encoder.block_prev(perms)
+        path = encoder.solve()
+
+    return consts.SearchStatus.NOT_FOUND
 
 def run_encoder(synthesizer, analyzer, entries, 
     repeat_time, run_re, inputs, outputs, is_array_output,
-    expected_solution, conversion_fair, all_solutions, path_len):
+    expected_solution, conversion_fair, prim_as_return, all_solutions, path_len):
     solutions = all_solutions[path_len]
     config = synthesizer._config
     solver_type = config[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_TYPE]
@@ -50,9 +92,12 @@ def run_encoder(synthesizer, analyzer, entries,
             typ_name = typ.get_primitive_name()
 
         output_map[typ_name] += 1
-
-    # print("input_map", input_map)
-    # print("output_map", output_map)
+ 
+    encoder.init(input_map, output_map, prim_as_return)
+    while encoder._path_len < path_len:
+        encoder.increment()
+    print("input_map", input_map)
+    print("output_map", output_map)
 
     if solutions is None:
         # temporary for rebuttal
@@ -78,7 +123,7 @@ def run_encoder(synthesizer, analyzer, entries,
         return
 
     # write encoder stats to file
-    path_count = 0
+    
     if path_len == 1:
         encoder_path = os.path.join(synthesizer.exp_dir, "encoder.txt")
         with open(encoder_path, "w") as f:
@@ -89,51 +134,34 @@ def run_encoder(synthesizer, analyzer, entries,
 
     translate_traces(entries)
 
-    solution_set = set()
+    # initialize stats
     start = time.time()
-    path = encoder.get_length_of(path_len, input_map, output_map, conversion_fair)
     re_time = 0
-    while path is not None:
-        # print("Finding a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
+    path_count = 0
 
-        end = time.time()
-        # print(path)
-        path_count += 1
-        programs, perms = synthesizer.generate_solutions(
-            path_len, inputs, outputs, path, end - start
-        )
+    res = get_results(synthesizer, analyzer, encoder, 
+        repeat_time, run_re, inputs, outputs, output_map, 
+        is_array_output, expected_solution, conversion_fair, solutions, path_len,
+        start, re_time, path_count)
 
-        for p in set(programs):
-            if p not in solution_set:
-                solution_set.add(p)
-                re_start = time.time()
-                if run_re:
-                    cost = rust_re(
-                        analyzer, p,
-                        list(inputs.items()),
-                        is_array_output,
-                        repeat_time)
-                else:
-                    cost = None
-                re_time += time.time() - re_start
-                solutions.put((path_count, time.time() - start, p, re_time, cost))
+    if res == consts.SearchStatus.NOT_FOUND and prim_as_return:
+        prim_outputs = [o.to_syntactic() for o in outputs]
+        prim_output_map = defaultdict(int)
+        for typ in prim_outputs:
+            typ_name = typ.ignore_array().get_primitive_name()
+            prim_output_map[typ_name] += 1
 
-
-                if p == expected_solution:
-                    print("Found expected solution", flush=True)
-                    solution_set.add(p)
-                    free_up()
-                    return consts.SearchStatus.FOUND_EXPECTED
-
-        encoder.block_prev(perms)
-        path = encoder.solve()
-
-    print("Finished encoder running for path length", path_len,
-        "after time", time.time() - start, flush=True)
+        # try again with primitives as return values
+        res = get_results(synthesizer, analyzer, encoder, 
+            repeat_time, run_re, inputs, prim_outputs, prim_output_map, 
+            is_array_output, expected_solution, conversion_fair, solutions, path_len,
+            start, re_time, path_count)
+    
+    # print("Finished encoder running for path length", path_len,
+    #     "after time", time.time() - start, flush=True)
 
     free_up()
-    return consts.SearchStatus.NOT_FOUND
-    # raise Exception("No solution found at this length")
+    return res
 
 def collect_parallel_data(synthesizer, all_solutions):
     all_path_cnt = 0
@@ -163,7 +191,7 @@ def collect_parallel_data(synthesizer, all_solutions):
 
 def spawn_encoders(synthesizer, analyzer, entries, 
     repeat_time, run_re, inputs, outputs, is_array_output,
-    solver_num, expected_solution, conversion_fair, timeout=150):
+    solver_num, expected_solution, conversion_fair, prim_as_return, timeout=120):
     m = multiprocessing.Manager()
     all_solutions = []
     for _ in range(consts.DEFAULT_LENGTH_LIMIT + 1):
@@ -175,7 +203,7 @@ def spawn_encoders(synthesizer, analyzer, entries,
         partial(run_encoder,
                 synthesizer, analyzer, entries,
                 repeat_time, run_re, inputs, outputs, is_array_output,
-                expected_solution, conversion_fair,
+                expected_solution, conversion_fair, prim_as_return,
                 all_solutions),
         range(consts.DEFAULT_LENGTH_LIMIT + 1),
         # [1,9]

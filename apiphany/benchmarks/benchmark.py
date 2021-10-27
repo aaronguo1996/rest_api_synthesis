@@ -28,7 +28,7 @@ class BenchConfig:
         bias_type=dynamic.BiasType.SIMPLE, use_parallel=True,
         get_place_stats=False, generate_witness=False, method_coverage=1,
         uncovered_opt=consts.UncoveredOption.DEFAULT_TO_SYNTACTIC,
-        conversion_fair=False,):
+        conversion_fair=False, prim_as_return=False,):
         self.cache = cache
         self.repeat_exp = repeat_exp
         self.repeat_re = repeat_re
@@ -42,6 +42,7 @@ class BenchConfig:
         self.method_coverage = method_coverage
         self.uncovered_opt = uncovered_opt
         self.conversion_fair = conversion_fair
+        self.prim_as_return = prim_as_return
 
 class BenchmarkResult:
     def __init__(self, name, desc):
@@ -107,8 +108,8 @@ class Benchmark:
             rep_output = self.output.ignore_array()
             rep_output.name = analyzer.find_representative_for_type(rep_output)
 
-            # print("inputs", rep_inputs)
-            # print("output", rep_output)
+            print("inputs", rep_inputs)
+            print("output", rep_output)
             # with cProfile.Profile() as p:
             parallel.spawn_encoders(
                 synthesizer,
@@ -120,6 +121,7 @@ class Benchmark:
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM],
                 self.solutions[0],
                 runtime_config.conversion_fair,
+                runtime_config.prim_as_return,
             )
                 # p.sort_stats("cumulative").print_stats(999999)
             
@@ -155,6 +157,7 @@ class Benchmark:
         syn_time = None
         re_time = None
         solution_found = False
+        rank = None
         for rank, (syn_time, sol_prog, re_time, cost) in enumerate(sorted_candidates):            
             # print(rank, cost, sol_prog.has_conversion())
             # print(sol_prog)
@@ -164,7 +167,8 @@ class Benchmark:
                 solution_found = True
                 break
 
-        rank += 1
+        if rank is not None:
+            rank += 1
 
         if solution_found:
             self.latex_entry.ranks = [rank]
@@ -260,7 +264,8 @@ class BenchmarkSuite:
 
     def generate_witnesses(self, doc_entries, hostname, base_path, 
         entries, endpoints, uncovered_opt):
-        print("Analyzing provided log...")
+        print("---------------------------------------------------------------")
+        print("Analyzing provided witnesses for", self.api)
         log_analyzer = analyzer.LogAnalyzer(uncovered_opt)
         prefilter = self._configuration.get(consts.KEY_SYNTHESIS).get(consts.KEY_SYN_PREFILTER)
         skip_fields = self._configuration.get(consts.KEY_SKIP_FIELDS)
@@ -315,6 +320,8 @@ class BenchmarkSuite:
             dot = Digraph(strict=True)
             log_analyzer.to_graph(dot, endpoints=endpoints)
             dot.render(os.path.join("output/", "dependencies"), view=False)
+
+        print("---------------------------------------------------------------")
 
     def get_info(self):
         # to get number of annotations, open the annotations file
@@ -452,7 +459,7 @@ class Bencher:
         self._suites = suites
         self._config = config
 
-    def run(self, data_dir, names,
+    def run(self, data_dir, suites, names,
         cached_results=False, 
         print_api=False, 
         print_results=False, 
@@ -485,6 +492,9 @@ class Bencher:
                 shutil.copy(src_file, dst_file)
 
         for suite in self._suites:
+            if suites is not None and suites != [] and suite.api not in suites:
+                continue
+
             suite.prep(data_dir, self._exp_name, self._config)
             if self._config.get_place_stats:
                 suite.get_popular_types()
@@ -494,6 +504,9 @@ class Bencher:
                 place_counts.append(places)
                 trans_counts.append(transitions)
                 benchmark_results.append(benchmark_entries)
+
+        # set to False to disable this step for further runnings
+        self._config.generate_witness = abs(self._config.method_coverage - 1.0) > 1e-6
 
         if print_api:
             self.print_api_info(place_counts, trans_counts, output)

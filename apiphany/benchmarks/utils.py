@@ -104,7 +104,10 @@ def compare_program_strings(progstr_a, progstr_b):
     return replace_variables(progstr_a) == replace_variables(progstr_b)
 
 def avg(lst):
-    return sum(lst) / len(lst)
+    if len(lst):
+        return sum(lst) / len(lst)
+    else:
+        return None
 
 def median(lst):
     if len(lst) % 2 == 0:
@@ -239,14 +242,14 @@ def prune_by_coverage(paths, witnesses, coverage):
         if key in methods:
             covered.add(key)
 
-    curr_coverage = len(covered) / len(methods)
-    if curr_coverage <= coverage or within_expected_coverage(curr_coverage, coverage):
-        print("Warning: the provided coverage cannot be reached")
-        return witnesses
+    # coverage = len(covered) / len(methods) * coverage # relative coverage
+    # if curr_coverage <= coverage or within_expected_coverage(curr_coverage, coverage):
+    #     print("Warning: the provided coverage cannot be reached")
+    #     return witnesses
 
     # drop a random subset of methods to reach the target coverage
-    expected_covered_num = math.floor(coverage * len(methods))
-    sampled_covered = random.choices(list(covered), k=expected_covered_num)
+    expected_covered_num = math.floor(coverage * len(covered)) # relative coverage
+    sampled_covered = random.sample(list(covered), k=expected_covered_num)
 
     sampled_witnesses = []
     for w in witnesses:

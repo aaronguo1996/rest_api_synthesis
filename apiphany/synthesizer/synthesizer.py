@@ -68,7 +68,7 @@ class Synthesizer:
     def _expand_groups(self, result):
         groups = []
         for name in result:
-            if "_clone" in name:
+            if consts.PREFIX_CLONE in name:
                 continue
 
             if self._expand_group:
