@@ -77,11 +77,12 @@ class Synthesizer:
                     raise Exception("Unknown transition", name)
 
                 param_typs = [str(p.type) for p in e.parameters]
+                param_reqs = [p.is_required for p in e.parameters]
                 if isinstance(e.response.type, list):
                     response_typ = [str(t) for t in e.response.type]
                 else:
                     response_typ = [str(e.response.type)]
-                key = (tuple(param_typs), tuple(response_typ))
+                key = (tuple(param_typs), tuple(param_reqs), tuple(response_typ))
                 group = self._groups.get(key, [name])
                 groups.append(group)
             else:
@@ -260,6 +261,7 @@ class Synthesizer:
             # "projection(customer, id)_"
             # "projection(payment_source, type)_"
 
+            # "/admin.users.session.invalidate_POST",
             # "/admin.conversations.search_GET",
             # "/conversations.list_GET",
             # "projection(objs_user, profile)_",
@@ -345,11 +347,12 @@ class Synthesizer:
         results = {}
         for proj, e in transitions.items():
             param_typs = [str(p.type.ignore_array()) for p in e.parameters]
+            param_reqs = [p.is_required for p in e.parameters]
             if isinstance(e.response.type, list):
                 response_typ = [str(t.ignore_array()) for t in e.response.type]
             else:
                 response_typ = [str(e.response.type.ignore_array())]
-            key = (tuple(param_typs), tuple(response_typ))
+            key = (tuple(param_typs), tuple(param_reqs), tuple(response_typ))
             if key not in self._groups:
                 results[proj] = e
                 self._groups[key] = [proj]

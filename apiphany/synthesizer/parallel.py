@@ -96,8 +96,8 @@ def run_encoder(synthesizer, analyzer, entries,
     encoder.init(input_map, output_map, prim_as_return)
     while encoder._path_len < path_len:
         encoder.increment()
-    print("input_map", input_map)
-    print("output_map", output_map)
+    # print("input_map", input_map)
+    # print("output_map", output_map)
 
     if solutions is None:
         # temporary for rebuttal

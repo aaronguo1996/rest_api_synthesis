@@ -177,7 +177,8 @@ class ProgramGenerator:
                 print(typ_subst)
                 raise Exception(
                     f"Given path is spurious, "
-                    f"no program can be generated for {sig.endpoint}"
+                    f"no program can be generated for {sig.endpoint}, "
+                    f"param {param} with type {typ_name}"
                 )
 
             exprs = typ_subst.get(typ_name)

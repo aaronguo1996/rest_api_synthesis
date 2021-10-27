@@ -170,11 +170,12 @@ class SchemaObject(BaseType):
         return schema.get_requires()
 
     def get_primitive_name(self):
-        return defs.TYPE_OBJECT
+        schema = BaseType.object_lib.get(self.name)
+        return schema.get_primitive_name()
 
     def to_syntactic(self):
-        self.name = defs.TYPE_OBJECT
-        return self
+        schema = BaseType.object_lib.get(self.name)
+        return schema.to_syntactic()
     
 class ObjectType(BaseType):
     """Ad-hoc objects

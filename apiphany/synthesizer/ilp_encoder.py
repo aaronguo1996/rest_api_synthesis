@@ -82,9 +82,9 @@ class ILPetriEncoder:
             self._model.setParam(GRB.Param.SolutionNumber, 0)
             start = time.time()
             self._model.optimize()
-            print("running solver | sols:", self._model.solCount, 
-                "| len:", self._path_len, 
-                "| solve time:", time.time() - start)
+            # print("running solver | sols:", self._model.solCount, 
+            #     "| len:", self._path_len, 
+            #     "| solve time:", time.time() - start)
         # uncomment for batch/tiled blocking
         # elif self._soln_ix >= SOLS_PER_SOLVE:
         #     # run the solver
