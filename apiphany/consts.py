@@ -58,7 +58,7 @@ SPACE = '    '
 MAX_COST = 99999.9
 
 EXP_DEFAULT = "default_apiphany"
-DATA_DEFAULT = "experiment_data_20210707_2056"
+DATA_DEFAULT = "experiment_data"
 
 APIS = ["slack_api_test", "stripe_api_test", "square_api_test"]
 

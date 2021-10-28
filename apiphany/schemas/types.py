@@ -171,10 +171,14 @@ class SchemaObject(BaseType):
 
     def get_primitive_name(self):
         schema = BaseType.object_lib.get(self.name)
+        if schema is None:
+            raise Exception("Unknown object definition", self.name)
         return schema.get_primitive_name()
 
     def to_syntactic(self):
         schema = BaseType.object_lib.get(self.name)
+        if schema is None:
+            raise Exception("Unknown object definition", self.name)
         return schema.to_syntactic()
     
 class ObjectType(BaseType):

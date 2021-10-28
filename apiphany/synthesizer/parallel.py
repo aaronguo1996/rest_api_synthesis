@@ -131,6 +131,7 @@ def run_encoder(synthesizer, analyzer, entries,
             f.write("\n")
             f.write(str(len(encoder._net.transition())))
             f.write("\n")
+            f.flush()
 
     translate_traces(entries)
 
@@ -191,7 +192,7 @@ def collect_parallel_data(synthesizer, all_solutions):
 
 def spawn_encoders(synthesizer, analyzer, entries, 
     repeat_time, run_re, inputs, outputs, is_array_output,
-    solver_num, expected_solution, conversion_fair, prim_as_return, timeout=120):
+    solver_num, expected_solution, conversion_fair, prim_as_return, timeout=150):
     m = multiprocessing.Manager()
     all_solutions = []
     for _ in range(consts.DEFAULT_LENGTH_LIMIT + 1):

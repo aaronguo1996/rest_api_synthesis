@@ -69,27 +69,16 @@ class Constructor:
                 else:
                     to_field_typ = name
 
-                in_name = None
-
-                parts = self._analyzer.type_partitions.get(obj_name)
-                if parts is not None:
-                    for i, part in enumerate(parts):
-                        for p in part:
-                            if to_field_typ == p[:len(to_field_typ)]:
-                                in_name = f"{obj_name}_{i}"
-                                break
-                            if in_name is not None:
-                                break
-                        else:
-                            in_name = None
-
-                if in_name is None:
-                    in_name = obj_name
+                
+                in_name = obj_name
+                if '{' in in_name and '}' in in_name:
+                    in_typ = types.construct_type(field_name, obj_def)
+                else:
+                    in_typ = types.SchemaObject(in_name)
 
                 endpoint = f"projection({in_name}, {name})"
                 proj_in = Parameter(
-                    "", "obj", endpoint, ["obj"],
-                    True, None, types.SchemaObject(in_name), None
+                    "", "obj", endpoint, ["obj"], True, None, in_typ, None
                 )
 
                 is_array = prop.get(defs.DOC_TYPE) == defs.TYPE_ARRAY
@@ -101,8 +90,7 @@ class Constructor:
                     continue
 
                 proj_out = Parameter(
-                    "", "field", endpoint, ["field"],
-                    True, int(is_array), out_type, None
+                    "", "field", endpoint, ["field"], True, int(is_array), out_type, None
                 )
                 proj_in = self._analyzer.find_same_type(proj_in)
                 proj_out = self._analyzer.find_same_type(proj_out)
@@ -199,36 +187,8 @@ class Constructor:
                     else:
                         to_field_typ = name
 
-                    in_name = None
-                    parts = self._analyzer.type_partitions.get(obj_name)
-                    opt_ins = []
-                    if parts is not None:
-                        for i, part in enumerate(parts):
-                            if to_field_typ in part:
-                                in_name = f"{obj_name}_{i}"
-                                break
-                            else:
-                                in_name = None
-
-                        for j in range(len(parts)):
-                            if j != i:
-                                param = Parameter(
-                                    "", "obj",
-                                    f"filter({in_name}, {in_name}.{to_field_typ})",
-                                    ["obj"], False, None,
-                                    types.SchemaObject(f"{obj_name}_{j}"), None
-                                )
-                                opt_ins.append(param)
-
-                        out_type = [
-                            types.SchemaObject(f"{obj_name}_{j}")
-                            for j in range(len(parts))
-                        ]
-
-                    if in_name is None:
-                        in_name = obj_name
-                        out_type = types.SchemaObject(obj_name)
-
+                    in_name = obj_name
+                    out_type = types.SchemaObject(obj_name)
                     endpoint = f"filter({in_name}, {in_name}.{to_field_typ})"
                     filter_in = [
                         Parameter(
@@ -240,16 +200,13 @@ class Constructor:
                             "", "field", endpoint, ["field"],
                             True, None, field_type, None
                         )
-                    ] + opt_ins
+                    ]
                     filter_out = Parameter(
                         "", "obj", endpoint,
                         ["obj"], True, 1, out_type, None
                     )
                     filter_in = [self._analyzer.find_same_type(fin)
                         for fin in filter_in]
-
-                    if parts is None:
-                        filter_out = self._analyzer.find_same_type(filter_out)
 
                     entry = TraceEntry(endpoint, "", None, filter_in, filter_out)
                     result_key = make_entry_name(endpoint, "")

@@ -9504,7 +9504,7 @@
                                 ],
                                 "properties": {
                                     "ts": {
-                                        "type": "string",
+                                        "type": "number",
                                         "description": "Timestamp of the message to be deleted."
                                     },
                                     "channel": {
@@ -9526,7 +9526,7 @@
                                 ],
                                 "properties": {
                                     "ts": {
-                                        "type": "string",
+                                        "type": "number",
                                         "description": "Timestamp of the message to be deleted."
                                     },
                                     "channel": {
@@ -10982,7 +10982,7 @@
                         "in": "query",
                         "description": "A UNIX timestamp of the latest value in the time range",
                         "schema": {
-                            "type": "string"
+                            "type": "number"
                         }
                     },
                     {
@@ -10990,7 +10990,7 @@
                         "in": "query",
                         "description": "A UNIX timestamp of the oldest value in the time range",
                         "schema": {
-                            "type": "string"
+                            "type": "number"
                         }
                     },
                     {
@@ -12120,7 +12120,7 @@
                         "in": "query",
                         "description": "End of time range of messages to include in results.",
                         "schema": {
-                            "type": "string"
+                            "type": "number"
                         }
                     },
                     {
@@ -12128,7 +12128,7 @@
                         "in": "query",
                         "description": "Start of time range of messages to include in results.",
                         "schema": {
-                            "type": "string"
+                            "type": "number"
                         }
                     },
                     {
@@ -12177,7 +12177,7 @@
                                             "type": "integer"
                                         },
                                         "channel_actions_ts": {
-                                            "$ref": "#/components/schemas/objs_ref_12"
+                                            "type": "integer"
                                         },
                                         "has_more": {
                                             "type": "boolean"
@@ -13549,7 +13549,7 @@
                                         "description": "Channel or conversation to set the read cursor for."
                                     },
                                     "ts": {
-                                        "type": "string",
+                                        "type": "number",
                                         "description": "Unique identifier of message you want marked as most recently seen in this conversation."
                                     }
                                 }
@@ -13567,7 +13567,7 @@
                                         "description": "Channel or conversation to set the read cursor for."
                                     },
                                     "ts": {
-                                        "type": "string",
+                                        "type": "number",
                                         "description": "Unique identifier of message you want marked as most recently seen in this conversation."
                                     }
                                 }
@@ -13921,7 +13921,7 @@
                                                     "$ref": "#/components/schemas/objs_conversation"
                                                 },
                                                 {
-                                                    "$ref": "#/components/schemas/objs_ref_13"
+                                                    "$ref": "#/components/schemas/objs_ref_8"
                                                 }
                                             ]
                                         },
@@ -14258,7 +14258,7 @@
                         "description": "Unique identifier of a thread's parent message. `ts` must be the timestamp of an existing message with 0 or more replies. If there are no replies then just the single message referenced by `ts` will return - it is just an ordinary, unthreaded message.",
                         "required": true,
                         "schema": {
-                            "type": "string"
+                            "type": "number"
                         }
                     },
                     {
@@ -14266,7 +14266,7 @@
                         "in": "query",
                         "description": "End of time range of messages to include in results.",
                         "schema": {
-                            "type": "string"
+                            "type": "number"
                         }
                     },
                     {
@@ -14274,7 +14274,7 @@
                         "in": "query",
                         "description": "Start of time range of messages to include in results.",
                         "schema": {
-                            "type": "string"
+                            "type": "number"
                         }
                     },
                     {
@@ -14323,10 +14323,10 @@
                                             "items": {
                                                 "oneOf": [
                                                     {
-                                                        "$ref": "#/components/schemas/objs_ref_14"
+                                                        "$ref": "#/components/schemas/objs_ref_9"
                                                     },
                                                     {
-                                                        "$ref": "#/components/schemas/objs_ref_15"
+                                                        "$ref": "#/components/schemas/objs_ref_10"
                                                     }
                                                 ]
                                             }
@@ -18353,10 +18353,10 @@
                                 "schema": {
                                     "oneOf": [
                                         {
-                                            "$ref": "#/components/schemas/objs_ref_16"
+                                            "$ref": "#/components/schemas/objs_ref_11"
                                         },
                                         {
-                                            "$ref": "#/components/schemas/objs_ref_19"
+                                            "$ref": "#/components/schemas/objs_ref_14"
                                         }
                                     ]
                                 },
@@ -18844,13 +18844,13 @@
                                 "schema": {
                                     "oneOf": [
                                         {
-                                            "$ref": "#/components/schemas/objs_ref_20"
+                                            "$ref": "#/components/schemas/objs_ref_15"
                                         },
                                         {
-                                            "$ref": "#/components/schemas/objs_ref_21"
+                                            "$ref": "#/components/schemas/objs_ref_16"
                                         },
                                         {
-                                            "$ref": "#/components/schemas/objs_ref_22"
+                                            "$ref": "#/components/schemas/objs_ref_17"
                                         }
                                     ]
                                 },
@@ -19033,13 +19033,13 @@
                                             "items": {
                                                 "oneOf": [
                                                     {
-                                                        "$ref": "#/components/schemas/objs_ref_23"
+                                                        "$ref": "#/components/schemas/objs_ref_18"
                                                     },
                                                     {
-                                                        "$ref": "#/components/schemas/objs_ref_24"
+                                                        "$ref": "#/components/schemas/objs_ref_19"
                                                     },
                                                     {
-                                                        "$ref": "#/components/schemas/objs_ref_25"
+                                                        "$ref": "#/components/schemas/objs_ref_20"
                                                     }
                                                 ]
                                             }
@@ -20656,22 +20656,22 @@
                                             "items": {
                                                 "oneOf": [
                                                     {
+                                                        "$ref": "#/components/schemas/objs_ref_21"
+                                                    },
+                                                    {
+                                                        "$ref": "#/components/schemas/objs_ref_22"
+                                                    },
+                                                    {
+                                                        "$ref": "#/components/schemas/objs_ref_23"
+                                                    },
+                                                    {
+                                                        "$ref": "#/components/schemas/objs_ref_24"
+                                                    },
+                                                    {
+                                                        "$ref": "#/components/schemas/objs_ref_25"
+                                                    },
+                                                    {
                                                         "$ref": "#/components/schemas/objs_ref_26"
-                                                    },
-                                                    {
-                                                        "$ref": "#/components/schemas/objs_ref_27"
-                                                    },
-                                                    {
-                                                        "$ref": "#/components/schemas/objs_ref_28"
-                                                    },
-                                                    {
-                                                        "$ref": "#/components/schemas/objs_ref_29"
-                                                    },
-                                                    {
-                                                        "$ref": "#/components/schemas/objs_ref_30"
-                                                    },
-                                                    {
-                                                        "$ref": "#/components/schemas/objs_ref_31"
                                                     }
                                                 ]
                                             }
@@ -23517,16 +23517,16 @@
                                 "schema": {
                                     "oneOf": [
                                         {
-                                            "$ref": "#/components/schemas/objs_ref_32"
+                                            "$ref": "#/components/schemas/objs_ref_27"
                                         },
                                         {
-                                            "$ref": "#/components/schemas/objs_ref_33"
+                                            "$ref": "#/components/schemas/objs_ref_28"
                                         },
                                         {
-                                            "$ref": "#/components/schemas/objs_ref_34"
+                                            "$ref": "#/components/schemas/objs_ref_29"
                                         },
                                         {
-                                            "$ref": "#/components/schemas/objs_ref_35"
+                                            "$ref": "#/components/schemas/objs_ref_30"
                                         }
                                     ]
                                 },
@@ -26990,7 +26990,11 @@
                         "type": "boolean"
                     },
                     "auto_type": {
-                        "$ref": "#/components/schemas/objs_ref_6"
+                        "type": "string",
+                        "enum": [
+                            "owner",
+                            "admin"
+                        ]
                     },
                     "channel_count": {
                         "type": "integer"
@@ -27102,7 +27106,7 @@
                         "type": "string"
                     },
                     "discoverable": {
-                        "$ref": "#/components/schemas/objs_ref_7"
+                        "type": "string"
                     },
                     "domain": {
                         "type": "string"
@@ -27261,10 +27265,10 @@
             "objs_user": {
                 "oneOf": [
                     {
-                        "$ref": "#/components/schemas/objs_ref_8"
+                        "$ref": "#/components/schemas/objs_ref_6"
                     },
                     {
-                        "$ref": "#/components/schemas/objs_ref_10"
+                        "$ref": "#/components/schemas/objs_ref_7"
                     }
                 ]
             },
@@ -28216,19 +28220,6 @@
                 }
             },
             "objs_ref_6": {
-                "type": "string",
-                "enum": [
-                    "owner",
-                    "admin"
-                ]
-            },
-            "objs_ref_7": {
-                "type": "string"
-            },
-            "objs_ref_9": {
-                "type": "string"
-            },
-            "objs_ref_8": {
                 "required": [
                     "id",
                     "is_app_user",
@@ -28329,7 +28320,7 @@
                         "type": "string"
                     },
                     "tz": {
-                        "$ref": "#/components/schemas/objs_ref_9"
+                        "type": "string"
                     },
                     "tz_label": {
                         "type": "string"
@@ -28343,10 +28334,7 @@
                 },
                 "description": "user object for non enterprise type"
             },
-            "objs_ref_11": {
-                "type": "string"
-            },
-            "objs_ref_10": {
+            "objs_ref_7": {
                 "required": [
                     "id",
                     "is_app_user",
@@ -28450,7 +28438,7 @@
                         "type": "string"
                     },
                     "tz": {
-                        "$ref": "#/components/schemas/objs_ref_11"
+                        "type": "string"
                     },
                     "tz_label": {
                         "type": "string"
@@ -28464,10 +28452,7 @@
                 },
                 "description": "enterprise user"
             },
-            "objs_ref_12": {
-                "type": "integer"
-            },
-            "objs_ref_13": {
+            "objs_ref_8": {
                 "required": [
                     "id"
                 ],
@@ -28502,7 +28487,7 @@
                     }
                 }
             },
-            "objs_ref_14": {
+            "objs_ref_9": {
                 "required": [
                     "reply_count",
                     "subscribed",
@@ -28568,7 +28553,7 @@
                     }
                 }
             },
-            "objs_ref_15": {
+            "objs_ref_10": {
                 "required": [
                     "parent_user_id",
                     "text",
@@ -28614,7 +28599,7 @@
                     }
                 }
             },
-            "objs_ref_17": {
+            "objs_ref_12": {
                 "title": "File Pin",
                 "type": "object",
                 "properties": {
@@ -28635,7 +28620,7 @@
                     }
                 }
             },
-            "objs_ref_18": {
+            "objs_ref_13": {
                 "title": "Message Pin",
                 "type": "object",
                 "properties": {
@@ -28659,7 +28644,7 @@
                     }
                 }
             },
-            "objs_ref_16": {
+            "objs_ref_11": {
                 "required": [
                     "items",
                     "ok"
@@ -28672,10 +28657,10 @@
                         "items": {
                             "oneOf": [
                                 {
-                                    "$ref": "#/components/schemas/objs_ref_17"
+                                    "$ref": "#/components/schemas/objs_ref_12"
                                 },
                                 {
-                                    "$ref": "#/components/schemas/objs_ref_18"
+                                    "$ref": "#/components/schemas/objs_ref_13"
                                 }
                             ]
                         }
@@ -28685,7 +28670,7 @@
                     }
                 }
             },
-            "objs_ref_19": {
+            "objs_ref_14": {
                 "required": [
                     "count",
                     "ok"
@@ -28700,7 +28685,7 @@
                     }
                 }
             },
-            "objs_ref_20": {
+            "objs_ref_15": {
                 "required": [
                     "channel",
                     "message",
@@ -28722,195 +28707,195 @@
                         "type": "string",
                         "enum": [
                             "message"
+                        ]
+                    }
+                }
+            },
+            "objs_ref_16": {
+                "required": [
+                    "file",
+                    "ok",
+                    "type"
+                ],
+                "type": "object",
+                "properties": {
+                    "file": {
+                        "$ref": "#/components/schemas/objs_file"
+                    },
+                    "ok": {
+                        "$ref": "#/components/schemas/defs_ok_true"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "file"
+                        ]
+                    }
+                }
+            },
+            "objs_ref_17": {
+                "required": [
+                    "comment",
+                    "file",
+                    "ok",
+                    "type"
+                ],
+                "type": "object",
+                "properties": {
+                    "comment": {
+                        "$ref": "#/components/schemas/objs_comment"
+                    },
+                    "file": {
+                        "$ref": "#/components/schemas/objs_file"
+                    },
+                    "ok": {
+                        "$ref": "#/components/schemas/defs_ok_true"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "file_comment"
+                        ]
+                    }
+                }
+            },
+            "objs_ref_18": {
+                "required": [
+                    "channel",
+                    "message",
+                    "type"
+                ],
+                "type": "object",
+                "properties": {
+                    "channel": {
+                        "$ref": "#/components/schemas/defs_channel"
+                    },
+                    "message": {
+                        "$ref": "#/components/schemas/objs_message"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "message"
+                        ]
+                    }
+                }
+            },
+            "objs_ref_19": {
+                "required": [
+                    "file",
+                    "type"
+                ],
+                "type": "object",
+                "properties": {
+                    "file": {
+                        "$ref": "#/components/schemas/objs_file"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "file"
+                        ]
+                    }
+                }
+            },
+            "objs_ref_20": {
+                "required": [
+                    "comment",
+                    "file",
+                    "type"
+                ],
+                "type": "object",
+                "properties": {
+                    "comment": {
+                        "$ref": "#/components/schemas/objs_comment"
+                    },
+                    "file": {
+                        "$ref": "#/components/schemas/objs_file"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "file_comment"
                         ]
                     }
                 }
             },
             "objs_ref_21": {
                 "required": [
-                    "file",
-                    "ok",
+                    "channel",
+                    "date_create",
+                    "message",
                     "type"
                 ],
                 "type": "object",
                 "properties": {
-                    "file": {
-                        "$ref": "#/components/schemas/objs_file"
+                    "channel": {
+                        "$ref": "#/components/schemas/defs_channel"
                     },
-                    "ok": {
-                        "$ref": "#/components/schemas/defs_ok_true"
+                    "date_create": {
+                        "type": "integer"
+                    },
+                    "message": {
+                        "$ref": "#/components/schemas/objs_message"
                     },
                     "type": {
                         "type": "string",
                         "enum": [
-                            "file"
+                            "message"
                         ]
                     }
                 }
             },
             "objs_ref_22": {
                 "required": [
-                    "comment",
+                    "date_create",
                     "file",
-                    "ok",
                     "type"
                 ],
                 "type": "object",
                 "properties": {
-                    "comment": {
-                        "$ref": "#/components/schemas/objs_comment"
+                    "date_create": {
+                        "type": "integer"
                     },
                     "file": {
                         "$ref": "#/components/schemas/objs_file"
                     },
-                    "ok": {
-                        "$ref": "#/components/schemas/defs_ok_true"
-                    },
                     "type": {
                         "type": "string",
                         "enum": [
-                            "file_comment"
+                            "file"
                         ]
                     }
                 }
             },
             "objs_ref_23": {
                 "required": [
-                    "channel",
-                    "message",
+                    "comment",
+                    "date_create",
+                    "file",
                     "type"
                 ],
                 "type": "object",
                 "properties": {
-                    "channel": {
-                        "$ref": "#/components/schemas/defs_channel"
+                    "comment": {
+                        "$ref": "#/components/schemas/objs_comment"
                     },
-                    "message": {
-                        "$ref": "#/components/schemas/objs_message"
+                    "date_create": {
+                        "type": "integer"
+                    },
+                    "file": {
+                        "$ref": "#/components/schemas/objs_file"
                     },
                     "type": {
                         "type": "string",
                         "enum": [
-                            "message"
+                            "file_comment"
                         ]
                     }
                 }
             },
             "objs_ref_24": {
-                "required": [
-                    "file",
-                    "type"
-                ],
-                "type": "object",
-                "properties": {
-                    "file": {
-                        "$ref": "#/components/schemas/objs_file"
-                    },
-                    "type": {
-                        "type": "string",
-                        "enum": [
-                            "file"
-                        ]
-                    }
-                }
-            },
-            "objs_ref_25": {
-                "required": [
-                    "comment",
-                    "file",
-                    "type"
-                ],
-                "type": "object",
-                "properties": {
-                    "comment": {
-                        "$ref": "#/components/schemas/objs_comment"
-                    },
-                    "file": {
-                        "$ref": "#/components/schemas/objs_file"
-                    },
-                    "type": {
-                        "type": "string",
-                        "enum": [
-                            "file_comment"
-                        ]
-                    }
-                }
-            },
-            "objs_ref_26": {
-                "required": [
-                    "channel",
-                    "date_create",
-                    "message",
-                    "type"
-                ],
-                "type": "object",
-                "properties": {
-                    "channel": {
-                        "$ref": "#/components/schemas/defs_channel"
-                    },
-                    "date_create": {
-                        "type": "integer"
-                    },
-                    "message": {
-                        "$ref": "#/components/schemas/objs_message"
-                    },
-                    "type": {
-                        "type": "string",
-                        "enum": [
-                            "message"
-                        ]
-                    }
-                }
-            },
-            "objs_ref_27": {
-                "required": [
-                    "date_create",
-                    "file",
-                    "type"
-                ],
-                "type": "object",
-                "properties": {
-                    "date_create": {
-                        "type": "integer"
-                    },
-                    "file": {
-                        "$ref": "#/components/schemas/objs_file"
-                    },
-                    "type": {
-                        "type": "string",
-                        "enum": [
-                            "file"
-                        ]
-                    }
-                }
-            },
-            "objs_ref_28": {
-                "required": [
-                    "comment",
-                    "date_create",
-                    "file",
-                    "type"
-                ],
-                "type": "object",
-                "properties": {
-                    "comment": {
-                        "$ref": "#/components/schemas/objs_comment"
-                    },
-                    "date_create": {
-                        "type": "integer"
-                    },
-                    "file": {
-                        "$ref": "#/components/schemas/objs_file"
-                    },
-                    "type": {
-                        "type": "string",
-                        "enum": [
-                            "file_comment"
-                        ]
-                    }
-                }
-            },
-            "objs_ref_29": {
                 "required": [
                     "channel",
                     "date_create",
@@ -28932,7 +28917,7 @@
                     }
                 }
             },
-            "objs_ref_30": {
+            "objs_ref_25": {
                 "required": [
                     "channel",
                     "date_create",
@@ -28954,7 +28939,7 @@
                     }
                 }
             },
-            "objs_ref_31": {
+            "objs_ref_26": {
                 "required": [
                     "channel",
                     "date_create",
@@ -28976,7 +28961,7 @@
                     }
                 }
             },
-            "objs_ref_32": {
+            "objs_ref_27": {
                 "required": [
                     "ok",
                     "team",
@@ -29016,7 +29001,7 @@
                 },
                 "description": "Schema for 'identity.basic' scope"
             },
-            "objs_ref_33": {
+            "objs_ref_28": {
                 "required": [
                     "ok",
                     "team",
@@ -29060,7 +29045,7 @@
                 },
                 "description": "Schema for 'identity.basic,identity.email' scopes"
             },
-            "objs_ref_34": {
+            "objs_ref_29": {
                 "required": [
                     "ok",
                     "team",
@@ -29130,7 +29115,7 @@
                 },
                 "description": "Schema for 'identity.basic,identity.avatar' scopes"
             },
-            "objs_ref_35": {
+            "objs_ref_30": {
                 "required": [
                     "ok",
                     "team",

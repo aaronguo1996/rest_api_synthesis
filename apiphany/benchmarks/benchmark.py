@@ -108,8 +108,8 @@ class Benchmark:
             rep_output = self.output.ignore_array()
             rep_output.name = analyzer.find_representative_for_type(rep_output)
 
-            print("inputs", rep_inputs)
-            print("output", rep_output)
+            # print("inputs", rep_inputs)
+            # print("output", rep_output)
             # with cProfile.Profile() as p:
             parallel.spawn_encoders(
                 synthesizer,
