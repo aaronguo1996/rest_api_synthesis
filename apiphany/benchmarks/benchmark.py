@@ -379,9 +379,17 @@ class BenchmarkSuite:
         print(self.api, "has", not_covered_benches, "benchmarks with not covered endpoints")
 
         # covered endpoints
-        covered = {
-            (x.endpoint, x.method.upper()) for x in self._entries if x.endpoint in endpoints
-        }
+        covered = set()
+        
+        for x in self._entries:
+            if x.endpoint == "/v1/accounts/{account}/persons":
+                print([(param.arg_name, param.value) for param in x.parameters])
+                print(x.response.value)
+            if (x.endpoint in endpoints and 
+                not isinstance(x.response, ErrorResponse) and 
+                not x.response.value):
+                covered.add((x.endpoint, x.method.upper()))
+
         ep_covered = len(covered)
 
         # witnesses stats

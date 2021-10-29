@@ -333,6 +333,7 @@ class Synthesizer:
             # "filter(Subscription, Subscription.customer_id)_",
             # "filter(Subscription, Subscription.location_id)_",
             # "/v2/catalog/search_POST",
+            "/v2/catalog/search-catalog-items_POST",
             # "projection(SearchCatalogObjectsResponse, objects)_",
             # "filter(CatalogObject, CatalogObject.item_data.tax_ids.[?])_"
         ]

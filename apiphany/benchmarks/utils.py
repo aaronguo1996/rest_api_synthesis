@@ -176,6 +176,9 @@ def index_entries(entries, skip_fields):
                 (param_values, e.response.value, weight)
             )
 
+        if fun == "/v1/accounts/{account}/persons_GET":
+            print(index_result[fun])
+
     return index_result
 
 def pretty_none(v):
@@ -239,8 +242,12 @@ def prune_by_coverage(paths, witnesses, coverage):
     covered = set()
     for w in witnesses:
         key = (w.endpoint, w.method.upper())
-        if key in methods:
+        if (key in methods and
+            not isinstance(w.response, ErrorResponse) and
+            w.response.value is not None):
             covered.add(key)
+
+    print("Original coverage:", len(covered), "out of", len(methods), ", percentage:", len(covered) / len(methods))
 
     # coverage = len(covered) / len(methods) * coverage # relative coverage
     # if curr_coverage <= coverage or within_expected_coverage(curr_coverage, coverage):

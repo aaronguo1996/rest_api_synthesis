@@ -10,7 +10,7 @@ EXP_NAME=apiphany_exp
 BENCH_SRC=bench.py
 BENCH_EXE=python $(BENCH_SRC)
 # reps
-REPEAT_EXP=1
+REPEAT_EXP=3
 uncovered_exclude=exclude
 uncovered_syntactic=default-to-syntactic
 coverage_onethird=0.33
