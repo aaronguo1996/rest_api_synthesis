@@ -12630,13 +12630,13 @@
                         "description": "A UNIX timestamp of the latest value in the time range",
                         "in": "query",
                         "name": "latest",
-                        "type": "number"
+                        "type": "string"
                     },
                     {
                         "description": "A UNIX timestamp of the oldest value in the time range",
                         "in": "query",
                         "name": "oldest",
-                        "type": "number"
+                        "type": "string"
                     },
                     {
                         "description": "Maximum number of original entries to return.",
@@ -13633,13 +13633,13 @@
                         "description": "End of time range of messages to include in results.",
                         "in": "query",
                         "name": "latest",
-                        "type": "number"
+                        "type": "string"
                     },
                     {
                         "description": "Start of time range of messages to include in results.",
                         "in": "query",
                         "name": "oldest",
-                        "type": "number"
+                        "type": "string"
                     },
                     {
                         "description": "Include messages with latest or oldest timestamp in results only when either timestamp is specified.",
@@ -15647,13 +15647,13 @@
                         "description": "End of time range of messages to include in results.",
                         "in": "query",
                         "name": "latest",
-                        "type": "number"
+                        "type": "string"
                     },
                     {
                         "description": "Start of time range of messages to include in results.",
                         "in": "query",
                         "name": "oldest",
-                        "type": "number"
+                        "type": "string"
                     },
                     {
                         "description": "Include messages with latest or oldest timestamp in results only when either timestamp is specified.",

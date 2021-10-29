@@ -196,8 +196,8 @@ class ProgramGenerator:
                     # for e in expr_subst.get(expr.var, []):
                     #     e.set_type(typ)
 
-                    arg_name = path_to_name(param.path)
-                    arg_exprs.append((arg_name, expr))
+                    # arg_name = path_to_name(param.path)
+                    arg_exprs.append((param, expr))
 
                 old_args_list = [args[:] for args in args_list]
                 for i, args in enumerate(old_args_list):
@@ -205,6 +205,9 @@ class ProgramGenerator:
                         # set a upper bound for how many parameter we will use
                         # replace any of the existing args instead of expanding it
                         for i in range(len(args)):
+                            if args[i][0][0].is_required: # don't replace required args
+                                continue
+
                             tmp_args = args[:]
                             tmp_args[i] = arg_exprs
                             args_list.append(tmp_args)
@@ -254,7 +257,8 @@ class ProgramGenerator:
         for args in args_list:
             for params in itertools.product(*args):
                 named_args = []
-                for arg_name, arg in params:
+                for param, arg in params:
+                    arg_name = path_to_name(param.path)
                     named_args.append((arg_name, arg))
 
                 f = make_entry_name(sig.endpoint, sig.method)

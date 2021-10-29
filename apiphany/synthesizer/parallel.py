@@ -19,41 +19,45 @@ def get_results(synthesizer, analyzer, encoder,
     is_array_output, expected_solution, conversion_fair, solutions, path_len,
     start, re_time, path_count):
     solution_set = set()
-    path = encoder.get_length_of(output_map, conversion_fair)
-    while path is not None:
-        # print("Finding a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
+    include_more_syntactic = True
+    encoder.set_final(output_map)
+    encoder.reset_syntactic()
 
-        end = time.time()
-        # print(path)
-        path_count += 1
-        programs, perms = synthesizer.generate_solutions(
-            path_len, inputs, outputs, path, end - start
-        )
-
-        for p in set(programs):
-            if p not in solution_set:
-                solution_set.add(p)
-                re_start = time.time()
-                if run_re:
-                    cost = rust_re(
-                        analyzer, p,
-                        list(inputs.items()),
-                        is_array_output,
-                        repeat_time)
-                else:
-                    cost = None
-                re_time += time.time() - re_start
-                solutions.put((path_count, time.time() - start, p, re_time, cost))
-
-
-                if p == expected_solution:
-                    # print("Found expected solution", flush=True)
-                    solution_set.add(p)
-                    free_up()
-                    return consts.SearchStatus.FOUND_EXPECTED
-
-        encoder.block_prev(perms)
+    while include_more_syntactic:
         path = encoder.solve()
+        while path is not None:
+            # print("Finding a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
+            end = time.time()
+            # print(path)
+            path_count += 1
+            programs, perms = synthesizer.generate_solutions(
+                path_len, inputs, outputs, path, end - start
+            )
+
+            for p in set(programs):
+                if p not in solution_set:
+                    solution_set.add(p)
+                    re_start = time.time()
+                    if run_re:
+                        cost = rust_re(analyzer, p, list(inputs.items()), is_array_output, repeat_time)
+                    else:
+                        cost = None
+                    re_time += time.time() - re_start
+                    solutions.put((path_count, time.time() - start, p, re_time, cost))
+
+                    # # hope this can reduce the memory usage
+                    # if len(solution_set) > 10**6:
+                    #     return consts.SearchStatus.NOT_FOUND
+
+                    if p == expected_solution:
+                        # print("Found expected solution", flush=True)
+                        solution_set.add(p)
+                        return consts.SearchStatus.FOUND_EXPECTED
+
+            encoder.block_prev(perms)
+            path = encoder.solve()
+
+        include_more_syntactic = encoder.increment_syntactic()
 
     return consts.SearchStatus.NOT_FOUND
 
@@ -192,7 +196,7 @@ def collect_parallel_data(synthesizer, all_solutions):
 
 def spawn_encoders(synthesizer, analyzer, entries, 
     repeat_time, run_re, inputs, outputs, is_array_output,
-    solver_num, expected_solution, conversion_fair, prim_as_return, timeout=150):
+    solver_num, expected_solution, conversion_fair, prim_as_return, timeout=90):
     m = multiprocessing.Manager()
     all_solutions = []
     for _ in range(consts.DEFAULT_LENGTH_LIMIT + 1):

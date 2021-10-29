@@ -82,7 +82,7 @@ class Synthesizer:
                     response_typ = [str(t) for t in e.response.type]
                 else:
                     response_typ = [str(e.response.type)]
-                key = (tuple(param_typs), tuple(param_reqs), tuple(response_typ))
+                key = (tuple(param_typs), tuple(response_typ))
                 group = self._groups.get(key, [name])
                 groups.append(group)
             else:
@@ -102,9 +102,16 @@ class Synthesizer:
 
         groups = self._expand_groups(result) 
         for r in itertools.product(*groups):
-            new_programs = self._program_generator.generate_program(
-                r, inputs, outputs[0]
-            )
+            try:
+                # sometimes the program generation fails because 
+                # we merge programs with the same signature but they may have different necessaties
+                # If an exception is raised, we assume this is a spurious sketch
+                new_programs = self._program_generator.generate_program(
+                    r, inputs, outputs[0]
+                )
+            except Exception:
+                new_programs = set()
+
             programs = programs.union(new_programs)
 
         # self._serialize_solutions(i, programs)
@@ -170,7 +177,7 @@ class Synthesizer:
             output_map[typ_name] += 1
 
         print("input_map", input_map)
-        pirnt("output_map", output_map)
+        print("output_map", output_map)
 
         start = time.time()
         self._encoder.init(input_map, output_map)
@@ -279,6 +286,7 @@ class Synthesizer:
             # "projection({'ok': defs_ok_true, 'profile': objs_user_profile}, profile)_",
             # "/conversations.history_GET",
             # "projection(objs_conversation, last_read)_",
+            # "projection(objs_conversation, user)_",
             # "/users.conversations_GET",
             # "/conversations.invite_POST",
             # "/chat.update_POST",
@@ -352,7 +360,7 @@ class Synthesizer:
                 response_typ = [str(t.ignore_array()) for t in e.response.type]
             else:
                 response_typ = [str(e.response.type.ignore_array())]
-            key = (tuple(param_typs), tuple(param_reqs), tuple(response_typ))
+            key = (tuple(param_typs), tuple(response_typ))
             if key not in self._groups:
                 results[proj] = e
                 self._groups[key] = [proj]

@@ -4,8 +4,8 @@ import time
 import gurobipy as gp
 from gurobipy import GRB
 
-from stats.time_stats import TimeStats, STATS_ENCODE, STATS_SEARCH
-from synthesizer.utils import group_params, make_entry_name
+from stats.time_stats import TimeStats, STATS_ENCODE
+from synthesizer.utils import group_params, is_syntactic
 from synthesizer.underapprox import Approximation
 import consts
 
@@ -29,7 +29,8 @@ class ILPetriEncoder:
         self._cf = None
         self._soln_ix = None
         self._finals = None
-        self._conversions = gp.tupledict()
+        self._syntactic_constr = None
+        self._syntactic_quota = 0
 
         # encode place and transition names into integers
         self._place_names = []
@@ -62,14 +63,6 @@ class ILPetriEncoder:
                 res.append(self._get_sol())
 
         return res
-
-    def get_length_of(self, outputs, conversion_fair=False):
-        self.set_final(outputs)
-
-        if not conversion_fair:
-            self.set_objective()
-
-        return self.solve()
 
     def type_exists(self, typ_name):
         return self._net.has_place(typ_name)
@@ -150,6 +143,14 @@ class ILPetriEncoder:
         self._model.remove(self._block)
         self._block = []
 
+    def increment_syntactic(self):
+        if self._syntactic_quota < 2 * self._path_len:
+            self._syntactic_quota += 1
+            self.reset_syntactic()
+            return True
+        else:
+            return False
+
     def _run_approximation(self, inputs, output, prim_as_return=False):
         # print("before approximation:", len(self._net.transition()))
         # on top of the input types,
@@ -211,9 +212,6 @@ class ILPetriEncoder:
             self._fires[(t_idx, ck)] = self._model.addVar(
                 name=f'fires[{t_idx},{ck}]',
                 vtype=GRB.BINARY)
-            if consts.PREFIX_CONVERT in trans_name:
-                self._conversions[(t_idx, ck)] = self._fires[(t_idx, ck)]
-
 
             # This transition can be fired some non-negative number of times.
             self._model.addConstr(
@@ -279,11 +277,9 @@ class ILPetriEncoder:
                             output_changes += self._tokens[(p_idx, ck + 1)]
                     else: # FIXME: changes separate for filters and non-filters
                         if output_changes is None:
-                            output_changes = self._tokens[(p_idx, ck + 1)] - \
-                                self._tokens[(p_idx, ck + 1)]
+                            output_changes = self._tokens[(p_idx, ck + 1)] - self._tokens[(p_idx, ck + 1)]
                         else:
-                            output_changes += self._tokens[(p_idx, ck + 1)] - \
-                                self._tokens[(p_idx, ck + 1)]
+                            output_changes += self._tokens[(p_idx, ck + 1)] - self._tokens[(p_idx, ck + 1)]
                 else: # required outputs
                     if entry is None: # clone transitions
                         tokens[p.name] = (req_in - 2, opt_in, 0)
@@ -401,6 +397,17 @@ class ILPetriEncoder:
                 (self._tokens[(p, t)] == self._finals.get(self._place_names[p], 0) for p in places),
                 name='final_marking')
 
+    def reset_syntactic(self):
+        if self._syntactic_constr:
+            self._model.remove(self._syntactic_constr)
+
+        usage = 0
+        for p in range(len(self._place_names)):
+            if is_syntactic(self._place_names[p]):
+                usage += self._tokens.sum(p, '*')
+    
+        self._syntactic_constr = self._model.addConstr(usage == self._syntactic_quota)
+
     def set_final(self, typs):
         # Final marking
         # Will be removed and re-added on each increment of ck.
@@ -408,9 +415,3 @@ class ILPetriEncoder:
         # constraint enforcing the final val of void.
         self._finals = typs
         self._reset_finals(self._path_len)
-
-    def set_objective(self):
-        self._model.setObjective(
-            self._conversions.sum(),
-            GRB.MINIMIZE)
-        # self._model.addConstr(self._conversions.sum() == 0, name='no convert')

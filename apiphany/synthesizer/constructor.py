@@ -74,6 +74,9 @@ class Constructor:
                 if '{' in in_name and '}' in in_name:
                     in_typ = types.construct_type(field_name, obj_def)
                 else:
+                    if types.BaseType.object_lib.get(in_name) is None:
+                        return results
+
                     in_typ = types.SchemaObject(in_name)
 
                 endpoint = f"projection({in_name}, {name})"
