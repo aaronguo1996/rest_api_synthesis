@@ -486,6 +486,25 @@ stripe_benchmarks = [
             )
         ]
     ),
+    Benchmark(
+        "2.11",
+        "Delete the default payment source for the given customer",
+        "https://stackoverflow.com/questions/17807881/stripe-api-throwing-error-when-trying-to-delete-a-card",
+        {
+            "customer_id": types.PrimString("customer.id"),
+        },
+        types.SchemaObject("payment_source"),
+        [
+            Program(
+                ["customer_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v1/customers/{customer}_GET", [("customer", VarExpr("customer_id"))]), False),
+                    AssignExpr("x1", AppExpr("/v1/customers/{customer}/sources/{id}_DELETE", [("customer", VarExpr("customer_id")), ("id", ProjectionExpr(VarExpr("x0"), "default_source"))]), False),
+                    VarExpr("x1")
+                ]
+            )
+        ]
+    )
 ]
 
 stripe_suite = BenchmarkSuite(

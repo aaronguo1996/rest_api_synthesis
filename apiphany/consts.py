@@ -3,7 +3,7 @@ from enum import Enum
 OBJ_MATCH_THRESHOLD = 0.6
 REF_PREFIX = "#/components/schemas/"
 CUSTOM_PREFIX = "x-"
-DEFAULT_LENGTH_LIMIT = 9
+DEFAULT_LENGTH_LIMIT = 6
 JSON_TYPE = "application/json"
 HOSTNAME_PREFIX = "https://"
 HOSTNAME_PREFIX_LEN = len(HOSTNAME_PREFIX)

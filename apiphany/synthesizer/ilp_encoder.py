@@ -68,6 +68,7 @@ class ILPetriEncoder:
         return self._net.has_place(typ_name)
 
     def solve(self):
+        # print(self._path_len, self._soln_ix, flush=True)
         # previous run failed; assume everything's been incremented and rerun the solver
         if self._soln_ix is None:
             # run the solver
@@ -75,9 +76,9 @@ class ILPetriEncoder:
             self._model.setParam(GRB.Param.SolutionNumber, 0)
             start = time.time()
             self._model.optimize()
-            # print("running solver | sols:", self._model.solCount, 
-            #     "| len:", self._path_len, 
-            #     "| solve time:", time.time() - start)
+            print("running solver | sols:", self._model.solCount, 
+                "| len:", self._path_len, 
+                "| solve time:", time.time() - start)
         # uncomment for batch/tiled blocking
         # elif self._soln_ix >= SOLS_PER_SOLVE:
         #     # run the solver
@@ -176,6 +177,10 @@ class ILPetriEncoder:
             self._reachables = self._reachables.union(reachables)
         else:
             self._reachables = set(self._entries.keys()) # everything is reachable
+
+        # print("clone_customer.id", "clone_customer.id" in self._reachables)
+        # print("/v1/customers/{customer}/sources/{id}_DELETE", "/v1/customers/{customer}/sources/{id}_DELETE" in self._reachables)
+        # print("/v1/customers/{customer}_GET", "/v1/customers/{customer}_GET" in self._reachables)
 
         for trans in self._net.transition():
             if trans.name not in self._reachables:

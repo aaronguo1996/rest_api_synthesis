@@ -78,7 +78,7 @@ class BasicGenerator:
         x = Xeger(limit=20)
         defined_regex = None
         if param_name in self._value_dict:
-            self._logger.debug(f"Witness {param_name} in the value_dict")
+            print(f"Witness {param_name} in the value_dict")
             defined_regex = self._value_dict.get(param_name)
 
         if isinstance(param_type, types.ArrayType):
@@ -105,7 +105,7 @@ class BasicGenerator:
 
     def _generate_one(self):
         entry = self._entry
-        self._logger.debug(f"generating for endpoint {entry.endpoint}")
+        print(f"generating for endpoint {entry.endpoint}")
 
         try:
             params = self._generate_params(
@@ -149,7 +149,7 @@ class SaturationThread(BasicGenerator):
             else:
                 return random.choice(producer.values)
         elif isinstance(producer, EndpointProducer):
-            self._logger.debug(f"Trying the producer {producer.endpoint} with path {producer.path}")
+            print(f"Trying the producer {producer.endpoint} with path {producer.path}")
             resp = Parameter(
                 producer.method,
                 producer.path[-1],
@@ -162,39 +162,39 @@ class SaturationThread(BasicGenerator):
             )
             bank = self._analyzer.dsu.get_value_bank(resp)
             if bank:
-                self._logger.debug(f"Find a value from the producer {producer.endpoint} with path {producer.path}")
+                print(f"Find a value from the producer {producer.endpoint} with path {producer.path}")
                 return random.choice(list(bank))
             else:
-                self._logger.debug(f"Didn't find a value from the producer {producer.endpoint} with path {producer.path}")
+                print(f"Didn't find a value from the producer {producer.endpoint} with path {producer.path}")
                 return None
         else:
-            self._logger.debug(f"Trying the parameter value {producer}")
+            print(f"Trying the parameter value {producer}")
             return producer
 
     def _generate_object(self, param):
         param_type = param.type
 
-        self._logger.debug(f"Generating string values for {param.arg_name} with path {param.path}")
+        print(f"Generating string values for {param.arg_name} with path {param.path}")
         if param.arg_name == defs.INDEX_ANY:
             arg_name = param.path[-2]
         else:
             arg_name = param.arg_name
 
         if self._analyzer.dsu.find(param) and arg_name != defs.DOC_NAME and arg_name != defs.DOC_TYPE:
-            self._logger.debug(
+            print(
                 f"Trying fill parameter {arg_name} by real dependencies")
             # if we already have the value bank for this variable
             param_value_bank = self._analyzer.dsu.get_value_bank(param)
             param_val = random.choice(list(param_value_bank))
         elif (param_type.name in self._analyzer.type_values and
             arg_name != defs.DOC_NAME):
-            self._logger.debug(
+            print(
                 f"Trying fill parameter {arg_name} with object values of type {param_type.name}")
             param_value_bank = self._analyzer.type_values[param_type.name]
             param_val = random.choice(list(param_value_bank))
         elif ((self._entry.endpoint, arg_name) in self._annotations and
            arg_name != defs.DOC_NAME):
-            self._logger.debug(
+            print(
                 f"Trying fill parameter {arg_name}"
                 f" by annotated dependencies")
             # try inferred dependencies but do not create new values
@@ -214,7 +214,7 @@ class SaturationThread(BasicGenerator):
             param_val = None
 
         if not param_val:
-            self._logger.debug(
+            print(
                 f"No dependency found for {(self._entry.endpoint, arg_name)}. "
                 f"Trying random values.")
             param_val = self._random_from_type(arg_name, param_type)
@@ -249,7 +249,7 @@ class SaturationThread(BasicGenerator):
 
 class WitnessGenerator:
     def __init__(self, openapi_entries, hostname, base_path,
-        entries, analyzer, token, val_dict, ann_path, exp_dir,
+        typed_entries, analyzer, token, val_dict, ann_path, exp_dir,
         path_to_defs=consts.REF_PREFIX,
         skip_fields=[], plot_freq = 1):
         self._logger = logging.getLogger(__name__)
@@ -257,7 +257,7 @@ class WitnessGenerator:
         self._doc_entries = openapi_entries
         self._hostname = hostname
         self._base_path = base_path
-        self._entries = entries
+        self._typed_entries = typed_entries
 
         # resolve dependencies from the spec
         resolver = DependencyResolver(openapi_entries)
@@ -277,7 +277,7 @@ class WitnessGenerator:
         self._exp_dir = exp_dir
 
         # start a new connection for generating
-        self._logger.debug(f"Get hostname: {self._hostname} and basePath: {self._base_path}")
+        print(f"Get hostname: {self._hostname} and basePath: {self._base_path}")
 
         self._path_to_defs = path_to_defs
         self._skip_fields = skip_fields
@@ -360,22 +360,18 @@ class WitnessGenerator:
         return entries
 
     def _run_all(self, generate_type, endpoints, iterations, timeout, max_opt_params):
-        for i in range(1, iterations+1):
+        for i in range(iterations):
             # fire many threads at one time
             with ThreadPoolExecutor(max_workers=8) as executor: # TODO: change this to configuration
                 futures = []
                 results = []
 
-                for entry in self._entries.values():
-                    # skip delete methods
-                    if entry.method.upper() == defs.METHOD_DELETE:
+                for entry in self._typed_entries.values():
+                    # do delete every 3 iterations
+                    if entry.method.upper() == defs.METHOD_DELETE and i % 5 != 0:
                         continue
-
-                    # skip projections
-                    if re.search(r"^projection(.*, .*)$", entry.endpoint):
-                        continue
-
-                    self._logger.debug(f"Submit job for {entry.method} {entry.endpoint}")
+                    
+                    print(f"Submit job for {entry.method} {entry.endpoint}")
                     num_params = utils.num_optional_params(entry)
 
                     def generate_opt_param_subsets(num_params, num_choose, indices):
@@ -456,7 +452,7 @@ class WitnessGenerator:
                 self._covered_endpoints.add(r.entry.endpoint)
 
         coverage = cnt / len(results)
-        self._logger.info(f"Coverage at iteration {i}: {coverage}")
+        print(f"Coverage at iteration {i}: {coverage}")
         return coverage
 
     def saturate_all(self, endpoints, iterations, timeout, max_opt_params):

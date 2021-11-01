@@ -1,7 +1,7 @@
 from collections import defaultdict
 import multiprocessing
 import os
-# import pebble
+import pebble
 import time
 import signal
 from functools import partial
@@ -18,12 +18,14 @@ def get_results(synthesizer, analyzer, encoder,
     repeat_time, run_re, inputs, outputs, output_map, 
     is_array_output, expected_solution, conversion_fair, solutions, path_len,
     start, re_time, path_count):
+    # print("getting results at path length", path_len, flush=True)
     solution_set = set()
-    include_more_syntactic = True
     encoder.set_final(output_map)
     encoder.reset_syntactic()
 
+    include_more_syntactic = True
     while include_more_syntactic:
+        # print("running path length", path_len, flush=True)
         path = encoder.solve()
         while path is not None:
             # print("Finding a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
@@ -184,6 +186,7 @@ def collect_parallel_data(synthesizer, all_solutions):
             if prog.has_conversion():
                 cost += 10
 
+            # print(prog)
             prog_list.append((syn_time, prog, re_time, cost))
 
         synthesizer._serialize_solutions(i, prog_list)
@@ -203,31 +206,50 @@ def spawn_encoders(synthesizer, analyzer, entries,
         solutions = m.Queue()
         all_solutions.append(solutions)
 
-    pool = multiprocessing.Pool(processes=solver_num)
-    results = pool.imap_unordered(
-        partial(run_encoder,
-                synthesizer, analyzer, entries,
+    # pool = multiprocessing.Pool(processes=solver_num)
+    # results = pool.imap_unordered(
+    #     partial(run_encoder,
+    #             synthesizer, analyzer, entries,
+    #             repeat_time, run_re, inputs, outputs, is_array_output,
+    #             expected_solution, conversion_fair, prim_as_return,
+    #             all_solutions),
+    #     range(consts.DEFAULT_LENGTH_LIMIT + 1),
+    #     # [1,4]
+    # )
+    # while True:
+    #     try:
+    #         status = results.next(timeout=timeout)
+    #         if status == consts.SearchStatus.FOUND_EXPECTED:
+    #             pool.terminate()
+    #             break
+    #     except StopIteration:
+    #         pool.terminate()
+    #         break
+    #     except multiprocessing.TimeoutError:
+    #         print("Timeout", flush=True)
+    #         pool.terminate()
+    #         break
+
+    # pool.close()
+    # pool.join()
+
+    with pebble.ProcessPool(max_workers=solver_num) as executor:
+        futures = []
+        for path_len in range(consts.DEFAULT_LENGTH_LIMIT + 1):
+            res = executor.schedule(run_encoder,
+                args=(synthesizer, analyzer, entries,
                 repeat_time, run_re, inputs, outputs, is_array_output,
                 expected_solution, conversion_fair, prim_as_return,
-                all_solutions),
-        range(consts.DEFAULT_LENGTH_LIMIT + 1),
-        # [1,9]
-    )
-    while True:
-        try:
-            status = results.next(timeout=timeout)
-            if status == consts.SearchStatus.FOUND_EXPECTED:
-                pool.terminate()
-                break
-        except StopIteration:
-            pool.terminate()
-            break
-        except multiprocessing.TimeoutError:
-            print("Timeout", flush=True)
-            pool.terminate()
-            break
+                all_solutions, path_len), timeout=timeout)
+            futures.append(res)
 
-    pool.close()
-    pool.join()
+        for future in futures:
+            try:
+                status = future.result(timeout=timeout)
+                if status == consts.SearchStatus.FOUND_EXPECTED:
+                    executor.close()
+                    executor.join()
+            except Exception:
+                pass
 
     collect_parallel_data(synthesizer, all_solutions)

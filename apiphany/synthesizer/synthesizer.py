@@ -109,7 +109,8 @@ class Synthesizer:
                 new_programs = self._program_generator.generate_program(
                     r, inputs, outputs[0]
                 )
-            except Exception:
+            except Exception as e:
+                print("Exception:", e)
                 new_programs = set()
 
             programs = programs.union(new_programs)
@@ -244,7 +245,7 @@ class Synthesizer:
             # "/v1/prices_POST",
             # "projection(subscription, items)_",
             # "projection(subscription_item, price)_",
-            # "/v1/customers/{customer}/sources/{id}_DELETE"
+            "/v1/customers/{customer}/sources/{id}_DELETE",
             # "/v1/invoiceitems_POST",
             # 'projection(product, active)_',
             # "/v1/invoices_GET",
@@ -263,9 +264,11 @@ class Synthesizer:
             # "/v1/customers/{customer}/sources_GET",
             # 'filter(status_transitions, status_transitions.returned)_',
             # "filter(subscription, subscription.items.data.[?].price.product)_",
-            # "projection(subscription, customer)_"
+            # "projection(subscription, customer)_",
             # "projection(customer, subscriptions)_",
-            # "projection(customer, id)_"
+            # "projection(customer, id)_",
+            "/v1/customers/{customer}_GET",
+            "projection(customer, default_source)_",
             # "projection(payment_source, type)_"
 
             # "/admin.users.session.invalidate_POST",
@@ -333,7 +336,7 @@ class Synthesizer:
             # "filter(Subscription, Subscription.customer_id)_",
             # "filter(Subscription, Subscription.location_id)_",
             # "/v2/catalog/search_POST",
-            "/v2/catalog/search-catalog-items_POST",
+            # "/v2/catalog/search-catalog-items_POST",
             # "projection(SearchCatalogObjectsResponse, objects)_",
             # "filter(CatalogObject, CatalogObject.item_data.tax_ids.[?])_"
         ]
