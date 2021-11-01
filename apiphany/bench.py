@@ -61,6 +61,8 @@ def build_cmd_parser():
         help="Only generate witness files")
     parser.add_argument("--generate-witness", action="store_true",
         help="Whether to generate witness")
+    parser.add_argument("--syntactic-only", action="store_true",
+        help="Whether to not infer any semantic types.")
     parser.add_argument("--method-coverage", type=float,
         help="Prune methods and witnesses to get the target coverage")
     parser.add_argument("--uncovered", type=consts.UncoveredOption,
@@ -106,6 +108,7 @@ def build_cmd_parser():
     # default values
     parser.set_defaults(
         filter_sol_only=False,
+        syntactic_only=False,
         generate_witness_only=False,
         generate_witness=False,
         method_coverage=1.0,
@@ -284,6 +287,7 @@ def main():
             uncovered_opt=args.uncovered,
             conversion_fair=args.conversion_fair,
             prim_as_return=args.primitive_as_return,
+            syntactic_only=args.syntactic_only,
         )
         b = Bencher(
             args.exp_name,

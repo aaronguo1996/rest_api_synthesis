@@ -212,7 +212,7 @@ def to_syntactic_type(param):
     param.type = typ.to_syntactic()
     return param
 
-def create_entries(doc, config, ascription):
+def create_entries(doc, config, ascription, infer_types=True):
     entries = {}
 
     endpoints = config.get(consts.KEY_ENDPOINTS)
@@ -224,7 +224,7 @@ def create_entries(doc, config, ascription):
             continue
 
         for _, method_def in ep_def.items():
-            typed_entries = ascription.ascribe_type(method_def)
+            typed_entries = ascription.ascribe_type(method_def, infer_types)
 
             for entry in typed_entries:
                 # store results

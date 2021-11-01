@@ -135,8 +135,9 @@ class PrimEnum(BaseType):
         return self
 
 class SchemaObject(BaseType):
-    def __init__(self, name, parent=None):
+    def __init__(self, name, parent=None, syntactic_type=None):
         super().__init__(name, parent)
+        self._syntactic_type = syntactic_type
 
     def is_type_of(self, obj):
         # get the object definition from the library
@@ -176,6 +177,10 @@ class SchemaObject(BaseType):
         return schema.get_primitive_name()
 
     def to_syntactic(self):
+        if self._syntactic_type is not None:
+            self.name = self._syntactic_type
+            return SchemaObject(self._syntactic_type, syntactic_type=self._syntactic_type)
+
         schema = BaseType.object_lib.get(self.name)
         if schema is None:
             raise Exception("Unknown object definition", self.name)

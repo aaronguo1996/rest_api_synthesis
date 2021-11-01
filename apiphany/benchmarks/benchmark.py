@@ -28,7 +28,7 @@ class BenchConfig:
         bias_type=dynamic.BiasType.SIMPLE, use_parallel=True,
         get_place_stats=False, generate_witness=False, method_coverage=1,
         uncovered_opt=consts.UncoveredOption.DEFAULT_TO_SYNTACTIC,
-        conversion_fair=False, prim_as_return=False,):
+        conversion_fair=False, prim_as_return=False, syntactic_only=False):
         self.cache = cache
         self.repeat_exp = repeat_exp
         self.repeat_re = repeat_re
@@ -43,6 +43,7 @@ class BenchConfig:
         self.uncovered_opt = uncovered_opt
         self.conversion_fair = conversion_fair
         self.prim_as_return = prim_as_return
+        self.syntactic_only = syntactic_only
 
 class BenchmarkResult:
     def __init__(self, name, desc):
@@ -103,7 +104,11 @@ class Benchmark:
             for ip, tip in self.inputs.items():
                 tip.name = analyzer.find_representative_for_type(tip)
                 rep_inputs[ip] = tip
+                if runtime_config.syntactic_only:
+                    tip.to_syntactic()
 
+            if runtime_config.syntactic_only:
+                self.output.to_syntactic()
             is_array_output = isinstance(self.output, types.ArrayType)
             rep_output = self.output.ignore_array()
             rep_output.name = analyzer.find_representative_for_type(rep_output)
@@ -254,7 +259,8 @@ class BenchmarkSuite:
             self.generate_witnesses(
                 doc_entries, hostname, base_path,
                 self._entries, endpoints, 
-                runtime_config.uncovered_opt)
+                runtime_config.uncovered_opt,
+                not runtime_config.syntactic_only)
 
         with open(os.path.join(self._suite_dir, consts.FILE_ENTRIES), "rb") as f:
             self._typed_entries = pickle.load(f)
@@ -263,7 +269,7 @@ class BenchmarkSuite:
             self._log_analyzer = pickle.load(f)
 
     def generate_witnesses(self, doc_entries, hostname, base_path, 
-        entries, endpoints, uncovered_opt):
+        entries, endpoints, uncovered_opt, infer_types=True):
         print("---------------------------------------------------------------")
         print("Analyzing provided witnesses for", self.api)
         log_analyzer = analyzer.LogAnalyzer(uncovered_opt)
@@ -278,7 +284,7 @@ class BenchmarkSuite:
             prefilter=prefilter)
 
         ascription = Ascription(log_analyzer, skip_fields)
-        entries = utils.create_entries(doc_entries, self._configuration, ascription)
+        entries = utils.create_entries(doc_entries, self._configuration, ascription, infer_types)
 
         print("Getting more traces...")
         engine = WitnessGenerator(
@@ -302,10 +308,10 @@ class BenchmarkSuite:
             self._configuration[consts.KEY_WITNESS][consts.KEY_MAX_OPT])
 
         # ascribe types with the new analysis results
-        entries = utils.create_entries(doc_entries, self._configuration, ascription)
+        entries = utils.create_entries(doc_entries, self._configuration, ascription, infer_types)
 
         print("Writing typed entries to file...")
-        constructor = Constructor(self._doc, log_analyzer)
+        constructor = Constructor(self._doc, log_analyzer, infer_types)
         projs_and_filters = constructor.construct_graph()
         entries.update(projs_and_filters)
         with open(os.path.join(self._suite_dir, consts.FILE_ENTRIES), "wb") as f:

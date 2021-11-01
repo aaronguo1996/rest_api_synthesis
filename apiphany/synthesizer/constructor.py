@@ -214,8 +214,7 @@ class Constructor:
                     if self._infer_types:
                         filter_in = [self._analyzer.find_same_type(fin)
                             for fin in filter_in]
-                        if parts is None:
-                            filter_out = self._analyzer.find_same_type(filter_out)
+                        filter_out = self._analyzer.find_same_type(filter_out)
 
                     entry = TraceEntry(endpoint, "", None, filter_in, filter_out)
                     result_key = make_entry_name(endpoint, "")
