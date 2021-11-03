@@ -234,7 +234,7 @@ class BenchmarkSuite:
             if oldest_dir is not None:
                 self._iter_dir = oldest_dir
 
-        self._entries = utils.parse_entries(
+        self._witnesses = utils.parse_entries(
             self._configuration, 
             self._suite_dir, 
             base_path, 
@@ -246,14 +246,14 @@ class BenchmarkSuite:
             doc_entries)
 
         paths = self._doc.get(defs.DOC_PATHS)
-        self._entries = utils.prune_by_coverage(
-            paths, self._entries,
+        self._witnesses = utils.prune_by_coverage(
+            paths, self._witnesses,
             runtime_config.method_coverage)
 
         if runtime_config.generate_witness:
             self.generate_witnesses(
                 doc_entries, hostname, base_path,
-                self._entries, endpoints, 
+                self._witnesses, endpoints, 
                 runtime_config.uncovered_opt)
 
         with open(os.path.join(self._suite_dir, consts.FILE_ENTRIES), "rb") as f:
@@ -263,7 +263,7 @@ class BenchmarkSuite:
             self._log_analyzer = pickle.load(f)
 
     def generate_witnesses(self, doc_entries, hostname, base_path, 
-        entries, endpoints, uncovered_opt):
+        witnesses, endpoints, uncovered_opt):
         print("---------------------------------------------------------------")
         print("Analyzing provided witnesses for", self.api)
         log_analyzer = analyzer.LogAnalyzer(uncovered_opt)
@@ -272,7 +272,7 @@ class BenchmarkSuite:
         
         log_analyzer.analyze(
             doc_entries,
-            entries,
+            witnesses,
             skip_fields,
             self._configuration.get(consts.KEY_BLACKLIST),
             prefilter=prefilter)
@@ -381,10 +381,7 @@ class BenchmarkSuite:
         # covered endpoints
         covered = set()
         
-        for x in self._entries:
-            if x.endpoint == "/v1/accounts/{account}/persons":
-                print([(param.arg_name, param.value) for param in x.parameters])
-                print(x.response.value)
+        for x in self._witnesses:
             if (x.endpoint in endpoints and 
                 not isinstance(x.response, ErrorResponse) and 
                 not x.response.value):
@@ -393,7 +390,7 @@ class BenchmarkSuite:
         ep_covered = len(covered)
 
         # witnesses stats
-        all_witnesses = [e for e in self._entries if not isinstance(e.response, ErrorResponse)]
+        all_witnesses = [e for e in self._witnesses if not isinstance(e.response, ErrorResponse)]
         all_witness_cnt = len(all_witnesses)
 
         return APIInfo(
@@ -416,7 +413,7 @@ class BenchmarkSuite:
         transitions = None
         
         indexed_entries = utils.index_entries(
-            self._entries,
+            self._witnesses,
             self._configuration.get(consts.KEY_SKIP_FIELDS)
         )
 

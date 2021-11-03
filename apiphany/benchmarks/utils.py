@@ -51,6 +51,16 @@ def get_initial_witnesses(configuration, exp_dir, base_path, endpoints):
     return entries
 
 
+def sanitize_traces(entries):
+    sanitized_entries = []
+    for entry in entries:
+        if "projection" in entry.endpoint:
+            continue
+
+        sanitized_entries.append(entry) 
+
+    return sanitized_entries
+
 def parse_entries(configuration, exp_dir, base_path, endpoints):
     trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
     skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)

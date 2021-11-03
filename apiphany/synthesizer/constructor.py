@@ -309,9 +309,9 @@ class Constructor:
         projections = self._create_projections()
         filters = self._create_filters()
         transitions = self._construct_type_trans(projections)
-        partials = self._create_partial_trans(projections)
+        # partials = self._create_partial_trans(projections)
         entries = dict(projections)
         entries.update(filters)
         entries.update(transitions)
-        entries.update(partials)
+        # entries.update(partials)
         return entries

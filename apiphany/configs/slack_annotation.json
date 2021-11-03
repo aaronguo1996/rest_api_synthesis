@@ -52,6 +52,58 @@
         ]
     },
     {
+        "consumer": "user_id",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/users.list",
+                "method": "get",
+                "path": "members/[?]/id"
+            },
+            {
+                "endpoint": "/users.info",
+                "method": "get",
+                "path": "user/id"
+            },
+            {
+                "endpoint": "/conversations.list",
+                "method": "get",
+                "path": "channels/[?]/creator"
+            },
+            {
+                "endpoint": "/conversations.members",
+                "method": "get",
+                "path": "members/[?]"
+            }
+        ]
+    },
+    {
+        "consumer": "user_ids",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/users.list",
+                "method": "get",
+                "path": "members/[?]/id"
+            },
+            {
+                "endpoint": "/users.info",
+                "method": "get",
+                "path": "user/id"
+            },
+            {
+                "endpoint": "/conversations.list",
+                "method": "get",
+                "path": "channels/[?]/creator"
+            },
+            {
+                "endpoint": "/conversations.members",
+                "method": "get",
+                "path": "members/[?]"
+            }
+        ]
+    },
+    {
         "consumer": "email",
         "endpoint": null,
         "producer": [
@@ -91,6 +143,27 @@
     },
     {
         "consumer": "channel",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/conversations.list",
+                "method": "get",
+                "path": "channels/[?]/id"
+            },
+            {
+                "endpoint": "/conversations.info",
+                "method": "get",
+                "path": "channel/id"
+            },
+            {
+                "endpoint": "/conversations.open",
+                "method": "post",
+                "path": "channel/id"
+            }
+        ]
+    },
+    {
+        "consumer": "channel_id",
         "endpoint": null,
         "producer": [
             {

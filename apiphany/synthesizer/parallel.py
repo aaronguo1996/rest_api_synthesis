@@ -59,6 +59,7 @@ def get_results(synthesizer, analyzer, encoder,
 
             for p in set(programs):
                 if p not in solution_set:
+                    # print(p)
                     solution_set.add(p)
                     re_start = time.time()
                     if run_re:
@@ -276,9 +277,11 @@ def spawn_encoders(synthesizer, analyzer, entries,
             try:
                 num_place, num_trans, status = future.result()
                 if status == consts.SearchStatus.FOUND_EXPECTED:
-                    executor.close()
-                    executor.join()
+                    break
             except TimeoutError:
                 pass
+
+        executor.close()
+        executor.join()
 
     collect_parallel_data(synthesizer, num_place, num_trans, all_solutions)

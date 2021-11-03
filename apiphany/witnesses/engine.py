@@ -376,6 +376,12 @@ class WitnessGenerator:
                     # do delete every 3 iterations
                     if entry.method.upper() == defs.METHOD_DELETE and i % 5 != 0:
                         continue
+
+                    if "projection" in entry.endpoint:
+                        continue
+
+                    if entry.endpoint == "/auth.revoke":
+                        continue
                     
                     print(f"Submit job for {entry.method} {entry.endpoint}")
                     num_params = utils.num_optional_params(entry)
