@@ -77,7 +77,7 @@ def build_cmd_parser():
         help="Whether to allow programs return primitive types when semantic types not found")
     
     # retrospective execution options
-    parser.add_argument("--repeat-re", type=int, nargs='?', default=15,
+    parser.add_argument("--repeat-re", type=int, nargs='?',
         help="Number of times to repeat retrospective execution")
     parser.add_argument("--bias-type", default='simple',
         choices=list(bias_type_args.keys()) ,dest='bias_type',
@@ -105,6 +105,7 @@ def build_cmd_parser():
 
     # default values
     parser.set_defaults(
+        repeat_re=15,
         filter_sol_only=False,
         generate_witness_only=False,
         generate_witness=False,
@@ -178,17 +179,17 @@ def plot_ranks(experiments, data_dir, output=None):
         ax1.set_xlim(0, 15)
         ax2.set_xscale('log')
         ax2.set_xlim(15, 50000)
-        ax1.set_ylim(0, 28)
+        ax1.set_ylim(0, 30)
         ax1.set_xlabel("Rank", loc="right")
         ax1.set_ylabel("# benchmarks")
-        ax1.yaxis.set_ticks(range(0,28,2))
+        ax1.yaxis.set_ticks(range(0,30,2))
         ax1.xaxis.set_ticks([0,3,6,9,10,12,15])
         ax1.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
         ax1.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
         ax2.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
         ax2.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
-        ax1.hlines(26, 0, 15, linestyles='dashed', label="max solved benchmarks", colors="0.8")
-        ax2.hlines(26, 15, 50000, linestyles='dashed', label="max solved benchmarks", colors="0.8")
+        ax1.hlines(29, 0, 15, linestyles='dashed', label="max solved benchmarks", colors="0.8")
+        ax2.hlines(29, 15, 50000, linestyles='dashed', label="max solved benchmarks", colors="0.8")
         ax2.legend(loc="best")
 
         # set border lines
@@ -230,9 +231,10 @@ def plot_solved(experiments, data_dir, output=None):
 
     # plot core data
     fig, ax = plt.subplots(1, 1)
-    ax.set_ylim(0, 28)
+    ax.set_ylim(0, 30)
     ax.set_xlim(0, 120)
-    ax.yaxis.set_ticks(range(0,28,2))
+    # ax.set_xscale('log')
+    ax.yaxis.set_ticks(range(0,30,2))
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("# solved benchmarks")
 
@@ -240,7 +242,7 @@ def plot_solved(experiments, data_dir, output=None):
         ys = list(range(len(xs)+1))
         ax.plot([0]+xs+[300], ys+[len(xs)], label=exp)
 
-    ax.hlines(26, 0, 120, linestyles='dashed', label="max solved benchmarks", colors="0.8")
+    ax.hlines(29, 0, 120, linestyles='dashed', label="max solved benchmarks", colors="0.8")
     ax.legend(loc="upper left")
     # plt.tight_layout()
     plt.savefig(os.path.join(output, "solved.png"))
