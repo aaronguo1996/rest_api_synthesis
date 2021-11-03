@@ -53,6 +53,7 @@ FILE_RESULTS = "bench_results.pkl"
 
 PREFIX_CLONE = "clone_"
 PREFIX_CONVERT = "convert_"
+PREFIX_PARTIAL = "partial_"
 
 SPACE = '    '
 MAX_COST = 99999.9

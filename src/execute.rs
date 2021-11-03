@@ -72,6 +72,7 @@ impl Runner {
                 }
 
                 let mut rr = t.get(r).unwrap();
+                // flatten the array
 
                 while let Some(ra) = rr.as_array() {
                     if ra.len() == 1 {
@@ -211,6 +212,7 @@ impl<'a> ExecEnv<'a> {
                 Expr::Var(v) => {
                     // Get var out of heap and push to stack.
                     let v = if let Some(val) = self.env.get(v) {
+                        // println!("find in the environment for {:?} of value {:?}", self.arena.get_str(v), heap.get(*val)?);
                         *val
                     } else {
                         // If we're trying to reference an undefined variable, it must
@@ -220,6 +222,7 @@ impl<'a> ExecEnv<'a> {
                         // to populate this variable. Otherwise, use the default inputs.
                         if self.candidates {
                             let last = self.data.last()?;
+                            // println!("getting candidate {:?}", heap.get(*last)?);
                             if let Some(choices) = heap.get(*last).unwrap().as_array() {
                                 // Choose one of these values for our input
                                 // TODO: flatten list
@@ -249,6 +252,7 @@ impl<'a> ExecEnv<'a> {
                             choice
                         }
                     };
+                    // println!("Choose {:?}", v);
 
                     self.data.push(v);
 
@@ -343,7 +347,13 @@ impl<'a> ExecEnv<'a> {
                         self.cost = 0;
 
                         // Push x[0] to env.
-                        self.env.insert(*v, *x.get(0).unwrap());
+                        let xaddr = *x.get(0).unwrap();
+                        let xv = heap.get_mut(xaddr)?;
+                        if !xv.1.is_none() {
+                            // println!("bind {:?} to value {:?}", *v, *x.get(0).unwrap());
+                            self.env.insert(*v, xaddr);
+                        }
+                        // self.env.insert(*v, *x.get(0).unwrap());
 
                         // Set tip to error recovery spot; the last place with
                         // a valid data val.
@@ -393,6 +403,20 @@ impl<'a> ExecEnv<'a> {
                     } else {
                         self.set_error();
                     }
+                }
+                Expr::Object(n) => {
+                    let n = (*n).try_into().unwrap();
+                    let mut object: HashMap<String, ValueIx> = HashMap::with_capacity(n);
+
+                    for _i in 0..n {
+                        let name = heap.get(self.data.pop()?)?.as_symbol()?;
+                        let val = self.data.pop()?;
+                        object.insert(self.arena.get_str(&name).to_string(), val);
+                    }
+
+                    self.data.push(heap.push_rval(RValue::Object(object)));
+                    self.cost += 1;
+                    self.ip += 1;
                 }
                 Expr::Push(s) => {
                     // We push a MiniSpur by pushing a usize number to the stack

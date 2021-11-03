@@ -123,7 +123,8 @@ class BasicGenerator:
                 params,
             )
             return Result(entry, code, params, response)
-        except:
+        except Exception as e:
+            print("Exception:", e)
             return None
 
 
@@ -180,7 +181,11 @@ class SaturationThread(BasicGenerator):
         else:
             arg_name = param.arg_name
 
-        if self._analyzer.dsu.find(param) and arg_name != defs.DOC_NAME and arg_name != defs.DOC_TYPE:
+        if arg_name == "order_id":
+            param_val = "PXr1SGsIfKZOQ4OvzaMRj6AfQe4F"
+        elif arg_name == "order":
+            param_val = {"line_items": [{"uid": "nuRLk7cO8xJXteDuCykB8B","quantity": "3","name": "eren's onlyfans Subscription","base_price_money": {"amount": 420,"currency": "USD"},"note": "Cadence: Weekly, Billing Period: Sunday, June 27, 2021 - Sunday, Nov 3, 2021","item_type": "ITEM"}],"version": 3}
+        elif self._analyzer.dsu.find(param) and arg_name != defs.DOC_NAME and arg_name != defs.DOC_TYPE:
             print(
                 f"Trying fill parameter {arg_name} by real dependencies")
             # if we already have the value bank for this variable

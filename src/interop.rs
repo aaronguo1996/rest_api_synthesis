@@ -2,7 +2,7 @@ use crate::{Arena, Expr, ExprIx, Prog, RootSlab, Runner, Traces, ValueIx};
 use hashbrown::HashMap as HBMap;
 use pyo3::{
     prelude::*,
-    types::{PyList, PyType},
+    types::{PyList, PyType, PyDict},
 };
 use serde_json::from_str;
 use smallvec::SmallVec;
@@ -19,6 +19,7 @@ pub struct Imports<'p> {
     pub equi_expr: &'p PyAny,
     pub assign_expr: &'p PyAny,
     pub list_expr: &'p PyAny,
+    pub object_expr: &'p PyAny,
 
     pub dumps: &'p PyAny,
 }
@@ -32,11 +33,10 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
     #[pyfn(m, "rust_re")]
     fn rust_re(
         py: Python,
-        log_analyzer: &PyAny,
         prog: &PyAny,
         // traces: fun -> param_names -> param_val map, response, weight
         // traces: Traces, // HashMap<&str, HashMap<Vec<&str>, Vec<(HashMap<&str, &PyAny>, &PyAny, usize)>>>,
-        inputs: Vec<(&str, &PyAny)>,
+        deferred_vals: Vec<(&str, Vec<&PyAny>)>,
         multiple: bool,
         repeat: usize,
     ) -> PyResult<usize> {
@@ -50,6 +50,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         let equi_expr = program.get("EquiExpr")?;
         let assign_expr = program.get("AssignExpr")?;
         let list_expr = program.get("ListExpr")?;
+        let object_expr = program.get("ObjectExpr")?;
 
         let json = PyModule::import(py, "json")?;
         let dumps = json.get("dumps")?;
@@ -62,6 +63,7 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
             equi_expr,
             assign_expr,
             list_expr,
+            object_expr,
 
             dumps,
         };
@@ -82,16 +84,13 @@ pub fn apiphany(_py: Python, m: &PyModule) -> PyResult<()> {
         // Then, using the log analyzer, create our inputs
         let mut new_inputs = HBMap::new();
 
-        for (input_name, input_type) in inputs {
-            let vals: Vec<&PyAny> = log_analyzer
-                .call_method("sample_values_by_type", (input_type,), None)?
-                .extract()?;
+        for (name, vals) in deferred_vals {
             let vals: Vec<ValueIx> = vals
                 .into_iter()
                 .map(|x| jsonify(dumps, x))
                 .collect::<PyResult<Vec<_>>>()?;
 
-            new_inputs.insert(arena.intern_str(input_name), vals);
+            new_inputs.insert(arena.intern_str(name), vals);
         }
 
         // Create our Runner!
@@ -316,6 +315,21 @@ fn translate_expr<'p>(
         // Intern the lhs, evaluate the rhs, push instr
         translate_expr(imports, py_expr.getattr("_item")?, arena)?;
         Ok(arena.alloc_expr(Expr::Singleton))
+    } else if imports
+        .object_expr
+        .cast_as::<PyType>()
+        .unwrap()
+        .is_instance(py_expr)?
+    {
+        let object = py_expr.getattr("_object")?.cast_as::<PyDict>()?;
+        let mut fields = Vec::new();
+        for (k, v) in object.iter() {
+            let k = arena.intern_str(k.extract()?);
+            fields.push(k);
+            translate_expr(imports, v, arena)?;
+            arena.alloc_expr(Expr::Push(k));
+        }
+        Ok(arena.alloc_expr(Expr::Object(fields.len().try_into().unwrap())))
     } else {
         Err(pyo3::exceptions::PyTypeError::new_err(
             "expr not subclass of Expression",

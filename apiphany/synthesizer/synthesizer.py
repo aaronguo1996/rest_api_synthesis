@@ -245,7 +245,7 @@ class Synthesizer:
             # "/v1/prices_POST",
             # "projection(subscription, items)_",
             # "projection(subscription_item, price)_",
-            "/v1/customers/{customer}/sources/{id}_DELETE",
+            # "/v1/customers/{customer}/sources/{id}_DELETE",
             # "/v1/invoiceitems_POST",
             # 'projection(product, active)_',
             # "/v1/invoices_GET",
@@ -267,8 +267,8 @@ class Synthesizer:
             # "projection(subscription, customer)_",
             # "projection(customer, subscriptions)_",
             # "projection(customer, id)_",
-            "/v1/customers/{customer}_GET",
-            "projection(customer, default_source)_",
+            # "/v1/customers/{customer}_GET",
+            # "projection(customer, default_source)_",
             # "projection(payment_source, type)_"
 
             # "/admin.users.session.invalidate_POST",
@@ -338,7 +338,14 @@ class Synthesizer:
             # "/v2/catalog/search_POST",
             # "/v2/catalog/search-catalog-items_POST",
             # "projection(SearchCatalogObjectsResponse, objects)_",
-            # "filter(CatalogObject, CatalogObject.item_data.tax_ids.[?])_"
+            # "filter(CatalogObject, CatalogObject.item_data.tax_ids.[?])_",
+            # "projection(CatalogObject, item_data)_",
+            # "projection(CatalogItem, name)_",
+            # "projection(CatalogObject, type)_",
+            # "filter(CatalogObject, CatalogObject.item_data.name)_",
+            # "/v2/catalog/object/{object_id}_DELETE",
+            # "projection(DeleteCatalogObjectResponse, deleted_object_ids)_",
+            # "partial_fulfillments_Order",
         ]
 
         for name in lst:

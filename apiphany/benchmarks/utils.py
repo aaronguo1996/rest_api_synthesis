@@ -176,8 +176,8 @@ def index_entries(entries, skip_fields):
                 (param_values, e.response.value, weight)
             )
 
-        if fun == "/v1/accounts/{account}/persons_GET":
-            print(index_result[fun])
+        # if fun == "/v2/orders/batch-retrieve_POST":
+        #     print(index_result[fun].keys())
 
     return index_result
 

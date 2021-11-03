@@ -89,5 +89,31 @@
                 "path": "order_entries/[?]/order_id"
             }
         ]
+    },
+    {
+        "consumer": "object_id",
+        "endpoint": null,
+        "producer": [
+            {
+                "endpoint": "/v2/catalog/list",
+                "method": "get",
+                "path": "objects/[?]/id"
+            },
+            {
+                "endpoint": "/v2/catalog/search-catalog-items",
+                "method": "post",
+                "path": "objects/[?]/id"
+            }
+        ]
+    },
+    {
+        "consumer": "object_types",
+        "endpoint": null,
+        "producer": [
+            {
+                "enum": ["ITEM"],
+                "combine": false
+            }
+        ]
     }
 ]

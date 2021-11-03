@@ -5,6 +5,7 @@ import pebble
 import time
 import signal
 from functools import partial
+from concurrent.futures import TimeoutError
 import cProfile
 
 from synthesizer.hypergraph_encoder import HyperGraphEncoder
@@ -13,6 +14,26 @@ from synthesizer.petrinet_encoder import PetriNetEncoder
 import consts
 from apiphany import rust_re, translate_traces, free_up
 from schemas import types
+from program import program
+
+def get_deferred_vals(analyzer, inputs, p):
+    # print(p)
+    results = {}
+    for expr in p._expressions:
+        if (isinstance(expr, program.AssignExpr) and
+            expr._is_bind and
+            isinstance(expr._rhs, program.VarExpr) and
+            expr._rhs.var in p._inputs):
+            # get bind values
+            var_type = expr._rhs.type.ignore_array()
+            results[expr._lhs] = analyzer.sample_values_by_type(var_type)
+
+    for input_name, input_type in inputs.items():
+        results[input_name] = analyzer.sample_values_by_type(input_type)
+
+    # print(results)
+    return results
+
 
 def get_results(synthesizer, analyzer, encoder, 
     repeat_time, run_re, inputs, outputs, output_map, 
@@ -41,7 +62,8 @@ def get_results(synthesizer, analyzer, encoder,
                     solution_set.add(p)
                     re_start = time.time()
                     if run_re:
-                        cost = rust_re(analyzer, p, list(inputs.items()), is_array_output, repeat_time)
+                        deferred_vals = get_deferred_vals(analyzer, inputs, p)
+                        cost = rust_re(p, list(deferred_vals.items()), is_array_output, repeat_time)
                     else:
                         cost = None
                     re_time += time.time() - re_start
@@ -59,7 +81,11 @@ def get_results(synthesizer, analyzer, encoder,
             encoder.block_prev(perms)
             path = encoder.solve()
 
-        include_more_syntactic = encoder.increment_syntactic()
+        if (analyzer._uncovered_opt == consts.UncoveredOption.DEFAULT_TO_SYNTACTIC and 
+            encoder.increment_syntactic()):
+            include_more_syntactic = True
+        else:
+            include_more_syntactic = False
 
     return consts.SearchStatus.NOT_FOUND
 
@@ -130,14 +156,14 @@ def run_encoder(synthesizer, analyzer, entries,
 
     # write encoder stats to file
     
-    if path_len == 1:
-        encoder_path = os.path.join(synthesizer.exp_dir, "encoder.txt")
-        with open(encoder_path, "w") as f:
-            f.write(str(len(encoder._net.place())))
-            f.write("\n")
-            f.write(str(len(encoder._net.transition())))
-            f.write("\n")
-            f.flush()
+    # if path_len == 1:
+    #     encoder_path = os.path.join(synthesizer.exp_dir, "encoder.txt")
+    #     with open(encoder_path, "w") as f:
+    #         f.write(str(len(encoder._net.place())))
+    #         f.write("\n")
+    #         f.write(str(len(encoder._net.transition())))
+    #         f.write("\n")
+    #         f.flush()
 
     translate_traces(entries)
 
@@ -168,9 +194,9 @@ def run_encoder(synthesizer, analyzer, entries,
     #     "after time", time.time() - start, flush=True)
 
     free_up()
-    return res
+    return len(encoder._net.place()), len(encoder._net.transition()), res
 
-def collect_parallel_data(synthesizer, all_solutions):
+def collect_parallel_data(synthesizer, num_place, num_trans, all_solutions):
     all_path_cnt = 0
     for i, progs in enumerate(all_solutions):
         # print(i, progs.qsize(), flush=True)
@@ -186,7 +212,6 @@ def collect_parallel_data(synthesizer, all_solutions):
             if prog.has_conversion():
                 cost += 10
 
-            # print(prog)
             prog_list.append((syn_time, prog, re_time, cost))
 
         synthesizer._serialize_solutions(i, prog_list)
@@ -194,6 +219,10 @@ def collect_parallel_data(synthesizer, all_solutions):
 
     encoder_path = os.path.join(synthesizer.exp_dir, "encoder.txt")
     with open(encoder_path, "a") as f:
+        f.write(str(num_place))
+        f.write("\n")
+        f.write(str(num_trans))
+        f.write("\n")
         f.write(str(all_path_cnt))
         f.write("\n")
 
@@ -245,11 +274,11 @@ def spawn_encoders(synthesizer, analyzer, entries,
 
         for future in futures:
             try:
-                status = future.result(timeout=timeout)
+                num_place, num_trans, status = future.result()
                 if status == consts.SearchStatus.FOUND_EXPECTED:
                     executor.close()
                     executor.join()
-            except Exception:
+            except TimeoutError:
                 pass
 
-    collect_parallel_data(synthesizer, all_solutions)
+    collect_parallel_data(synthesizer, num_place, num_trans, all_solutions)

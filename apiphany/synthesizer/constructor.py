@@ -1,5 +1,4 @@
-import jsonref
-import json
+import re
 import copy
 import random
 
@@ -7,7 +6,7 @@ from openapi import defs
 from analyzer.entry import Parameter, TraceEntry
 from openapi.utils import blacklist
 from schemas import types
-from synthesizer.utils import make_entry_name, make_type_transition_name
+from synthesizer.utils import make_entry_name, make_type_transition_name, make_partial_trans_name
 import consts
 from analyzer.utils import get_representative
 
@@ -292,11 +291,27 @@ class Constructor:
 
         return results
 
+    def _create_partial_trans(self, projections):
+        results = {}
+        for f, entry in projections.items():
+            match = re.search(r"projection\((.*), (.*)\)_", f)
+            obj_name = match.group(1)
+            field_name = match.group(2)
+            # reverse the filters to construct complete objects from partial fields
+            trans_name = make_partial_trans_name(obj_name, field_name)
+            params = [Parameter("", field_name, trans_name, [field_name], True, None, entry.response.type, None)]
+            response = entry.parameters[0]
+            results[trans_name] = TraceEntry(trans_name, "", None, params, response)
+
+        return results
+
     def construct_graph(self):
         projections = self._create_projections()
         filters = self._create_filters()
         transitions = self._construct_type_trans(projections)
+        partials = self._create_partial_trans(projections)
         entries = dict(projections)
         entries.update(filters)
         entries.update(transitions)
+        entries.update(partials)
         return entries
