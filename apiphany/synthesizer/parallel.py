@@ -37,50 +37,56 @@ def get_deferred_vals(analyzer, inputs, p):
 
 def get_results(synthesizer, analyzer, encoder, 
     repeat_time, run_re, inputs, outputs, output_map, 
-    is_array_output, expected_solution, conversion_fair, solutions, path_len,
-    start, re_time, path_count):
+    is_array_output, expected_solution, conversion_fair, with_partials,
+    solutions, path_len, start, re_time, path_count):
     # print("getting results at path length", path_len, flush=True)
     solution_set = set()
     encoder.set_final(output_map)
     encoder.reset_syntactic()
-
     include_more_syntactic = True
+
     while include_more_syntactic:
-        # print("running path length", path_len, flush=True)
-        path = encoder.solve()
-        while path is not None:
-            # print("Finding a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
-            end = time.time()
-            # print(path)
-            path_count += 1
-            programs, perms = synthesizer.generate_solutions(
-                path_len, inputs, outputs, path, end - start
-            )
+        encoder.reset_partial()
+        include_more_partial = True
 
-            for p in set(programs):
-                if p not in solution_set:
-                    # print(p)
-                    solution_set.add(p)
-                    re_start = time.time()
-                    if run_re:
-                        deferred_vals = get_deferred_vals(analyzer, inputs, p)
-                        cost = rust_re(p, list(deferred_vals.items()), is_array_output, repeat_time)
-                    else:
-                        cost = None
-                    re_time += time.time() - re_start
-                    solutions.put((path_count, time.time() - start, p, re_time, cost))
-
-                    # # hope this can reduce the memory usage
-                    # if len(solution_set) > 10**6:
-                    #     return consts.SearchStatus.NOT_FOUND
-
-                    if p == expected_solution:
-                        # print("Found expected solution", flush=True)
-                        solution_set.add(p)
-                        return consts.SearchStatus.FOUND_EXPECTED
-
-            encoder.block_prev(perms)
+        while include_more_partial:
+            # print("running path length", path_len, flush=True)
             path = encoder.solve()
+            while path is not None:
+                # print("Finding a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
+                end = time.time()
+                # print(path)
+                path_count += 1
+                programs, perms = synthesizer.generate_solutions(
+                    path_len, inputs, outputs, path, end - start
+                )
+
+                for p in set(programs):
+                    if p not in solution_set:
+                        # print(p)
+                        solution_set.add(p)
+                        re_start = time.time()
+                        if run_re:
+                            deferred_vals = get_deferred_vals(analyzer, inputs, p)
+                            cost = rust_re(p, list(deferred_vals.items()), is_array_output, repeat_time)
+                        else:
+                            cost = None
+                        re_time += time.time() - re_start
+                        solutions.put((path_count, time.time() - start, p, re_time, cost))
+
+                        # # hope this can reduce the memory usage
+                        # if len(solution_set) > 10**6:
+                        #     return consts.SearchStatus.NOT_FOUND
+
+                        if p == expected_solution:
+                            # print("Found expected solution", flush=True)
+                            solution_set.add(p)
+                            return consts.SearchStatus.FOUND_EXPECTED
+
+                encoder.block_prev(perms)
+                path = encoder.solve()
+            
+            include_more_partial = with_partials and encoder.increment_partial()
 
         if (analyzer._uncovered_opt == consts.UncoveredOption.DEFAULT_TO_SYNTACTIC and 
             encoder.increment_syntactic()):
@@ -91,8 +97,8 @@ def get_results(synthesizer, analyzer, encoder,
     return consts.SearchStatus.NOT_FOUND
 
 def run_encoder(synthesizer, analyzer, entries, 
-    repeat_time, run_re, inputs, outputs, is_array_output,
-    expected_solution, conversion_fair, prim_as_return, all_solutions, path_len):
+    inputs, outputs, is_array_output, expected_solution, 
+    runtime_config, all_solutions, path_len):
     solutions = all_solutions[path_len]
     config = synthesizer._config
     solver_type = config[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_TYPE]
@@ -126,7 +132,7 @@ def run_encoder(synthesizer, analyzer, entries,
 
         output_map[typ_name] += 1
  
-    encoder.init(input_map, output_map, prim_as_return)
+    encoder.init(input_map, output_map, runtime_config.prim_as_return)
     while encoder._path_len < path_len:
         encoder.increment()
     # print("input_map", input_map)
@@ -174,11 +180,12 @@ def run_encoder(synthesizer, analyzer, entries,
     path_count = 0
 
     res = get_results(synthesizer, analyzer, encoder, 
-        repeat_time, run_re, inputs, outputs, output_map, 
-        is_array_output, expected_solution, conversion_fair, solutions, path_len,
-        start, re_time, path_count)
+        runtime_config.repeat_re, not runtime_config.synthesis_only, 
+        inputs, outputs, output_map, is_array_output, expected_solution, 
+        runtime_config.conversion_fair, runtime_config.with_partials,
+        solutions, path_len, start, re_time, path_count)
 
-    if res == consts.SearchStatus.NOT_FOUND and prim_as_return:
+    if res == consts.SearchStatus.NOT_FOUND and runtime_config.prim_as_return:
         prim_outputs = [o.to_syntactic() for o in outputs]
         prim_output_map = defaultdict(int)
         for typ in prim_outputs:
@@ -187,9 +194,10 @@ def run_encoder(synthesizer, analyzer, entries,
 
         # try again with primitives as return values
         res = get_results(synthesizer, analyzer, encoder, 
-            repeat_time, run_re, inputs, prim_outputs, prim_output_map, 
-            is_array_output, expected_solution, conversion_fair, solutions, path_len,
-            start, re_time, path_count)
+            runtime_config.repeat_re, not runtime_config.synthesis_only, 
+            inputs, prim_outputs, prim_output_map, is_array_output, expected_solution, 
+            runtime_config.conversion_fair, runtime_config.with_partials,
+            solutions, path_len, start, re_time, path_count)
     
     # print("Finished encoder running for path length", path_len,
     #     "after time", time.time() - start, flush=True)
@@ -228,8 +236,8 @@ def collect_parallel_data(synthesizer, num_place, num_trans, all_solutions):
         f.write("\n")
 
 def spawn_encoders(synthesizer, analyzer, entries, 
-    repeat_time, run_re, inputs, outputs, is_array_output,
-    solver_num, expected_solution, conversion_fair, prim_as_return, timeout=90):
+    inputs, outputs, is_array_output, solver_num, expected_solution, 
+    runtime_config, timeout=consts.TIMEOUT):
     m = multiprocessing.Manager()
     all_solutions = []
     for _ in range(consts.DEFAULT_LENGTH_LIMIT + 1):
@@ -268,9 +276,9 @@ def spawn_encoders(synthesizer, analyzer, entries,
         for path_len in range(consts.DEFAULT_LENGTH_LIMIT + 1):
             res = executor.schedule(run_encoder,
                 args=(synthesizer, analyzer, entries,
-                repeat_time, run_re, inputs, outputs, is_array_output,
-                expected_solution, conversion_fair, prim_as_return,
-                all_solutions, path_len), timeout=timeout)
+                inputs, outputs, is_array_output, expected_solution, 
+                runtime_config, all_solutions, path_len), 
+                timeout=timeout)
             futures.append(res)
 
         for future in futures:

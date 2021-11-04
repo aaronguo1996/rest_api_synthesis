@@ -29,8 +29,12 @@ class ILPetriEncoder:
         self._cf = None
         self._soln_ix = None
         self._finals = None
+        # control of how many syntactic type are used
         self._syntactic_constr = None
         self._syntactic_quota = 0
+        # control of how many partial objects are created
+        self._partial_constr = None
+        self._partial_quota = 0
 
         # encode place and transition names into integers
         self._place_names = []
@@ -148,6 +152,14 @@ class ILPetriEncoder:
         if self._syntactic_quota < 2 * self._path_len:
             self._syntactic_quota += 1
             self.reset_syntactic()
+            return True
+        else:
+            return False
+
+    def increment_partial(self):
+        if self._partial_quota < self._path_len:
+            self._partial_quota += 1
+            self.reset_partial()
             return True
         else:
             return False
@@ -412,6 +424,17 @@ class ILPetriEncoder:
                 usage += self._tokens.sum(p, '*')
     
         self._syntactic_constr = self._model.addConstr(usage == self._syntactic_quota)
+
+    def reset_partial(self):
+        if self._partial_constr:
+            self._model.remove(self._partial_constr)
+
+        usage = 0
+        for t in range(len(self._trans_names)):
+            if consts.PREFIX_PARTIAL in self._trans_names[t]:
+                usage += self._fires.sum(t, '*')
+
+        self._partial_constr = self._model.addConstr(usage == self._partial_quota)
 
     def set_final(self, typs):
         # Final marking

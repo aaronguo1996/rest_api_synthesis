@@ -30,7 +30,8 @@ run-full-exclude run-full-syntactic run-onethird-exclude run-onethird-syntactic 
 		--generate-witness \
 		--method-coverage $(coverage_$(call word-dash,$@,2)) \
 		--uncovered $(uncovered_$(call word-dash,$@,3)) \
-		--repeat-exp $(REPEAT_EXP)
+		--repeat-exp $(REPEAT_EXP) \
+		--with-partials
 	cd ..
 
 plot-all plot-ranks plot-solved:

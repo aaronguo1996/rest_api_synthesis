@@ -415,7 +415,7 @@ impl<'a> ExecEnv<'a> {
                     }
 
                     self.data.push(heap.push_rval(RValue::Object(object)));
-                    self.cost += 1;
+                    self.cost += 5;
                     self.ip += 1;
                 }
                 Expr::Push(s) => {

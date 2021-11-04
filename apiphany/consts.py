@@ -61,7 +61,10 @@ MAX_COST = 99999.9
 EXP_DEFAULT = "default_apiphany"
 DATA_DEFAULT = "experiment_data"
 
+# benchmarking
 APIS = ["slack_api_test", "stripe_api_test", "square_api_test"]
+TOTAL_BENCHMARKS = 29
+TIMEOUT = 90
 
 class UncoveredOption(Enum):
     EXCLUDE = "exclude"

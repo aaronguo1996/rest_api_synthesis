@@ -28,7 +28,7 @@ class BenchConfig:
         bias_type=dynamic.BiasType.SIMPLE, use_parallel=True,
         get_place_stats=False, generate_witness=False, method_coverage=1,
         uncovered_opt=consts.UncoveredOption.DEFAULT_TO_SYNTACTIC,
-        conversion_fair=False, prim_as_return=False,):
+        conversion_fair=False, prim_as_return=False, with_partials=False,):
         self.cache = cache
         self.repeat_exp = repeat_exp
         self.repeat_re = repeat_re
@@ -43,6 +43,7 @@ class BenchConfig:
         self.uncovered_opt = uncovered_opt
         self.conversion_fair = conversion_fair
         self.prim_as_return = prim_as_return
+        self.with_partials = with_partials
 
 class BenchmarkResult:
     def __init__(self, name, desc):
@@ -115,13 +116,10 @@ class Benchmark:
                 synthesizer,
                 analyzer,
                 indexed_entries,
-                runtime_config.repeat_re,
-                not runtime_config.synthesis_only,
                 rep_inputs, [rep_output], is_array_output,
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM],
                 self.solutions[0],
-                runtime_config.conversion_fair,
-                runtime_config.prim_as_return,
+                runtime_config,
             )
                 # p.sort_stats("cumulative").print_stats(999999)
             
@@ -160,7 +158,7 @@ class Benchmark:
         rank = None
         for rank, (syn_time, sol_prog, re_time, cost) in enumerate(sorted_candidates):            
             # print(rank, cost, sol_prog.has_conversion())
-            # print(sol_prog)
+            print(rank, sol_prog)
             if sol_prog in self.solutions:
                 print("Solution found")
                 print(sol_prog, "has cost", cost)
@@ -170,9 +168,11 @@ class Benchmark:
         if rank is not None:
             rank += 1
 
+        candidates_no_re = sorted_candidates
         if solution_found:
+            candidates_no_re = [c for c in sorted_candidates if c[0] < syn_time]
             self.latex_entry.ranks = [rank]
-            print(f"PASS, Ranks {rank} vs {len(sorted_candidates)}")
+            print(f"PASS, Ranks {rank} vs {len(candidates_no_re)}")
             self.latex_entry.mean_rank = rank
             self.latex_entry.median_rank = rank
 
@@ -188,11 +188,11 @@ class Benchmark:
         else:
             print(f"FAIL")
 
-        self.latex_entry.rank_no_re = len(sorted_candidates)
+        self.latex_entry.rank_no_re = len(candidates_no_re)
         self.latex_entry.syn_time = syn_time
         self.latex_entry.re_time = re_time
         self.latex_entry.candidates = len(candidates)
-        self.latex_entry.paths = paths            
+        self.latex_entry.paths = paths
 
         return self.latex_entry
 
@@ -254,7 +254,9 @@ class BenchmarkSuite:
             self.generate_witnesses(
                 doc_entries, hostname, base_path,
                 self._witnesses, endpoints, 
-                runtime_config.uncovered_opt)
+                runtime_config.uncovered_opt,
+                runtime_config.with_partials,
+            )
 
         with open(os.path.join(self._suite_dir, consts.FILE_ENTRIES), "rb") as f:
             self._typed_entries = pickle.load(f)
@@ -263,7 +265,7 @@ class BenchmarkSuite:
             self._log_analyzer = pickle.load(f)
 
     def generate_witnesses(self, doc_entries, hostname, base_path, 
-        witnesses, endpoints, uncovered_opt):
+        witnesses, endpoints, uncovered_opt, with_partials=False):
         print("---------------------------------------------------------------")
         print("Analyzing provided witnesses for", self.api)
         log_analyzer = analyzer.LogAnalyzer(uncovered_opt)
@@ -306,7 +308,9 @@ class BenchmarkSuite:
 
         print("Writing typed entries to file...")
         constructor = Constructor(self._doc, log_analyzer)
-        projs_and_filters = constructor.construct_graph()
+        projs_and_filters = constructor.construct_graph(
+            with_syntactic=uncovered_opt==consts.UncoveredOption.DEFAULT_TO_SYNTACTIC,
+            with_partials=with_partials,)
         entries.update(projs_and_filters)
         with open(os.path.join(self._suite_dir, consts.FILE_ENTRIES), "wb") as f:
             pickle.dump(entries, f)

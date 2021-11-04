@@ -787,10 +787,11 @@ class ObjectExpr(Expression):
         self._object = object
 
     def __str__(self):
-        result = "{"
+        fields = []
         for field, val in self._object.items():
-            result += f"{field}={val}, "
-        result += "}"
+            fields.append(f"{field}={val}")
+
+        result = "{" + ", ".join(fields) + "}"
         return result
 
     def __eq__(self, other):

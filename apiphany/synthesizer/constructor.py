@@ -305,13 +305,19 @@ class Constructor:
 
         return results
 
-    def construct_graph(self):
+    def construct_graph(self, with_syntactic=False, with_partials=False):
         projections = self._create_projections()
         filters = self._create_filters()
-        transitions = self._construct_type_trans(projections)
-        # partials = self._create_partial_trans(projections)
+        
         entries = dict(projections)
         entries.update(filters)
-        entries.update(transitions)
-        # entries.update(partials)
+
+        if with_syntactic:
+            transitions = self._construct_type_trans(projections)
+            entries.update(transitions)
+
+        if with_partials:
+            partials = self._create_partial_trans(projections)
+            entries.update(partials)
+            
         return entries
