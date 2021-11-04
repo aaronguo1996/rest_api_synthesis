@@ -46,6 +46,7 @@ def get_results(synthesizer, analyzer, encoder,
     include_more_syntactic = True
 
     while include_more_syntactic:
+        encoder._partial_quota = 0
         encoder.reset_partial()
         include_more_partial = True
 
@@ -287,6 +288,7 @@ def spawn_encoders(synthesizer, analyzer, entries,
                 if status == consts.SearchStatus.FOUND_EXPECTED:
                     break
             except TimeoutError:
+                print("TIMEOUT", flush=True)
                 pass
 
         executor.close()

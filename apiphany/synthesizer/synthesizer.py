@@ -110,7 +110,8 @@ class Synthesizer:
                     r, inputs, outputs[0]
                 )
             except Exception as e:
-                print("Exception:", e)
+                raise Exception(e)
+                # print("Exception:", e)
                 new_programs = set()
 
             programs = programs.union(new_programs)
@@ -307,6 +308,8 @@ class Synthesizer:
             # "projection(objs_conversation, version)_",
             # "filter(objs_conversation, objs_conversation.version)_",
             # "projection({'channels': [objs_conversation], 'ok': defs_ok_true, 'response_metadata': {'next_cursor': next_cursor_/conversations.list_GET_response_metadata.next_cursor}}, channels)_",
+            # "partial_fields_objs_user_profile",
+            # "convert_defs_pinned_info_object",
 
             # "projection(ListInvoicesResponse, invoices)_",
             # "projection(Invoice, id)_",

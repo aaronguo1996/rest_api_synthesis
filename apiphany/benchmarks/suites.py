@@ -181,6 +181,25 @@ slack_benchmarks = [
             )
         ]
     ),
+    Benchmark(
+        "1.8",
+        "Get the unread messages of a channel",
+        "https://stackoverflow.com/questions/64561594/is-it-possible-to-know-the-number-of-unread-slack-messages-a-user-has-with-the-s",
+        {
+            "channel_id": types.PrimString("defs_channel")
+        },
+        types.ArrayType(None, types.ArrayType(None, types.SchemaObject("objs_message"))),
+        [
+            Program(
+                ["channel_id"],
+                [
+                    AssignExpr("x2", AppExpr("/conversations.info_GET", [("channel", VarExpr("channel_id"))]), False),
+                    AssignExpr("x3", AppExpr("/conversations.history_GET", [("channel", VarExpr("channel_id")), ("oldest", ProjectionExpr(ProjectionExpr(VarExpr("x2"), "channel"), "last_read"))]), False),
+                    ProjectionExpr(VarExpr("x3"), "messages")
+                ]
+            ),
+        ],
+    ),
 ]
 
 slack_suite = BenchmarkSuite(

@@ -192,7 +192,10 @@ class ObjectType(BaseType):
         self.fields = []
 
     def __str__(self):
-        return str(self.object_fields)
+        if self.object_fields:
+            return str(self.object_fields)
+        else:
+            return defs.TYPE_OBJECT
 
     @staticmethod
     def is_schema_type(expected_type):
@@ -200,7 +203,7 @@ class ObjectType(BaseType):
             return None
 
         typ = expected_type.get(defs.DOC_PROPERTIES)
-        if typ is not None:
+        if typ:
             return typ
         else:
             return None
@@ -317,11 +320,10 @@ class ArrayType(BaseType):
         return self.item.ignore_array()
 
     def get_primitive_name(self):
-        return self.item.get_primitive_name()
+        return f"[{self.item.get_primitive_name()}]"
 
     def to_syntactic(self):
-        self.item = self.item.to_syntactic()
-        return self
+        return ArrayType(self.name, self.item.to_syntactic(), self.parent)
 
 class UnionType(BaseType):
     def __init__(self, name, items, parent=None):
