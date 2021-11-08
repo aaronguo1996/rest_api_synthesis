@@ -16,7 +16,7 @@ slack_minimal = [
             "user_ids": types.ArrayType(None, types.PrimString("defs_user_id")),
             "channel_name": types.PrimString("objs_conversation.name"),
         },
-        types.ArrayType(None, types.SchemaObject("objs_conversation", syntactic_type="objs_conversation")),
+        types.ArrayType(None, types.SchemaObject("objs_conversation")),
         [
             Program(
                 ["user_ids", "channel_name"],
@@ -62,7 +62,7 @@ slack_benchmarks = [
         {
             "email": types.PrimString("objs_user_profile.email")
         },
-        types.SchemaObject("objs_message", syntactic_type="objs_message"),
+        types.SchemaObject("objs_message"),
         [
             Program(
                 ["email"],
@@ -82,7 +82,7 @@ slack_benchmarks = [
         {
             "user_id": types.PrimString("defs_user_id")
         },
-        types.ArrayType(None, types.ArrayType(None, types.SchemaObject("objs_message", syntactic_type="objs_message"))),
+        types.ArrayType(None, types.ArrayType(None, types.SchemaObject("objs_message"))),
         [
             Program(
                 ["user_id"],
@@ -104,7 +104,7 @@ slack_benchmarks = [
             "user_id": types.PrimString("defs_user_id"),
             "ts": types.PrimString("defs_ts"),
         },
-        types.ArrayType(None, types.SchemaObject("objs_message", syntactic_type="objs_message")),
+        types.ArrayType(None, types.SchemaObject("objs_message")),
         [
             Program(
                 ["user_id", "ts"],
@@ -127,7 +127,7 @@ slack_benchmarks = [
             "user_ids": types.ArrayType(None, types.PrimString("defs_user_id")),
             "channel_name": types.PrimString("objs_conversation.name"),
         },
-        types.ArrayType(None, types.SchemaObject("objs_conversation", syntactic_type="objs_conversation")),
+        types.ArrayType(None, types.SchemaObject("objs_conversation")),
         [
             Program(
                 ["user_ids", "channel_name"],
@@ -148,7 +148,7 @@ slack_benchmarks = [
             "channel": types.PrimString("defs_channel"),
             "ts": types.PrimString("defs_ts"),
         },
-        types.SchemaObject("objs_message", syntactic_type="objs_message"),
+        types.SchemaObject("objs_message"),
         [
             Program(
                 ["channel", "ts"],
@@ -167,7 +167,7 @@ slack_benchmarks = [
         {
             "channel": types.PrimString("objs_conversation.name"),
         },
-        types.SchemaObject("objs_message", syntactic_type="objs_message"),
+        types.SchemaObject("objs_message"),
         [
             Program(
                 ["channel"],
@@ -203,7 +203,7 @@ stripe_minimal = [
             "customer_id": types.PrimString("customer.id"),
             "product_id": types.PrimString("product.id"),
         },
-        types.ArrayType(None, types.SchemaObject("subscription", syntactic_type="subscription")),
+        types.ArrayType(None, types.SchemaObject("subscription")),
         [
             Program(
                 ["customer_id", "product_id"],
@@ -227,7 +227,7 @@ stripe_benchmarks = [
             "customer_id": types.PrimString("customer.id"),
             "product_id": types.PrimString("product.id"),
         },
-        types.ArrayType(None, types.SchemaObject("subscription", syntactic_type="subscription")),
+        types.ArrayType(None, types.SchemaObject("subscription")),
         [
             Program(
                 ["customer_id", "product_id"],
@@ -270,7 +270,7 @@ stripe_benchmarks = [
             "customer_id": types.PrimString("customer.id"),
             "product_ids": types.ArrayType(None, types.PrimString("product.id")),
         },
-        types.ArrayType(None, types.SchemaObject("subscription", syntactic_type="subscription")),
+        types.ArrayType(None, types.SchemaObject("subscription")),
         [
             Program(
                 ["customer_id", "product_ids"],
@@ -294,7 +294,7 @@ stripe_benchmarks = [
             "currency": types.PrimString("fee.currency"),
             "unit_amount": types.PrimInt("plan.amount"),
         },
-        types.SchemaObject("invoiceitem", syntactic_type="invoiceitem"),
+        types.SchemaObject("invoiceitem"),
         [
             Program(
                 ["product_name", "customer_id", "currency", "unit_amount"],
@@ -334,7 +334,7 @@ stripe_benchmarks = [
         {
             "email": types.PrimString("customer.email"),
         },
-        types.SchemaObject("customer", syntactic_type="customer"),
+        types.SchemaObject("customer"),
         [
             Program(
                 ["email"],
@@ -354,7 +354,7 @@ stripe_benchmarks = [
         {
             "customer_id": types.PrimString("customer.id"),
         },
-        types.ArrayType(None, types.SchemaObject("charge", syntactic_type="charge")),
+        types.ArrayType(None, types.SchemaObject("charge")),
         [
             Program(
                 ["customer_id"],
@@ -374,7 +374,7 @@ stripe_benchmarks = [
         {
             "subscription": types.PrimString("subscription.id"),
         },
-        types.SchemaObject("refund", syntactic_type="refund"),
+        types.SchemaObject("refund"),
         [
             Program(
                 ["subscription"],
@@ -470,10 +470,10 @@ stripe_benchmarks = [
         "Update payment methods for a user's subscriptions",
         "https://stackoverflow.com/questions/58270828/update-credit-card-details-of-user-for-all-subscriptions-in-stripe-using-api",
         {
-            "payment_method": types.SchemaObject("payment_method", syntactic_type="payment_method"),
+            "payment_method": types.SchemaObject("payment_method"),
             "customer_id": types.PrimString("customer.id"),
         },
-        types.ArrayType(None, types.SchemaObject("subscription", syntactic_type="subscription")),
+        types.ArrayType(None, types.SchemaObject("subscription")),
         [
             Program(
                 ["payment_method", "customer_id"],
@@ -506,7 +506,7 @@ square_minimal = [
         {
             "location_id": types.PrimString("Location.id"),
         },
-        types.ArrayType(None, types.SchemaObject("Invoice", syntactic_type="Invoice")),
+        types.ArrayType(None, types.SchemaObject("Invoice")),
         [
             Program(
                 ["location_id"],
@@ -527,7 +527,7 @@ square_benchmarks = [
         {
             "location_id": types.PrimString("Location.id"),
         },
-        types.ArrayType(None, types.SchemaObject("Invoice", syntactic_type="Invoice")),
+        types.ArrayType(None, types.SchemaObject("Invoice")),
         [
             Program(
                 ["location_id"],
@@ -547,7 +547,7 @@ square_benchmarks = [
             "location_id": types.PrimString("Location.id"),
             "plan_id": types.PrimString("CatalogObject.id"),
         },
-        types.ArrayType(None, types.SchemaObject("Subscription", syntactic_type="Subscription")),
+        types.ArrayType(None, types.SchemaObject("Subscription")),
         [
             Program(
                 ["customer_id", "location_id", "plan_id"],
@@ -580,7 +580,7 @@ square_benchmarks = [
         {
             "tax_id": types.PrimString("CatalogObject.id"),
         },
-        types.ArrayType(None, types.SchemaObject("CatalogObject", syntactic_type="CatalogObject")),
+        types.ArrayType(None, types.SchemaObject("CatalogObject")),
         [
             Program(
                 ["tax_id"],
@@ -659,9 +659,9 @@ square_benchmarks = [
         {
             "location_id": types.PrimString("Location.id"),
             "order_ids": types.ArrayType(None, types.PrimString("Order.id")),
-            "updates": types.SchemaObject("OrderFulfillment", syntactic_type="OrderFulfillment"),
+            "updates": types.SchemaObject("OrderFulfillment"),
         },
-        types.ArrayType(None, types.SchemaObject("Order", syntactic_type="Order")),
+        types.ArrayType(None, types.SchemaObject("Order")),
         [
             Program(
                 ["location_id", "order_ids", "updates"],
@@ -740,7 +740,7 @@ square_benchmarks = [
         {
             "name": types.PrimString("Customer.given_name"),
         },
-        types.SchemaObject("Customer", syntactic_type="Customer"),
+        types.SchemaObject("Customer"),
         [
             Program(
                 ["name"],

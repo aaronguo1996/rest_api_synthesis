@@ -65,8 +65,7 @@ class PrimInt(BaseType):
         return defs.TYPE_INT
 
     def to_syntactic(self):
-        self.name = defs.TYPE_INT
-        return self
+        return PrimInt(defs.TYPE_INT)
 
 class PrimBool(BaseType):
     def __init__(self, name=defs.TYPE_BOOL):
@@ -77,8 +76,7 @@ class PrimBool(BaseType):
         return defs.TYPE_BOOL
 
     def to_syntactic(self):
-        self.name = defs.TYPE_BOOL
-        return self
+        return PrimBool(defs.TYPE_BOOL)
 
 class PrimNum(BaseType):
     def __init__(self, name=defs.TYPE_NUM):
@@ -89,8 +87,7 @@ class PrimNum(BaseType):
         return defs.TYPE_NUM
 
     def to_syntactic(self):
-        self.name = defs.TYPE_NUM
-        return self
+        return PrimNum(defs.TYPE_NUM)
 
 class PrimString(BaseType):
     def __init__(self, name=defs.TYPE_STRING, pattern=None):
@@ -112,8 +109,7 @@ class PrimString(BaseType):
         return defs.TYPE_STRING
 
     def to_syntactic(self):
-        self.name = defs.TYPE_STRING
-        return self
+        return PrimString(defs.TYPE_STRING, self._pattern)
 
 class PrimEnum(BaseType):
     def __init__(self, name=defs.TYPE_STRING, enums=[]):
@@ -131,13 +127,11 @@ class PrimEnum(BaseType):
         return defs.TYPE_STRING
 
     def to_syntactic(self):
-        self.name = defs.TYPE_STRING
-        return self
+        return PrimEnum(defs.TYPE_STRING, self.enums)
 
 class SchemaObject(BaseType):
-    def __init__(self, name, parent=None, syntactic_type=None):
+    def __init__(self, name, parent=None):
         super().__init__(name, parent)
-        self._syntactic_type = syntactic_type
 
     def is_type_of(self, obj):
         # get the object definition from the library
@@ -177,10 +171,6 @@ class SchemaObject(BaseType):
         return schema.get_primitive_name()
 
     def to_syntactic(self):
-        if self._syntactic_type is not None:
-            self.name = self._syntactic_type
-            return SchemaObject(self._syntactic_type, syntactic_type=self._syntactic_type)
-
         schema = BaseType.object_lib.get(self.name)
         if schema is None:
             raise Exception("Unknown object definition", self.name)
@@ -268,8 +258,11 @@ class ObjectType(BaseType):
         return defs.TYPE_OBJECT
 
     def to_syntactic(self):
-        self.name = defs.TYPE_OBJECT
-        return self
+        return ObjectType(
+            defs.TYPE_OBJECT,
+            self.object_fields,
+            self.required_fields,
+            self.parent)
 
 class ArrayType(BaseType):
     def __init__(self, name, item_typ, parent=None):
@@ -325,8 +318,7 @@ class ArrayType(BaseType):
         return self.item.get_primitive_name()
 
     def to_syntactic(self):
-        self.item = self.item.to_syntactic()
-        return self
+        return ArrayType(self.name, self.item.to_syntactic(), self.parent)
 
 class UnionType(BaseType):
     def __init__(self, name, items, parent=None):
@@ -404,8 +396,10 @@ class UnionType(BaseType):
         return self.items[0].get_primitive_name()
 
     def to_syntactic(self):
-        self.items = [t.to_syntactic() for t in self.items]
-        return self
+        return UnionType(
+            self.name, 
+            [t.to_syntactic() for t in self.items],
+            self.parent)
 
 def construct_prim_type(name, schema):
     if not isinstance(schema, dict):

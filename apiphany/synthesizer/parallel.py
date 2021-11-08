@@ -26,16 +26,18 @@ def get_results(synthesizer, analyzer, encoder,
     while include_more_syntactic:
         path = encoder.solve()
         while path is not None:
-            # print("Finding a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
+            # if path_len == 5:
+            # print("Found a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
             end = time.time()
             # print(path)
             path_count += 1
-            programs, perms = synthesizer.generate_solutions(
+            programs = synthesizer.generate_solutions(
                 path_len, inputs, outputs, path, end - start
             )
 
-            for p in set(programs):
+            for p in programs:
                 if p not in solution_set:
+                    # print("Found a program", p, flush=True)
                     solution_set.add(p)
                     re_start = time.time()
                     if run_re:
@@ -54,7 +56,7 @@ def get_results(synthesizer, analyzer, encoder,
                         solution_set.add(p)
                         return consts.SearchStatus.FOUND_EXPECTED
 
-            encoder.block_prev(perms)
+            encoder.block_prev()
             path = encoder.solve()
 
         include_more_syntactic = encoder.increment_syntactic()
@@ -80,28 +82,36 @@ def run_encoder(synthesizer, analyzer, entries,
         encoder.add_transition(name, e)
 
     input_map = defaultdict(int)
-    for _, typ in inputs.items():
+    transformed_inputs = {}
+    for name, typ in inputs.items():
         typ_name = str(typ.ignore_array())
         # double check whether the type name is available in the encoder
         # if not, default to its primitive type
         if not encoder.type_exists(typ_name):
             typ_name = typ.get_primitive_name()
+            transformed_inputs[name] = typ.to_syntactic()
+        else:
+            transformed_inputs[name] = typ
 
         input_map[typ_name] += 1
 
     output_map = defaultdict(int)
+    transformed_outputs = []
     for typ in outputs:
         typ_name = str(typ.ignore_array())
         if not encoder.type_exists(typ_name):
             typ_name = typ.get_primitive_name()
+            transformed_outputs.append(typ.to_syntactic())
+        else:
+            transformed_outputs.append(typ)
 
         output_map[typ_name] += 1
  
     encoder.init(input_map, output_map, prim_as_return)
     while encoder._path_len < path_len:
         encoder.increment()
-    # print("input_map", input_map)
-    # print("output_map", output_map)
+    print("input_map", input_map)
+    print("output_map", output_map)
 
     if solutions is None:
         # temporary for rebuttal
@@ -145,7 +155,7 @@ def run_encoder(synthesizer, analyzer, entries,
     path_count = 0
 
     res = get_results(synthesizer, analyzer, encoder, 
-        repeat_time, run_re, inputs, outputs, output_map, 
+        repeat_time, run_re, transformed_inputs, transformed_outputs, output_map, 
         is_array_output, expected_solution, conversion_fair, solutions, path_len,
         start, re_time, path_count)
 
@@ -158,7 +168,7 @@ def run_encoder(synthesizer, analyzer, entries,
 
         # try again with primitives as return values
         res = get_results(synthesizer, analyzer, encoder, 
-            repeat_time, run_re, inputs, prim_outputs, prim_output_map, 
+            repeat_time, run_re, transformed_inputs, prim_outputs, prim_output_map, 
             is_array_output, expected_solution, conversion_fair, solutions, path_len,
             start, re_time, path_count)
     
@@ -186,6 +196,7 @@ def collect_parallel_data(synthesizer, all_solutions):
 
             prog_list.append((syn_time, prog, re_time, cost))
 
+        print(i, len(prog_list), flush=True)
         synthesizer._serialize_solutions(i, prog_list)
         all_path_cnt += path_cnt
 
@@ -211,7 +222,7 @@ def spawn_encoders(synthesizer, analyzer, entries,
                 expected_solution, conversion_fair, prim_as_return,
                 all_solutions),
         range(consts.DEFAULT_LENGTH_LIMIT + 1),
-        # [1,9]
+        # [5]
     )
     while True:
         try:

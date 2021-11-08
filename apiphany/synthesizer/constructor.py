@@ -73,7 +73,9 @@ class Constructor:
                 
                 in_name = obj_name
                 if '{' in in_name and '}' in in_name:
-                    in_typ = types.construct_type(field_name, obj_def)
+                    in_typ = types.construct_type(
+                        field_name if self._infer_types else None, 
+                        obj_def)
                 else:
                     if types.BaseType.object_lib.get(in_name) is None:
                         return results
@@ -86,7 +88,9 @@ class Constructor:
                 )
 
                 is_array = prop.get(defs.DOC_TYPE) == defs.TYPE_ARRAY
-                out_type = types.construct_type(f"{field_name}.{name}" if self._infer_types else None, prop)
+                out_type = types.construct_type(
+                    f"{field_name}.{name}" if self._infer_types else None, 
+                    prop)
 
                 # skip uninformative fields
                 if (isinstance(out_type, types.ObjectType) and
@@ -171,7 +175,9 @@ class Constructor:
         elif defs.DOC_PROPERTIES in field_def: # if the object has sub-fields
             properties = field_def.get(defs.DOC_PROPERTIES)
             for name, prop in properties.items():
-                field_type = types.construct_type(f"{field_name}.{name}", prop)
+                field_type = types.construct_type(
+                    f"{field_name}.{name}" if self._infer_types else None, 
+                    prop)
                 # skip uninformative fields
                 if (isinstance(field_type, types.ObjectType) and
                     not field_type.object_fields):
@@ -220,7 +226,9 @@ class Constructor:
                     result_key = make_entry_name(endpoint, "")
                     results[result_key] = entry
         elif obj_name != field_name:
-            field_type = types.construct_type(f"{field_name}", field_def)
+            field_type = types.construct_type(
+                f"{field_name}" if self._infer_types else None,
+                field_def)
             # skip uninformative fields
             if (isinstance(field_type, types.ObjectType) and
                 not field_type.object_fields):
@@ -278,12 +286,16 @@ class Constructor:
                     semantic_types[param.type.name] = param
 
         for name, param in semantic_types.items():
-            if (self._analyzer._uncovered_opt != consts.UncoveredOption.EXCLUDE and (
-                name != defs.TYPE_BOOL and
+            if (name != defs.TYPE_BOOL and
                 name != defs.TYPE_INT and
                 name != defs.TYPE_STRING and
                 name != defs.TYPE_NUM and
-                name != defs.TYPE_OBJECT)):
+                name != defs.TYPE_OBJECT):
+                
+                # skip non-schema types when syntactic_only is True
+                if not self._infer_types and '.' in name:
+                    continue
+
                 prim_name = param.type.get_primitive_name()
                 out_type = copy.deepcopy(param.type)
                 out_type = out_type.to_syntactic()

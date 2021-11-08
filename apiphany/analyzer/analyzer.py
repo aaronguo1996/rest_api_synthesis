@@ -487,10 +487,14 @@ class LogAnalyzer:
 
         self.value_map = value_map
 
-    def find_representative_for_type(self, typ):
+    def find_representative_for_type(self, typ, infer_type=True):
         # assume the input type is not a union type
         if isinstance(typ, types.ArrayType):
-            typ.item.name = self.find_representative_for_type(typ.item)
+            typ.item = self.find_representative_for_type(typ.item, infer_type)
+            return typ
+            # raise Exception("Array type not supported")
+
+        if not infer_type:
             return typ
 
         params = self.dsu._parents.keys()
@@ -500,10 +504,11 @@ class LogAnalyzer:
                 rep = get_representative(group)
 
                 if rep is not None:
-                    return rep
+                    typ.name = rep
+                    return typ
 
         # if no representative found, return its name
-        return typ.name # typ.get_primitive_name()
+        return typ #.name # typ.get_primitive_name()
 
     def find_same_type(self, param):
         if isinstance(param.type, types.UnionType):

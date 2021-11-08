@@ -84,6 +84,7 @@ class Synthesizer:
                     response_typ = [str(e.response.type)]
                 key = (tuple(param_typs), tuple(response_typ))
                 group = self._groups.get(key, [name])
+                # print("size of group:", len(group))
                 groups.append(group)
             else:
                 groups.append([name])
@@ -100,29 +101,32 @@ class Synthesizer:
     def generate_solutions(self, i, inputs, outputs, result, time):
         programs = set()
 
-        groups = self._expand_groups(result) 
-        for r in itertools.product(*groups):
-            try:
-                # sometimes the program generation fails because 
-                # we merge programs with the same signature but they may have different necessaties
-                # If an exception is raised, we assume this is a spurious sketch
-                new_programs = self._program_generator.generate_program(
-                    r, inputs, outputs[0]
-                )
-            except Exception:
-                new_programs = set()
+        groups = self._expand_groups(result)
+        # for r in groups:
+        try:
+            # sometimes the program generation fails because 
+            # we merge programs with the same signature but they may have different necessaties
+            # If an exception is raised, we assume this is a spurious sketch
+            new_programs = self._program_generator.generate_program(
+                groups, inputs, outputs[0]
+            )
+            # for p in new_programs:
+            #     yield p
+        except Exception as e:
+            raise Exception(e)
+            new_programs = set()
 
-            programs = programs.union(new_programs)
+        programs = programs.union(new_programs)
 
         # self._serialize_solutions(i, programs)
-        if i not in self._programs:
-            self._programs[i] = set()
+        # if i not in self._programs:
+        #     self._programs[i] = set()
 
-        self._programs[i] = self._programs[i].union(programs)
+        # self._programs[i] = self._programs[i].union(programs)
 
-        perm_indices = [list(range(len(result)))]
+        # perm_indices = [list(range(len(result)))]
 
-        return programs, perm_indices
+        return programs #, perm_indices
 
     def _create_encoder(self):
         solver = self._config[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_TYPE]
@@ -235,6 +239,8 @@ class Synthesizer:
         unique_entries = self._group_transitions(self._entries)
         lst = [
             # "/v1/customers_GET",
+            # "filter(customer, customer.email)_",
+            # "projection({'data': [customer], 'has_more': boolean, 'object': string, 'url': string}, data)_"
             # "projection(customer, email)_"
             # "/v1/subscriptions_POST",
             # "/v1/prices_GET",
@@ -304,6 +310,7 @@ class Synthesizer:
             # "projection(objs_conversation, version)_",
             # "filter(objs_conversation, objs_conversation.version)_",
             # "projection({'channels': [objs_conversation], 'ok': defs_ok_true, 'response_metadata': {'next_cursor': next_cursor_/conversations.list_GET_response_metadata.next_cursor}}, channels)_",
+            # "convert_defs_user_id_string",
 
             # "projection(ListInvoicesResponse, invoices)_",
             # "projection(Invoice, id)_",

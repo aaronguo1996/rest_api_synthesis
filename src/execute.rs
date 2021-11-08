@@ -224,7 +224,7 @@ impl<'a> ExecEnv<'a> {
                                 // Choose one of these values for our input
                                 // TODO: flatten list
                                 let mut rng = tls_rng();
-                                let choice = choices[rng.generate_range(0, choices.len() - 1)];
+                                let choice = choices[rng.generate_range(0, choices.len())];
                                 self.env.insert(*v, choice);
 
                                 choice
@@ -243,7 +243,7 @@ impl<'a> ExecEnv<'a> {
                                 return None;
                             }
 
-                            let choice = choices[rng.generate_range(0, choices.len() - 1)];
+                            let choice = choices[rng.generate_range(0, choices.len())];
                             self.env.insert(*v, choice);
 
                             choice

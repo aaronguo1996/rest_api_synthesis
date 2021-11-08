@@ -261,6 +261,9 @@ class VarExpr(Expression):
 
         return self._var == other._var
 
+    def __hash__(self):
+        return hash(self._var)
+
     @property
     def var(self):
         return self._var

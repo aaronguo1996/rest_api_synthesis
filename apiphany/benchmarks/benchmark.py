@@ -102,19 +102,23 @@ class Benchmark:
             # convert the types before passing into the synthesizer
             rep_inputs = {}
             for ip, tip in self.inputs.items():
-                tip.name = analyzer.find_representative_for_type(tip)
+                tip = analyzer.find_representative_for_type(
+                    tip, 
+                    not runtime_config.syntactic_only)
                 rep_inputs[ip] = tip
-                if runtime_config.syntactic_only:
-                    tip.to_syntactic()
+            #     if runtime_config.syntactic_only:
+            #         tip.to_syntactic()
 
-            if runtime_config.syntactic_only:
-                self.output.to_syntactic()
+            # if runtime_config.syntactic_only:
+            #     self.output.to_syntactic()
             is_array_output = isinstance(self.output, types.ArrayType)
             rep_output = self.output.ignore_array()
-            rep_output.name = analyzer.find_representative_for_type(rep_output)
+            rep_output = analyzer.find_representative_for_type(
+                rep_output, 
+                not runtime_config.syntactic_only)
 
-            # print("inputs", rep_inputs)
-            # print("output", rep_output)
+            print("inputs", rep_inputs)
+            print("output", rep_output)
             # with cProfile.Profile() as p:
             parallel.spawn_encoders(
                 synthesizer,

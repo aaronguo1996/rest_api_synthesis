@@ -75,9 +75,9 @@ class ILPetriEncoder:
             self._model.setParam(GRB.Param.SolutionNumber, 0)
             start = time.time()
             self._model.optimize()
-            # print("running solver | sols:", self._model.solCount, 
-            #     "| len:", self._path_len, 
-            #     "| solve time:", time.time() - start)
+            print("running solver | sols:", self._model.solCount, 
+                "| len:", self._path_len, 
+                "| solve time:", time.time() - start)
         # uncomment for batch/tiled blocking
         # elif self._soln_ix >= SOLS_PER_SOLVE:
         #     # run the solver
@@ -113,7 +113,7 @@ class ILPetriEncoder:
             return None
 
     # blocking impl:
-    def block_prev(self, arg):
+    def block_prev(self):
         self._soln_ix += 1
         self._model.setParam(GRB.Param.SolutionNumber, self._soln_ix)
 
@@ -335,6 +335,8 @@ class ILPetriEncoder:
 
         params = group_params(entry.parameters)
         for param, token in params.items():
+            if param == "Customer.id":
+                print(entry)
             if not self._net.has_place(param):
                 self._net.add_place(Place(param))
             self._net.add_input(param, trans_name, Value(token))
@@ -348,6 +350,8 @@ class ILPetriEncoder:
                 self._net.add_output(param, trans_name, Value(1))
         else:
             param = str(resp_typ)
+            if param == "Customer.id":
+                print(entry)
             if not self._net.has_place(param):
                 self._net.add_place(Place(param))
             self._net.add_output(param, trans_name, Value(1))

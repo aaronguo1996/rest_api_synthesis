@@ -56,6 +56,7 @@ PREFIX_CONVERT = "convert_"
 
 SPACE = '    '
 MAX_COST = 99999.9
+MAX_PARAMS = 4
 
 EXP_DEFAULT = "default_apiphany"
 DATA_DEFAULT = "experiment_data"
