@@ -297,6 +297,11 @@ class Constructor:
             match = re.search(r"projection\((.*), (.*)\)_", f)
             obj_name = match.group(1)
             field_name = match.group(2)
+
+            # skip response objects for Square API
+            if re.search(r".*Response", obj_name) or re.search(r".*Request", obj_name):
+                continue
+
             # reverse the filters to construct complete objects from partial fields
             trans_name = make_partial_trans_name(obj_name, field_name)
             params = [Parameter("", field_name, trans_name, [field_name], True, None, entry.response.type, None)]

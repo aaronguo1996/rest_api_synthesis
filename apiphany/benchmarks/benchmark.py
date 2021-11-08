@@ -170,7 +170,7 @@ class Benchmark:
 
         candidates_no_re = sorted_candidates
         if solution_found:
-            candidates_no_re = [c for c in sorted_candidates if c[0] < syn_time]
+            candidates_no_re = [c for c in sorted_candidates if c[0] <= syn_time]
             self.latex_entry.ranks = [rank]
             print(f"PASS, Ranks {rank} vs {len(candidates_no_re)}")
             self.latex_entry.mean_rank = rank

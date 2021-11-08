@@ -63,8 +63,8 @@ DATA_DEFAULT = "experiment_data"
 
 # benchmarking
 APIS = ["slack_api_test", "stripe_api_test", "square_api_test"]
-TOTAL_BENCHMARKS = 29
-TIMEOUT = 90
+TOTAL_BENCHMARKS = 30
+TIMEOUT = 120
 
 class UncoveredOption(Enum):
     EXCLUDE = "exclude"

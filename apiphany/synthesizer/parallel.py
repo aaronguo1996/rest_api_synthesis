@@ -5,7 +5,7 @@ import pebble
 import time
 import signal
 from functools import partial
-from concurrent.futures import TimeoutError
+from concurrent.futures import TimeoutError, as_completed
 import cProfile
 
 from synthesizer.hypergraph_encoder import HyperGraphEncoder
@@ -51,7 +51,10 @@ def get_results(synthesizer, analyzer, encoder,
         include_more_partial = True
 
         while include_more_partial:
-            # print("running path length", path_len, flush=True)
+            # print("running path length", path_len, 
+            #     "with partial quota", encoder._partial_quota, 
+            #     "and syntactic quota", encoder._syntactic_quota, 
+            #     flush=True)
             path = encoder.solve()
             while path is not None:
                 # print("Finding a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
@@ -249,8 +252,8 @@ def spawn_encoders(synthesizer, analyzer, entries,
     # results = pool.imap_unordered(
     #     partial(run_encoder,
     #             synthesizer, analyzer, entries,
-    #             repeat_time, run_re, inputs, outputs, is_array_output,
-    #             expected_solution, conversion_fair, prim_as_return,
+    #             inputs, outputs, is_array_output, expected_solution, 
+    #             runtime_config, all_solutions,
     #             all_solutions),
     #     range(consts.DEFAULT_LENGTH_LIMIT + 1),
     #     # [1,4]
@@ -274,7 +277,7 @@ def spawn_encoders(synthesizer, analyzer, entries,
 
     with pebble.ProcessPool(max_workers=solver_num) as executor:
         futures = []
-        for path_len in range(consts.DEFAULT_LENGTH_LIMIT + 1):
+        for path_len in range(1, consts.DEFAULT_LENGTH_LIMIT + 1):
             res = executor.schedule(run_encoder,
                 args=(synthesizer, analyzer, entries,
                 inputs, outputs, is_array_output, expected_solution, 
@@ -282,16 +285,17 @@ def spawn_encoders(synthesizer, analyzer, entries,
                 timeout=timeout)
             futures.append(res)
 
-        for future in futures:
-            try:
-                num_place, num_trans, status = future.result()
+        try:
+            for future in as_completed(futures):
+                num_place, num_trans, status = future.result(timeout=timeout)
                 if status == consts.SearchStatus.FOUND_EXPECTED:
                     break
-            except TimeoutError:
-                print("TIMEOUT", flush=True)
-                pass
+        except TimeoutError:
+            print("TIMEOUT", flush=True)
+        except pebble.ProcessExpired as e:
+            print("Expired with code", e.exitcode, flush=True)
 
-        executor.close()
+        executor.stop()
         executor.join()
 
     collect_parallel_data(synthesizer, num_place, num_trans, all_solutions)

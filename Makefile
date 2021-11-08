@@ -10,7 +10,7 @@ EXP_NAME=apiphany_exp
 BENCH_SRC=bench.py
 BENCH_EXE=python $(BENCH_SRC)
 # reps
-REPEAT_EXP=3
+REPEAT_EXP=1
 # experiments
 EXPS=("$EXP_NAME")
 # params
@@ -24,15 +24,28 @@ word-dash=$(word $2,$(subst -, ,$1))
 build:
 	maturin develop --release --strip
 
-run-full-exclude run-full-syntactic run-onethird-exclude run-onethird-syntactic run-twothirds-exclude run-twothirds-syntactic: build
+generate-full-exclude generate-full-syntactic generate-onethird-exclude generate-onethird-syntactic generate-twothirds-exclude generate-twothirds-syntactic: build
 	cd apiphany && $(BENCH_EXE) . --data-dir ../experiment_data \
 		--exp-name $(EXP_NAME) \
 		--generate-witness \
+		--generate-witness-only \
 		--method-coverage $(coverage_$(call word-dash,$@,2)) \
 		--uncovered $(uncovered_$(call word-dash,$@,3)) \
-		--repeat-exp $(REPEAT_EXP) \
-		--with-partials
-	cd ..
+		--repeat-exp 1 \
+		--with-partials ; \
+	cd .. ; \
+
+run-full-exclude run-full-syntactic run-onethird-exclude run-onethird-syntactic run-twothirds-exclude run-twothirds-syntactic: build
+	for suite in "squareapi" "slack" "stripe" ; do \
+		cd apiphany && $(BENCH_EXE) . --data-dir ../experiment_data \
+			--exp-name $(EXP_NAME) \
+			--method-coverage $(coverage_$(call word-dash,$@,2)) \
+			--uncovered $(uncovered_$(call word-dash,$@,3)) \
+			--repeat-exp $(REPEAT_EXP) \
+			--suites $$suite \
+			--with-partials ; \
+		cd .. ; \
+	done
 
 plot-all plot-ranks plot-solved:
 	cd apiphany && $(BENCH_EXE) . --data-dir ../experiment_data \

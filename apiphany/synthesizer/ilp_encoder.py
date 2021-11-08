@@ -80,9 +80,9 @@ class ILPetriEncoder:
             self._model.setParam(GRB.Param.SolutionNumber, 0)
             start = time.time()
             self._model.optimize()
-            print("running solver | sols:", self._model.solCount, 
-                "| len:", self._path_len, 
-                "| solve time:", time.time() - start)
+            # print("running solver | sols:", self._model.solCount, 
+            #     "| len:", self._path_len, 
+            #     "| solve time:", time.time() - start)
         # uncomment for batch/tiled blocking
         # elif self._soln_ix >= SOLS_PER_SOLVE:
         #     # run the solver
@@ -149,7 +149,7 @@ class ILPetriEncoder:
         self._block = []
 
     def increment_syntactic(self):
-        if self._syntactic_quota < 2 * self._path_len:
+        if self._syntactic_quota < self._path_len:
             self._syntactic_quota += 1
             self.reset_syntactic()
             return True
