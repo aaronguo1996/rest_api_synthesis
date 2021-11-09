@@ -34,7 +34,7 @@
         "expand_group": true,
         "block_perms": true,
         "solver_type": "petri net ILP",
-        "solver_number": 9,
+        "solver_number": 8,
         "solution_number": 600,
         "enable_prefilter": false
     },

@@ -434,11 +434,11 @@ class LogAnalyzer:
     def sample_value_by_type(self, typ):
         if isinstance(typ, types.ArrayType):
             lst_len = random.choice(range(1, 5))
-            vals = []
-            for _ in range(lst_len):
-                val = self.sample_value_by_type(typ.item)
-                vals.append(val)
-
+            # vals = []
+            # for _ in range(lst_len):
+            #     val = self.sample_value_by_type(typ.item)
+            #     vals.append(val)
+            vals = [None for _ in range(lst_len)]
             return vals
         else:
             candidates = self.get_values_by_type(typ)

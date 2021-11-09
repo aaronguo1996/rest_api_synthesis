@@ -1,6 +1,6 @@
 from benchmarks.benchmark import Benchmark, BenchmarkSuite
 from schemas import types
-from program.program import (Program, ProjectionExpr, EquiExpr,
+from program.program import (Program, ProjectionExpr, EquiExpr, ObjectExpr,
                             AssignExpr, VarExpr, AppExpr)
 
 ################################################################################
@@ -180,6 +180,25 @@ slack_benchmarks = [
                 ]
             )
         ]
+    ),
+    Benchmark(
+        "1.8",
+        "Get the unread messages of a channel",
+        "https://stackoverflow.com/questions/64561594/is-it-possible-to-know-the-number-of-unread-slack-messages-a-user-has-with-the-s",
+        {
+            "channel_id": types.PrimString("defs_channel")
+        },
+        types.ArrayType(None, types.ArrayType(None, types.SchemaObject("objs_message"))),
+        [
+            Program(
+                ["channel_id"],
+                [
+                    AssignExpr("x2", AppExpr("/conversations.info_GET", [("channel", VarExpr("channel_id"))]), False),
+                    AssignExpr("x3", AppExpr("/conversations.history_GET", [("channel", VarExpr("channel_id")), ("oldest", ProjectionExpr(ProjectionExpr(VarExpr("x2"), "channel"), "last_read"))]), False),
+                    ProjectionExpr(VarExpr("x3"), "messages")
+                ]
+            ),
+        ],
     ),
 ]
 
@@ -486,6 +505,25 @@ stripe_benchmarks = [
             )
         ]
     ),
+    Benchmark(
+        "2.11",
+        "Delete the default payment source for a customer",
+        "https://stackoverflow.com/questions/17807881/stripe-api-throwing-error-when-trying-to-delete-a-card",
+        {
+            "customer_id": types.PrimString("customer.id"),
+        },
+        types.SchemaObject("payment_source"),
+        [
+            Program(
+                ["customer_id"],
+                [
+                    AssignExpr("x0", AppExpr("/v1/customers/{customer}_GET", [("customer", VarExpr("customer_id"))]), False),
+                    AssignExpr("x1", AppExpr("/v1/customers/{customer}/sources/{id}_DELETE", [("customer", VarExpr("customer_id")), ("id", ProjectionExpr(VarExpr("x0"), "default_source"))]), False),
+                    VarExpr("x1")
+                ]
+            )
+        ]
+    )
 ]
 
 stripe_suite = BenchmarkSuite(
@@ -612,46 +650,6 @@ square_benchmarks = [
             )
         ],
     ),
-    # Benchmark(
-    #     "3.5",
-    #     "Delete catalog items with names",
-    #     {
-    #         "item_type": types.PrimString("CatalogObject.type"),
-    #         "names": types.ArrayType(None, types.PrimString("CatalogDiscount.name"))
-    #     },
-    #     types.ArrayType(None, types.PrimString("CatalogObject.id")),
-    #     [
-    #         Program(
-    #             ["item_type", "names"],
-    #             [
-    #                 AssignExpr("x0", AppExpr("/v2/catalog/list_GET", []), False),
-    #                 AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
-    #                 AssignExpr("x2", VarExpr("names"), True),
-    #                 EquiExpr(ProjectionExpr(ProjectionExpr(VarExpr("x1"), "item_data"), "name"), VarExpr("x2")),
-    #                 AssignExpr("x3", AppExpr("/v2/catalog/batch-delete_DELETE", [("object_ids[0]", VarExpr("x1"))]), False),
-    #                 VarExpr("x3")
-    #             ]
-    #         )
-    #     ],
-    # ),
-    # Benchmark(
-    #     "3.6",
-    #     "Delete all catalog items",
-    #     {
-    #     },
-    #     types.ArrayType(None, types.PrimString("CatalogObject.id")),
-    #     [
-    #         Program(
-    #             [],
-    #             [
-    #                 AssignExpr("x0", AppExpr("/v2/catalog/batch-retrieve_POST", []), False),
-    #                 AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
-    #                 AssignExpr("x2", AppExpr("/v2/catalog/batch-delete_DELETE", [("object_ids[0]", VarExpr("x1"))]), False),
-    #                 VarExpr("x2")
-    #             ]
-    #         )
-    #     ],
-    # ),
     Benchmark(
         "3.5",
         "Add order details to order",
@@ -659,7 +657,7 @@ square_benchmarks = [
         {
             "location_id": types.PrimString("Location.id"),
             "order_ids": types.ArrayType(None, types.PrimString("Order.id")),
-            "updates": types.SchemaObject("OrderFulfillment"),
+            "updates": types.ArrayType(None, types.SchemaObject("OrderFulfillment")),
         },
         types.ArrayType(None, types.SchemaObject("Order")),
         [
@@ -669,8 +667,9 @@ square_benchmarks = [
                     AssignExpr("x0", VarExpr("order_ids"), True),
                     AssignExpr("x1", AppExpr("/v2/orders/batch-retrieve_POST", [("location_id", VarExpr("location_id")), ("order_ids[0]", VarExpr("x0"))]), False),
                     AssignExpr("x2", ProjectionExpr(VarExpr("x1"), "orders"), True),
-                    AssignExpr("x3", AppExpr("/v2/orders/{order_id}_PUT", [("order_id", ProjectionExpr(VarExpr("x2"), "id")), ("order[fulfillments]", VarExpr("updates"))]), False),
-                    VarExpr("x3")
+                    AssignExpr("x3", ObjectExpr({"fulfillments": VarExpr("updates")}), False),
+                    AssignExpr("x4", AppExpr("/v2/orders/{order_id}_PUT", [("order_id", ProjectionExpr(VarExpr("x2"), "id")), ("order", VarExpr("x3"))]), False),
+                    ProjectionExpr(VarExpr("x4"), "order"),
                 ]
             )
         ],
@@ -761,7 +760,51 @@ square_benchmarks = [
                 ]
             )
         ],
-    )
+    ),
+    Benchmark(
+        "3.10",
+        "Delete catalog items with names",
+        "https://github.com/square/catalog-api-demo/blob/85b6754c90fa7b66fc5e605ee7a344314537eade/src/main/java/com/squareup/catalog/demo/example/DeleteCategoryExample.java#L65",
+        {
+            "item_type": types.PrimString("CatalogObject.type"),
+            "names": types.ArrayType(None, types.PrimString("CatalogItem.name"))
+        },
+        # types.SchemaObject("DeleteCatalogObjectResponse"),
+        types.ArrayType(None, types.PrimString("CatalogObject.id")),
+        [
+            Program(
+                ["item_type", "names"],
+                [
+                    AssignExpr("x0", AppExpr("/v2/catalog/search_POST", [("object_types[0]", VarExpr("item_type"))]), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
+                    AssignExpr("x2", VarExpr("names"), True),
+                    EquiExpr(ProjectionExpr(ProjectionExpr(VarExpr("x1"), "item_data"), "name"), VarExpr("x2")),
+                    AssignExpr("x3", AppExpr("/v2/catalog/object/{object_id}_DELETE", [("object_id", ProjectionExpr(VarExpr("x1"), "id"))]), False),
+                    AssignExpr("x4", ProjectionExpr(VarExpr("x3"), "deleted_object_ids"), True),
+                    VarExpr("x4"),
+                ]
+            )
+        ],
+    ),
+    Benchmark(
+        "3.11",
+        "Delete all catalog items",
+        "https://github.com/square/catalog-api-demo/blob/85b6754c90fa7b66fc5e605ee7a344314537eade/src/main/java/com/squareup/catalog/demo/example/DeleteAllItemsExample.java#L45",
+        {
+        },
+        types.ArrayType(None, types.PrimString("CatalogObject.id")),
+        [
+            Program(
+                [],
+                [
+                    AssignExpr("x0", AppExpr("/v2/catalog/list_GET", []), False),
+                    AssignExpr("x1", ProjectionExpr(VarExpr("x0"), "objects"), True),
+                    AssignExpr("x2", AppExpr("/v2/catalog/object/{object_id}_DELETE", [("object_id", ProjectionExpr(VarExpr("x1"), "id"))]), False),
+                    ProjectionExpr(VarExpr("x2"), "deleted_object_ids"),
+                ]
+            )
+        ],
+    ),
 ]
 
 square_suite = BenchmarkSuite(

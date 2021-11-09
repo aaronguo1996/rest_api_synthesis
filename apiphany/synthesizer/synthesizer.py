@@ -84,7 +84,7 @@ class Synthesizer:
                     response_typ = [str(e.response.type)]
                 key = (tuple(param_typs), tuple(response_typ))
                 group = self._groups.get(key, [name])
-                # print("size of group:", len(group))
+                # print("groups for", name, ":", group)
                 groups.append(group)
             else:
                 groups.append([name])
@@ -113,7 +113,8 @@ class Synthesizer:
             # for p in new_programs:
             #     yield p
         except Exception as e:
-            raise Exception(e)
+            # raise Exception(e)
+            print("[Warning]:", e)
             new_programs = set()
 
         programs = programs.union(new_programs)
@@ -250,7 +251,7 @@ class Synthesizer:
             # "/v1/prices_POST",
             # "projection(subscription, items)_",
             # "projection(subscription_item, price)_",
-            # "/v1/customers/{customer}/sources/{id}_DELETE"
+            # "/v1/customers/{customer}/sources/{id}_DELETE",
             # "/v1/invoiceitems_POST",
             # 'projection(product, active)_',
             # "/v1/invoices_GET",
@@ -269,10 +270,13 @@ class Synthesizer:
             # "/v1/customers/{customer}/sources_GET",
             # 'filter(status_transitions, status_transitions.returned)_',
             # "filter(subscription, subscription.items.data.[?].price.product)_",
-            # "projection(subscription, customer)_"
+            # "projection(subscription, customer)_",
             # "projection(customer, subscriptions)_",
-            # "projection(customer, id)_"
+            # "projection(customer, id)_",
+            # "/v1/customers/{customer}_GET",
+            # "projection(customer, default_source)_",
             # "projection(payment_source, type)_"
+            # "/v1/account_GET",
 
             # "/admin.users.session.invalidate_POST",
             # "/admin.conversations.search_GET",
@@ -311,6 +315,8 @@ class Synthesizer:
             # "filter(objs_conversation, objs_conversation.version)_",
             # "projection({'channels': [objs_conversation], 'ok': defs_ok_true, 'response_metadata': {'next_cursor': next_cursor_/conversations.list_GET_response_metadata.next_cursor}}, channels)_",
             # "convert_defs_user_id_string",
+            # "partial_fields_objs_user_profile",
+            # "convert_defs_pinned_info_object",
 
             # "projection(ListInvoicesResponse, invoices)_",
             # "projection(Invoice, id)_",
@@ -342,7 +348,14 @@ class Synthesizer:
             # "/v2/catalog/search_POST",
             # "/v2/catalog/search-catalog-items_POST",
             # "projection(SearchCatalogObjectsResponse, objects)_",
-            # "filter(CatalogObject, CatalogObject.item_data.tax_ids.[?])_"
+            # "filter(CatalogObject, CatalogObject.item_data.tax_ids.[?])_",
+            # "projection(CatalogObject, item_data)_",
+            # "projection(CatalogItem, name)_",
+            # "projection(CatalogObject, type)_",
+            # "filter(CatalogObject, CatalogObject.item_data.name)_",
+            # "/v2/catalog/object/{object_id}_DELETE",
+            # "projection(DeleteCatalogObjectResponse, deleted_object_ids)_",
+            # "partial_fulfillments_Order",
         ]
 
         for name in lst:

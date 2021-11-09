@@ -28,7 +28,7 @@ class BenchConfig:
         bias_type=dynamic.BiasType.SIMPLE, use_parallel=True,
         get_place_stats=False, generate_witness=False, method_coverage=1,
         uncovered_opt=consts.UncoveredOption.DEFAULT_TO_SYNTACTIC,
-        conversion_fair=False, prim_as_return=False, syntactic_only=False):
+        conversion_fair=False, prim_as_return=False, with_partials=False, syntactic_only=False,):
         self.cache = cache
         self.repeat_exp = repeat_exp
         self.repeat_re = repeat_re
@@ -44,6 +44,7 @@ class BenchConfig:
         self.conversion_fair = conversion_fair
         self.prim_as_return = prim_as_return
         self.syntactic_only = syntactic_only
+        self.with_partials = with_partials
 
 class BenchmarkResult:
     def __init__(self, name, desc):
@@ -124,13 +125,10 @@ class Benchmark:
                 synthesizer,
                 analyzer,
                 indexed_entries,
-                runtime_config.repeat_re,
-                not runtime_config.synthesis_only,
                 rep_inputs, [rep_output], is_array_output,
                 configuration[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_NUM],
                 self.solutions[0],
-                runtime_config.conversion_fair,
-                runtime_config.prim_as_return,
+                runtime_config,
             )
                 # p.sort_stats("cumulative").print_stats(999999)
             
@@ -169,7 +167,7 @@ class Benchmark:
         rank = None
         for rank, (syn_time, sol_prog, re_time, cost) in enumerate(sorted_candidates):            
             # print(rank, cost, sol_prog.has_conversion())
-            # print(sol_prog)
+            # print(rank, sol_prog)
             if sol_prog in self.solutions:
                 print("Solution found")
                 print(sol_prog, "has cost", cost)
@@ -179,9 +177,11 @@ class Benchmark:
         if rank is not None:
             rank += 1
 
+        candidates_no_re = sorted_candidates
         if solution_found:
+            candidates_no_re = [c for c in sorted_candidates if c[0] <= syn_time]
             self.latex_entry.ranks = [rank]
-            print(f"PASS, Ranks {rank} vs {len(sorted_candidates)}")
+            print(f"PASS, Ranks {rank} vs {len(candidates_no_re)}")
             self.latex_entry.mean_rank = rank
             self.latex_entry.median_rank = rank
 
@@ -197,11 +197,11 @@ class Benchmark:
         else:
             print(f"FAIL")
 
-        self.latex_entry.rank_no_re = len(sorted_candidates)
+        self.latex_entry.rank_no_re = len(candidates_no_re)
         self.latex_entry.syn_time = syn_time
         self.latex_entry.re_time = re_time
         self.latex_entry.candidates = len(candidates)
-        self.latex_entry.paths = paths            
+        self.latex_entry.paths = paths
 
         return self.latex_entry
 
@@ -243,7 +243,7 @@ class BenchmarkSuite:
             if oldest_dir is not None:
                 self._iter_dir = oldest_dir
 
-        self._entries = utils.parse_entries(
+        self._witnesses = utils.parse_entries(
             self._configuration, 
             self._suite_dir, 
             base_path, 
@@ -255,16 +255,18 @@ class BenchmarkSuite:
             doc_entries)
 
         paths = self._doc.get(defs.DOC_PATHS)
-        self._entries = utils.prune_by_coverage(
-            paths, self._entries,
+        self._witnesses = utils.prune_by_coverage(
+            paths, self._witnesses,
             runtime_config.method_coverage)
 
         if runtime_config.generate_witness:
             self.generate_witnesses(
                 doc_entries, hostname, base_path,
-                self._entries, endpoints, 
+                self._witnesses, endpoints, 
                 runtime_config.uncovered_opt,
-                not runtime_config.syntactic_only)
+                runtime_config.with_partials,
+                not runtime_config.syntactic_only,
+            )
 
         with open(os.path.join(self._suite_dir, consts.FILE_ENTRIES), "rb") as f:
             self._typed_entries = pickle.load(f)
@@ -273,7 +275,7 @@ class BenchmarkSuite:
             self._log_analyzer = pickle.load(f)
 
     def generate_witnesses(self, doc_entries, hostname, base_path, 
-        entries, endpoints, uncovered_opt, infer_types=True):
+        witnesses, endpoints, uncovered_opt, with_partials=False, infer_types=True):
         print("---------------------------------------------------------------")
         print("Analyzing provided witnesses for", self.api)
         log_analyzer = analyzer.LogAnalyzer(uncovered_opt)
@@ -282,7 +284,7 @@ class BenchmarkSuite:
         
         log_analyzer.analyze(
             doc_entries,
-            entries,
+            witnesses,
             skip_fields,
             self._configuration.get(consts.KEY_BLACKLIST),
             prefilter=prefilter)
@@ -312,11 +314,17 @@ class BenchmarkSuite:
             self._configuration[consts.KEY_WITNESS][consts.KEY_MAX_OPT])
 
         # ascribe types with the new analysis results
-        entries = utils.create_entries(doc_entries, self._configuration, ascription, infer_types)
+        entries = utils.create_entries(
+            doc_entries, self._configuration, ascription, infer_types)
 
         print("Writing typed entries to file...")
         constructor = Constructor(self._doc, log_analyzer, infer_types)
-        projs_and_filters = constructor.construct_graph()
+        with_syntactic = (
+            uncovered_opt==consts.UncoveredOption.DEFAULT_TO_SYNTACTIC or
+            not infer_types) # generate semantic to syntactic conversion when syntactic types exist
+        projs_and_filters = constructor.construct_graph(
+            with_syntactic=with_syntactic,
+            with_partials=with_partials,)
         entries.update(projs_and_filters)
         with open(os.path.join(self._suite_dir, consts.FILE_ENTRIES), "wb") as f:
             pickle.dump(entries, f)
@@ -391,19 +399,16 @@ class BenchmarkSuite:
         # covered endpoints
         covered = set()
         
-        for x in self._entries:
-            if x.endpoint == "/v1/accounts/{account}/persons":
-                print([(param.arg_name, param.value) for param in x.parameters])
-                print(x.response.value)
+        for x in self._witnesses:
             if (x.endpoint in endpoints and 
                 not isinstance(x.response, ErrorResponse) and 
-                not x.response.value):
+                x.response.value):
                 covered.add((x.endpoint, x.method.upper()))
 
         ep_covered = len(covered)
 
         # witnesses stats
-        all_witnesses = [e for e in self._entries if not isinstance(e.response, ErrorResponse)]
+        all_witnesses = [e for e in self._witnesses if not isinstance(e.response, ErrorResponse)]
         all_witness_cnt = len(all_witnesses)
 
         return APIInfo(
@@ -426,7 +431,7 @@ class BenchmarkSuite:
         transitions = None
         
         indexed_entries = utils.index_entries(
-            self._entries,
+            self._witnesses,
             self._configuration.get(consts.KEY_SKIP_FIELDS)
         )
 
@@ -537,11 +542,11 @@ class Bencher:
 
     def print_api_info(self, places, transitions, output=None):
         res = (
-            "\\small\\begin{tabular}{l|rrrr|rrrrr|rr}\n"
+            "\\small\\begin{tabular}{l|rrrr|rr|rr}\n"
             "\\toprule\n"
-            "& \\multicolumn{4}{c|}{API size} & \\multicolumn{5}{c|}{API Analysis} & \\multicolumn{2}{c}{TTN size} \\\\\n"
-            "\\cmidrule(lr){2-5} \\cmidrule(lr){6-10} \\cmidrule(lr){11-12}\n"
-            "API & $|\\Lambda.f|$ & $n_{args}$ & $|\\Lambda.o|$ & $s_{objs}$ & $|\\witnesses_0|$ & $|\\sema{\\Lambda}_0.f|$ & $|\\witnesses|$ & $|\\sema{\\Lambda}.f|$ & $n_{ann}$ & $|P|$ & $|T|$ \\\\\n"
+            "& \\multicolumn{4}{c|}{API size} & \\multicolumn{2}{c|}{API Analysis} & \\multicolumn{2}{c}{TTN size} \\\\\n"
+            "\\cmidrule(lr){2-5} \\cmidrule(lr){6-7} \\cmidrule(lr){8-9}\n"
+            "API & $|\\Lambda.f|$ & $n_{args}$ & $|\\Lambda.o|$ & $s_{objs}$ & $|\\witnesses|$ & $|\\sema{\\Lambda}.f|$ & $|P|$ & $|T|$ \\\\\n"
             "\\midrule\n")
         res += "\n"
 
@@ -555,11 +560,8 @@ class Bencher:
                     f"& {min(api_info.num_args)} - {max(api_info.num_args)} "
                     f"& {api_info.obj_num} "
                     f"& {min(api_info.obj_sizes)} - {max(api_info.obj_sizes)} "
-                    f"& {api_info.init_w} "
-                    f"& {api_info.init_covered} "
                     f"& {api_info.gen_w} "
                     f"& {api_info.ep_covered} "
-                    f"& {api_info.annotations} "
                     f"& {places[i]} "
                     f"& {transitions[i]}")
                 res += r" \\"
@@ -578,11 +580,11 @@ class Bencher:
     def print_benchmark_results(self, results, output=None):
         res = ("% auto-generated: ./bench.py, table 2\n"
                "\\resizebox{\\textwidth}{!}{"
-               "\\begin{tabular}{l|lp{7.5cm}|rrrr|rr}\n"
+               "\\begin{tabular}{l|lp{7.5cm}|rrrr|rr|rr}\n"
                "\\toprule\n"
-               "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{4}{c|}{Solution} & \\multicolumn{2}{c}{Timing} \\\\\n"
-               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9}\n"
-               "API & ID & Description & size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & $|\\prog|$ & $t_{RE}$ & $t_{syn}$ \\\\\n"
+               "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{4}{c|}{Solution} & \\multicolumn{2}{c|}{Timing} & \\multicolumn{2}{c}{Rank} \\\\\n"
+               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9} \\cmidrule(lr){10-11} \n"
+               "API & ID & Description & size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & $t_{RE}$ & $t_{Total}$ & w/o RE & w/ RE \\\\\n"
                "\\midrule")
         res += "\n"
 
@@ -627,9 +629,8 @@ class Bencher:
                     f"& {utils.pretty_none(r.endpoint_calls)} "
                     f"& {utils.pretty_none(r.projects)} "
                     f"& {utils.pretty_none(r.filters)} "
-                    f"& {utils.pretty_none(r.paths)}"
-                    f"& {utils.pretty_none(r.candidates)} "
                     f"& {utils.pretty_none(r.re_time)} "
+                    f"& {utils.pretty_none(r.syn_time)} "
                     f"& {rank_no_re_str} "
                     f"& {median_rank_str} ")
                 res += r" \\"

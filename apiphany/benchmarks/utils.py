@@ -51,6 +51,16 @@ def get_initial_witnesses(configuration, exp_dir, base_path, endpoints):
     return entries
 
 
+def sanitize_traces(entries):
+    sanitized_entries = []
+    for entry in entries:
+        if "projection" in entry.endpoint:
+            continue
+
+        sanitized_entries.append(entry) 
+
+    return sanitized_entries
+
 def parse_entries(configuration, exp_dir, base_path, endpoints):
     trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
     skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
@@ -176,9 +186,14 @@ def index_entries(entries, skip_fields):
                 (param_values, e.response.value, weight)
             )
 
-        if fun == "/v1/accounts/{account}/persons_GET":
-            print(index_result[fun])
+        # if fun == "/v2/orders/batch-retrieve_POST":
+        #     print(index_result[fun].keys())
 
+    for fun, fun_results in index_result.items():
+        for param, param_results in fun_results.items():
+            if len(param_results) > 10:
+                index_result[fun][param] = param_results[-10:]
+                
     return index_result
 
 def pretty_none(v):
@@ -259,8 +274,22 @@ def prune_by_coverage(paths, witnesses, coverage):
     sampled_covered = random.sample(list(covered), k=expected_covered_num)
 
     sampled_witnesses = []
+    # counts = {}
     for w in witnesses:
-        if (w.endpoint, w.method.upper()) in sampled_covered:
+        key = (w.endpoint, w.method.upper())
+        if key in sampled_covered:
             sampled_witnesses.append(w)
+    #         if key not in counts:
+    #             counts[key] = []
+
+    #         counts[key].append(w)
+
+    # 
+    # # control the witness size to reduce the memory usage
+    # for k, ws in counts.items():
+    #     if len(ws) > 10:
+    #         sampled_witnesses += ws[-10:]
+    #     else:
+    #         sampled_witnesses += ws
 
     return sampled_witnesses

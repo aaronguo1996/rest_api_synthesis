@@ -72,14 +72,8 @@
         "endpoint": null,
         "producer": [
             {
-                "endpoint": "/v1/customers",
-                "method": "get",
-                "path": "data/[?]/id"
-            },
-            {
-                "endpoint": "/v1/customers",
-                "method": "post",
-                "path": "id"
+                "enum": ["cus_JXqQwlgvr7TbPD", "cus_JXqRVg8RTl3qu4"],
+                "combine": false
             }
         ]
     },
@@ -213,6 +207,16 @@
                 "endpoint": "/v1/sources/{source}",
                 "method": "get",
                 "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "id",
+        "endpoint": "/v1/customers/{customer}/sources/{id}",
+        "producer": [
+            {
+                "enum": ["card_1J1nmJDLm14arRKVVkwe9RIJ", "src_1IyVSHDLm14arRKVfxg2sics", "card_1J1nlnDLm14arRKVER5VdVTk", "ba_1IuknTDLm14arRKVhttZGkbh"],
+                "combine": false
             }
         ]
     },

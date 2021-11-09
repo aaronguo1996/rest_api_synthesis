@@ -29,8 +29,12 @@ class ILPetriEncoder:
         self._cf = None
         self._soln_ix = None
         self._finals = None
+        # control of how many syntactic type are used
         self._syntactic_constr = None
         self._syntactic_quota = 0
+        # control of how many partial objects are created
+        self._partial_constr = None
+        self._partial_quota = 0
 
         # encode place and transition names into integers
         self._place_names = []
@@ -68,6 +72,7 @@ class ILPetriEncoder:
         return self._net.has_place(typ_name)
 
     def solve(self):
+        # print(self._path_len, self._soln_ix, flush=True)
         # previous run failed; assume everything's been incremented and rerun the solver
         if self._soln_ix is None:
             # run the solver
@@ -151,6 +156,14 @@ class ILPetriEncoder:
         else:
             return False
 
+    def increment_partial(self):
+        if self._partial_quota < self._path_len:
+            self._partial_quota += 1
+            self.reset_partial()
+            return True
+        else:
+            return False
+
     def _run_approximation(self, inputs, output, prim_as_return=False):
         # print("before approximation:", len(self._net.transition()))
         # on top of the input types,
@@ -176,6 +189,10 @@ class ILPetriEncoder:
             self._reachables = self._reachables.union(reachables)
         else:
             self._reachables = set(self._entries.keys()) # everything is reachable
+
+        # print("clone_customer.id", "clone_customer.id" in self._reachables)
+        # print("/v1/customers/{customer}/sources/{id}_DELETE", "/v1/customers/{customer}/sources/{id}_DELETE" in self._reachables)
+        # print("/v1/customers/{customer}_GET", "/v1/customers/{customer}_GET" in self._reachables)
 
         for trans in self._net.transition():
             if trans.name not in self._reachables:
@@ -335,8 +352,6 @@ class ILPetriEncoder:
 
         params = group_params(entry.parameters)
         for param, token in params.items():
-            if param == "Customer.id":
-                print(entry)
             if not self._net.has_place(param):
                 self._net.add_place(Place(param))
             self._net.add_input(param, trans_name, Value(token))
@@ -350,8 +365,6 @@ class ILPetriEncoder:
                 self._net.add_output(param, trans_name, Value(1))
         else:
             param = str(resp_typ)
-            if param == "Customer.id":
-                print(entry)
             if not self._net.has_place(param):
                 self._net.add_place(Place(param))
             self._net.add_output(param, trans_name, Value(1))
@@ -411,6 +424,17 @@ class ILPetriEncoder:
                 usage += self._tokens.sum(p, '*')
     
         self._syntactic_constr = self._model.addConstr(usage == self._syntactic_quota)
+
+    def reset_partial(self):
+        if self._partial_constr:
+            self._model.remove(self._partial_constr)
+
+        usage = 0
+        for t in range(len(self._trans_names)):
+            if consts.PREFIX_PARTIAL in self._trans_names[t]:
+                usage += self._fires.sum(t, '*')
+
+        self._partial_constr = self._model.addConstr(usage == self._partial_quota)
 
     def set_final(self, typs):
         # Final marking

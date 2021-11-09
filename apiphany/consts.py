@@ -53,6 +53,7 @@ FILE_RESULTS = "bench_results.pkl"
 
 PREFIX_CLONE = "clone_"
 PREFIX_CONVERT = "convert_"
+PREFIX_PARTIAL = "partial_"
 
 SPACE = '    '
 MAX_COST = 99999.9
@@ -61,7 +62,10 @@ MAX_PARAMS = 4
 EXP_DEFAULT = "default_apiphany"
 DATA_DEFAULT = "experiment_data"
 
+# benchmarking
 APIS = ["slack_api_test", "stripe_api_test", "square_api_test"]
+TOTAL_BENCHMARKS = 30
+TIMEOUT = 120
 
 class UncoveredOption(Enum):
     EXCLUDE = "exclude"

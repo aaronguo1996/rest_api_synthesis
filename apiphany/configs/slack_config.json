@@ -20,7 +20,7 @@
     },
     "witness": {
         "value_dict": {},
-        "token": "xoxp-1442946594759-1463848871412-1618073336579-1735b1e1b231339f9677e134350fed4c",
+        "token": "xoxb-1442946594759-1469691450199-c2xc96dNR3YUmANRkaINLGvR",
         "annotation_path": "configs/slack_annotation.json",
         "gen_depth": 3,
         "timeout_total": 600,
@@ -33,7 +33,7 @@
         "expand_group": true,
         "block_perms": true,
         "solver_type": "petri net ILP",
-        "solver_number": 6,
+        "solver_number": 8,
         "solution_number": 10,
         "enable_prefilter": false
     },

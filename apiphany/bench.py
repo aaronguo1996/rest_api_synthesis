@@ -17,6 +17,7 @@ import os
 import pickle
 import math
 import cProfile
+from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
 from analyzer import dynamic
 from benchmarks.benchmark import BenchConfig, Bencher, BenchmarkResult
@@ -65,6 +66,8 @@ def build_cmd_parser():
         help="Whether to not infer any semantic types.")
     parser.add_argument("--method-coverage", type=float,
         help="Prune methods and witnesses to get the target coverage")
+    parser.add_argument("--with-partials", action='store_true',
+        help="Whether to include partial object constructions")
     parser.add_argument("--uncovered", type=consts.UncoveredOption,
         choices=list(consts.UncoveredOption),
         default=consts.UncoveredOption.EXCLUDE,
@@ -79,7 +82,7 @@ def build_cmd_parser():
         help="Whether to allow programs return primitive types when semantic types not found")
     
     # retrospective execution options
-    parser.add_argument("--repeat-re", type=int, nargs='?', default=15,
+    parser.add_argument("--repeat-re", type=int, nargs='?',
         help="Number of times to repeat retrospective execution")
     parser.add_argument("--bias-type", default='simple',
         choices=list(bias_type_args.keys()) ,dest='bias_type',
@@ -107,6 +110,7 @@ def build_cmd_parser():
 
     # default values
     parser.set_defaults(
+        repeat_re=15,
         filter_sol_only=False,
         syntactic_only=False,
         generate_witness_only=False,
@@ -178,20 +182,25 @@ def plot_ranks(experiments, data_dir, output=None):
         fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
         fig.subplots_adjust(wspace=0.05)  # adjust space between axes
 
+        ymax = math.ceil(consts.TOTAL_BENCHMARKS / 2.) * 2 + 1
         ax1.set_xlim(0, 15)
         ax2.set_xscale('log')
         ax2.set_xlim(15, 50000)
-        ax1.set_ylim(0, 28)
+        ax1.set_ylim(0, ymax)
         ax1.set_xlabel("Rank", loc="right")
         ax1.set_ylabel("# benchmarks")
-        ax1.yaxis.set_ticks(range(0,28,2))
+        ax1.yaxis.set_ticks(range(0,ymax+1,2))
         ax1.xaxis.set_ticks([0,3,6,9,10,12,15])
+        # ax1.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62", marker="^", markevery=ranks_re)
+        # ax1.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb", marker="d", markevery=ranks_no_re)
+        # ax2.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62", marker="^", markevery=ranks_re)
+        # ax2.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb", marker="d", markevery=ranks_no_re)
         ax1.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
         ax1.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
         ax2.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
         ax2.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
-        ax1.hlines(26, 0, 15, linestyles='dashed', label="max solved benchmarks", colors="0.8")
-        ax2.hlines(26, 15, 50000, linestyles='dashed', label="max solved benchmarks", colors="0.8")
+        ax1.hlines(consts.TOTAL_BENCHMARKS, 0, 15, linestyles='dashed', label="max solved benchmarks", colors="0.8")
+        ax2.hlines(consts.TOTAL_BENCHMARKS, 15, 50000, linestyles='dashed', label="max solved benchmarks", colors="0.8")
         ax2.legend(loc="best")
 
         # set border lines
@@ -233,18 +242,24 @@ def plot_solved(experiments, data_dir, output=None):
 
     # plot core data
     fig, ax = plt.subplots(1, 1)
-    ax.set_ylim(0, 28)
-    ax.set_xlim(0, 120)
-    ax.yaxis.set_ticks(range(0,28,2))
+    ymax = math.ceil(consts.TOTAL_BENCHMARKS / 2.) * 2 + 1
+    ax.set_ylim(0, ymax)
+    ax.set_xlim(0, consts.TIMEOUT)
+    # ax.set_xscale('log')
+    ax.yaxis.set_ticks(range(0,ymax+1,5))
+    ax.yaxis.set_minor_locator(AutoMinorLocator())
+    ax.xaxis.set_minor_locator(AutoMinorLocator())
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("# solved benchmarks")
 
-    for exp, xs in times_dict.items():
+    markers = ["^", "d", "o", "s", "*"]
+    colors = ["#fc8d62", "#8da0cb"]
+    for i, (exp, xs) in enumerate(times_dict.items()):
         ys = list(range(len(xs)+1))
-        ax.plot([0]+xs+[300], ys+[len(xs)], label=exp)
+        ax.plot([0]+xs+[300], ys+[len(xs)], label=exp, marker=markers[i], color=colors[i])
 
-    ax.hlines(26, 0, 120, linestyles='dashed', label="max solved benchmarks", colors="0.8")
-    ax.legend(loc="upper left")
+    ax.hlines(consts.TOTAL_BENCHMARKS, 0, 120, linestyles='dashed', label="max solved benchmarks", colors="0.8")
+    ax.legend(loc="center right")
     # plt.tight_layout()
     plt.savefig(os.path.join(output, "solved.png"))
 
@@ -288,6 +303,7 @@ def main():
             conversion_fair=args.conversion_fair,
             prim_as_return=args.primitive_as_return,
             syntactic_only=args.syntactic_only,
+            with_partials=args.with_partials,
         )
         b = Bencher(
             args.exp_name,
@@ -317,7 +333,7 @@ def main():
                 print_results=args.print_results,
                 print_appendix=False,
                 plot_ranks=False,
-                cached_results=False)
+                cached_results=args.cache)
 
             # p.print_stats()
             print(f"Iteration #{i} completed")

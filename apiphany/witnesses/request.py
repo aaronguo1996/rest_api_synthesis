@@ -10,7 +10,7 @@ class Connection:
     def __init__(self, hostname, base_path):
         self._hostname = hostname[:-1] if hostname[-1] == '/' else hostname
         self._base_path = base_path[:-1] if base_path[-1] == '/' else base_path
-        self._logger = logging.getLogger(__name__)
+        # self._logger = logging.getLogger(__name__)
 
     def replace_path_params(self, endpoint, data):
         url = "https://" + self._hostname + self._base_path + endpoint
@@ -37,8 +37,8 @@ class Connection:
         else:
             raise Exception("unhandled content type", content_type)
 
-        self._logger.info(f"Sending to {url} the message {body}")
+        print(f"Sending to {url}/{method} the message {body}")
         return_code = resp.status_code
         resp_body = resp.text
-        self._logger.info(f"Getting back from {url, body} the response {resp_body}")
+        print(f"Getting back from {url, body} the response {resp_body}")
         return return_code, resp_body

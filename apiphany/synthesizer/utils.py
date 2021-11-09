@@ -19,6 +19,9 @@ def make_entry_name(endpoint, method):
 def make_type_transition_name(from_type, to_type):
     return consts.PREFIX_CONVERT + from_type + "_" + to_type
 
+def make_partial_trans_name(object, field):
+    return consts.PREFIX_PARTIAL + field + "_" + object
+
 def is_syntactic(typ_name):
     return (
         typ_name == defs.TYPE_STRING or
