@@ -97,7 +97,7 @@ class Benchmark:
         os.makedirs(bm_dir, exist_ok=True)
 
         if not cached or not runtime_config.cache:
-            synthesizer = Synthesizer(configuration, entries, bm_dir)
+            synthesizer = Synthesizer(configuration, entries, bm_dir, log_analyzer=analyzer)
             synthesizer.init()
             # convert the types before passing into the synthesizer
             rep_inputs = {}

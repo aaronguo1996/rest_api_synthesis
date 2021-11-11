@@ -538,6 +538,20 @@ class LogAnalyzer:
 
         return param
 
+    def find_eq_param(self, param):
+        params = self.dsu._parents.keys()
+        print("AHHAHOSADHCOIA")
+        la = []
+        for p in params:
+            if str(p.type) == str(param.type):
+                print(p.type)
+                print(p.arg_name)
+                la.append(p)
+                # return par
+
+        print(la)
+        return None
+
     def set_type(self, param, infer_type=True):
         """set type for a given parameter
         if the parameter is an ad-hoc object,

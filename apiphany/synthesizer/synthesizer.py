@@ -12,10 +12,12 @@ from synthesizer.hypergraph_encoder import HyperGraphEncoder
 from synthesizer.petrinet_encoder import PetriNetEncoder
 from synthesizer.ilp_encoder import ILPetriEncoder
 import consts
-
+from analyzer.entry import Parameter
+from schemas.types import SchemaObject, BaseType
+from synthesizer import utils
 
 class Synthesizer:
-    def __init__(self, config, entries, exp_dir):
+    def __init__(self, config, entries, exp_dir, log_analyzer=None):
         self._config = config
         self._groups = {}
         self._group_names = {}
@@ -29,6 +31,7 @@ class Synthesizer:
         # public
         self.unique_entries = {}
         self.exp_dir = exp_dir
+        self.log_analyzer = log_analyzer
 
     @TimeStats(key=STATS_GRAPH)
     def init(self):
@@ -336,14 +339,19 @@ class Synthesizer:
             # "/v2/catalog/search-catalog-items_POST",
             # "projection(SearchCatalogObjectsResponse, objects)_",
             # "filter(CatalogObject, CatalogObject.item_data.tax_ids.[?])_"
+            '/stars.add_POST', '/conversations.list_GET', '/users.profile.get_GET', '/reminders.list_GET', '/users.conversations_GET'
+            # '/v1/balance_GET', '/v1/webhook_endpoints_GET', '/v1/transfers_GET', '/v1/subscription_items_GET', '/v1/tax_rates/{tax_rate}_POST'
+            # '/v2/customers/groups_POST', '/v2/orders/{order_id}_GET', '/v2/payments/cancel_POST', '/v2/team-members/search_POST', '/v2/inventory/batch-retrieve-counts_POST'
         ]
 
+        utils._create_annot_table(lst, self._entries, self.log_analyzer)
         for name in lst:
             e = self._entries.get(name)
             print('-----')
             print(name)
-            print([(p.arg_name, p.type, p.is_required) for p in e.parameters])
+            print([(p.arg_name, p.type, p.is_required, self.log_analyzer.dsu.get_group(p)) for p in e.parameters])
             print(e.response.type, flush=True)
+            print(type(e.response.type))
             print("group members:", self._group_names.get(name, []))
 
         for name, e in self._entries.items():

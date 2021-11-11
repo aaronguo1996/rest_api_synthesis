@@ -249,6 +249,10 @@ def prune_by_coverage(paths, witnesses, coverage):
 
     print("Original coverage:", len(covered), "out of", len(methods), ", percentage:", len(covered) / len(methods))
 
+    random.seed(2)
+    choices = [choice[0] + "_" + choice[1] for choice in random.choices(list(covered), k=15)]
+    print(choices)
+
     # coverage = len(covered) / len(methods) * coverage # relative coverage
     # if curr_coverage <= coverage or within_expected_coverage(curr_coverage, coverage):
     #     print("Warning: the provided coverage cannot be reached")

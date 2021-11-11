@@ -271,6 +271,16 @@ class ObjectType(BaseType):
         self.name = defs.TYPE_OBJECT
         return self
 
+    def get_flattened_type_list(self):
+        lst = []
+        for field in self.get_fields():
+            field_type, required = self.get_object_field(field)
+            if type(field_type) == ObjectType:
+                lst += field_type.get_flattened_type_list()
+            else:
+                lst.append((field, required, field_type))
+        return lst
+
 class ArrayType(BaseType):
     def __init__(self, name, item_typ, parent=None):
         super().__init__(name, parent)
