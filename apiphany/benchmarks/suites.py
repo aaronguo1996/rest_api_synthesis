@@ -680,7 +680,7 @@ square_benchmarks = [
         "https://stackoverflow.com/questions/23252751/square-connect-api-list-payments-endpoint-not-showing-description",
         {
         },
-        types.ArrayType(None, types.PrimString("Tender.note")),
+        types.ArrayType(None, types.PrimString("Payment.note")),
         [
             Program(
                 [],

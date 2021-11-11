@@ -654,7 +654,9 @@ impl Arena {
             // );
             let dist = WeightedIndex::new(&weights).unwrap();
             let mut rng = thread_rng();
-            Some(responses[dist.sample(&mut rng)])
+            let ix = dist.sample(&mut rng);
+            // println!("trace index: {:?}", ix);
+            Some(responses[ix])
 
             // Some(responses[weighted_choice(&weights)])
         } else {

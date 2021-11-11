@@ -64,6 +64,10 @@ class AppExpr(Expression):
             if args_dict[arg] != other_args_dict[arg]:
                 return False
 
+        for arg in other_args_dict:
+            if arg not in args_dict:
+                return False
+
         return True
 
     def __hash__(self):

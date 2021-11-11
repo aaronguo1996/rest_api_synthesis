@@ -7,6 +7,7 @@ import signal
 from functools import partial
 from concurrent.futures import TimeoutError, as_completed
 import cProfile
+import resource
 
 from synthesizer.hypergraph_encoder import HyperGraphEncoder
 from synthesizer.ilp_encoder import ILPetriEncoder
@@ -83,7 +84,7 @@ def get_results(synthesizer, analyzer, encoder,
                         #     return consts.SearchStatus.NOT_FOUND
 
                         if p == expected_solution:
-                            # print("Found expected solution", flush=True)
+                            print("Found expected solution", flush=True)
                             solution_set.add(p)
                             return consts.SearchStatus.FOUND_EXPECTED
 
@@ -289,27 +290,47 @@ def spawn_encoders(synthesizer, analyzer, entries,
     # pool.close()
     # pool.join()
 
-    with pebble.ProcessPool(max_workers=solver_num) as executor:
-        futures = []
-        for path_len in range(consts.DEFAULT_LENGTH_LIMIT + 1):
-            res = executor.schedule(run_encoder,
-                args=(synthesizer, analyzer, entries,
-                inputs, outputs, is_array_output, expected_solution, 
-                runtime_config, all_solutions, path_len), 
-                timeout=timeout)
-            futures.append(res)
+    def initializer(memlimit):
+        """Set the soft memory limit for the worker process."""
+        # retrieve current limits, re-use the hard limit
+        soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+        resource.setrlimit(resource.RLIMIT_AS, (memlimit, hard))
 
-        try:
-            for future in as_completed(futures):
-                num_place, num_trans, status = future.result(timeout=timeout)
-                if status == consts.SearchStatus.FOUND_EXPECTED:
-                    break
-        except TimeoutError:
-            print("TIMEOUT", flush=True)
-        except pebble.ProcessExpired as e:
-            print("Expired with code", e.exitcode, flush=True)
+    try:
+        with pebble.ProcessPool(
+            max_workers=solver_num, 
+            initializer=initializer, 
+            initargs=[30*10**9 / solver_num]) as executor:
+            futures = []
+            for path_len in range(consts.DEFAULT_LENGTH_LIMIT + 1):
+                res = executor.schedule(run_encoder,
+                    args=(synthesizer, analyzer, entries,
+                    inputs, outputs, is_array_output, expected_solution, 
+                    runtime_config, all_solutions, path_len), 
+                    timeout=timeout)
+                futures.append(res)
 
-        executor.stop()
-        executor.join()
+            try:
+                for future in as_completed(futures):
+                    num_place, num_trans, status = future.result(timeout=timeout)
+                    if status == consts.SearchStatus.FOUND_EXPECTED:
+                        break
+            except TimeoutError:
+                print("TIMEOUT", flush=True)
+            except pebble.ProcessExpired as e:
+                num_place = None
+                num_trans = None
+                print("Expired with code", e.exitcode, flush=True)
+            except resource.error as e:
+                num_place = None
+                num_trans = None
+                print("Reached resource limit:", e, flush=True)
+
+            executor.stop()
+            executor.join()
+    except resource.error as e:
+        num_place = None
+        num_trans = None
+        print("Reached resource limit:", e, flush=True)
 
     collect_parallel_data(synthesizer, num_place, num_trans, all_solutions)

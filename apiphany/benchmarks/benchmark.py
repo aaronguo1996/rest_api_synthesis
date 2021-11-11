@@ -28,7 +28,8 @@ class BenchConfig:
         bias_type=dynamic.BiasType.SIMPLE, use_parallel=True,
         get_place_stats=False, generate_witness=False, method_coverage=1,
         uncovered_opt=consts.UncoveredOption.DEFAULT_TO_SYNTACTIC,
-        conversion_fair=False, prim_as_return=False, with_partials=False, syntactic_only=False,):
+        conversion_fair=False, prim_as_return=False, with_partials=False, 
+        syntactic_only=False, no_merge=False):
         self.cache = cache
         self.repeat_exp = repeat_exp
         self.repeat_re = repeat_re
@@ -45,6 +46,7 @@ class BenchConfig:
         self.prim_as_return = prim_as_return
         self.syntactic_only = syntactic_only
         self.with_partials = with_partials
+        self.no_merge = no_merge
 
 class BenchmarkResult:
     def __init__(self, name, desc):
@@ -184,24 +186,23 @@ class Benchmark:
             print(f"PASS, Ranks {rank} vs {len(candidates_no_re)}")
             self.latex_entry.mean_rank = rank
             self.latex_entry.median_rank = rank
-
-            # collect stats about the solution
-            ns = sol_prog.collect_exprs()
-            self.latex_entry.ast_size = len(ns)
-            self.latex_entry.projects = len(
-                list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
-            self.latex_entry.filters = len(
-                list(filter(lambda x: isinstance(x, EquiExpr), ns)))
-            self.latex_entry.endpoint_calls = len(
-                list(filter(lambda x: isinstance(x, AppExpr), ns)))
+            self.latex_entry.syn_time = syn_time
+            self.latex_entry.re_time = re_time
+            self.latex_entry.rank_no_re = len(candidates_no_re)
+            self.latex_entry.candidates = len(candidates)
+            self.latex_entry.paths = paths
         else:
             print(f"FAIL")
 
-        self.latex_entry.rank_no_re = len(candidates_no_re)
-        self.latex_entry.syn_time = syn_time
-        self.latex_entry.re_time = re_time
-        self.latex_entry.candidates = len(candidates)
-        self.latex_entry.paths = paths
+        # collect stats about the solution
+        ns = self.solutions[0].collect_exprs()
+        self.latex_entry.ast_size = len(ns)
+        self.latex_entry.projects = len(
+            list(filter(lambda x: isinstance(x, ProjectionExpr), ns)))
+        self.latex_entry.filters = len(
+            list(filter(lambda x: isinstance(x, EquiExpr), ns)))
+        self.latex_entry.endpoint_calls = len(
+            list(filter(lambda x: isinstance(x, AppExpr), ns)))
 
         return self.latex_entry
 
@@ -263,9 +264,7 @@ class BenchmarkSuite:
             self.generate_witnesses(
                 doc_entries, hostname, base_path,
                 self._witnesses, endpoints, 
-                runtime_config.uncovered_opt,
-                runtime_config.with_partials,
-                not runtime_config.syntactic_only,
+                runtime_config,
             )
 
         with open(os.path.join(self._suite_dir, consts.FILE_ENTRIES), "rb") as f:
@@ -275,22 +274,25 @@ class BenchmarkSuite:
             self._log_analyzer = pickle.load(f)
 
     def generate_witnesses(self, doc_entries, hostname, base_path, 
-        witnesses, endpoints, uncovered_opt, with_partials=False, infer_types=True):
+        witnesses, endpoints, runtime_config):
         print("---------------------------------------------------------------")
         print("Analyzing provided witnesses for", self.api)
-        log_analyzer = analyzer.LogAnalyzer(uncovered_opt)
+        log_analyzer = analyzer.LogAnalyzer(runtime_config.uncovered_opt)
         prefilter = self._configuration.get(consts.KEY_SYNTHESIS).get(consts.KEY_SYN_PREFILTER)
         skip_fields = self._configuration.get(consts.KEY_SKIP_FIELDS)
         
-        log_analyzer.analyze(
-            doc_entries,
-            witnesses,
-            skip_fields,
-            self._configuration.get(consts.KEY_BLACKLIST),
-            prefilter=prefilter)
+        if not runtime_config.no_merge:
+            log_analyzer.analyze(
+                doc_entries,
+                witnesses,
+                skip_fields,
+                self._configuration.get(consts.KEY_BLACKLIST),
+                prefilter=prefilter)
 
         ascription = Ascription(log_analyzer, skip_fields)
-        entries = utils.create_entries(doc_entries, self._configuration, ascription, infer_types)
+        entries = utils.create_entries(
+            doc_entries, self._configuration, ascription, 
+            not runtime_config.syntactic_only)
 
         print("Getting more traces...")
         engine = WitnessGenerator(
@@ -315,16 +317,18 @@ class BenchmarkSuite:
 
         # ascribe types with the new analysis results
         entries = utils.create_entries(
-            doc_entries, self._configuration, ascription, infer_types)
+            doc_entries, self._configuration, ascription,
+            not runtime_config.syntactic_only)
 
         print("Writing typed entries to file...")
-        constructor = Constructor(self._doc, log_analyzer, infer_types)
+        constructor = Constructor(self._doc, log_analyzer,
+            not runtime_config.syntactic_only)
         with_syntactic = (
-            uncovered_opt==consts.UncoveredOption.DEFAULT_TO_SYNTACTIC or
-            not infer_types) # generate semantic to syntactic conversion when syntactic types exist
+            runtime_config.uncovered_opt==consts.UncoveredOption.DEFAULT_TO_SYNTACTIC or
+            runtime_config.syntactic_only) # generate semantic to syntactic conversion when syntactic types exist
         projs_and_filters = constructor.construct_graph(
             with_syntactic=with_syntactic,
-            with_partials=with_partials,)
+            with_partials=runtime_config.with_partials,)
         entries.update(projs_and_filters)
         with open(os.path.join(self._suite_dir, consts.FILE_ENTRIES), "wb") as f:
             pickle.dump(entries, f)
@@ -576,77 +580,6 @@ class Bencher:
             with open(os.path.join(output, "api_info.tex"), "w") as of:
                 of.write(res)
                 print(f"written to {os.path.join(output, 'api_info.tex')}")
-
-    def print_benchmark_results(self, results, output=None):
-        res = ("% auto-generated: ./bench.py, table 2\n"
-               "\\resizebox{\\textwidth}{!}{"
-               "\\begin{tabular}{l|lp{7.5cm}|rrrr|rr|rr}\n"
-               "\\toprule\n"
-               "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{4}{c|}{Solution} & \\multicolumn{2}{c|}{Timing} & \\multicolumn{2}{c}{Rank} \\\\\n"
-               "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9} \\cmidrule(lr){10-11} \n"
-               "API & ID & Description & size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & $t_{RE}$ & $t_{Total}$ & w/o RE & w/ RE \\\\\n"
-               "\\midrule")
-        res += "\n"
-
-        for i, suite in enumerate(self._suites):
-            bench_results = results[i]
-            res += f"\\multirow{{{len(suite.benchmarks)}}}{{*}}{{\\{suite.api}}} "
-            for r in bench_results:
-                if r is None:
-                    continue
-
-                # print(r.name)
-                ranks = r.ranks
-                if ranks is None:
-                    median_rank = None
-                else:
-                    median_rank = ranks[len(ranks)//2]
-                
-                rank_no_re = r.rank_no_re
-                # if r.rank_no_re_rng is None:
-                #     rank_no_re = None
-                # else:
-                #     rank_no_re = f"{r.rank_no_re_rng[0]}-{r.rank_no_re_rng[1]}"
-                
-                if median_rank is not None:
-                    if median_rank <= rank_no_re:
-                        median_rank_str = f"\\textbf{{{median_rank}}}"
-                    else:
-                        median_rank_str = str(median_rank)
-
-                    if rank_no_re <= median_rank:
-                        rank_no_re_str = f"\\textbf{{{rank_no_re}}}"
-                    else:
-                        rank_no_re_str = str(rank_no_re)
-                else:
-                    median_rank_str = utils.pretty_none(median_rank)
-                    rank_no_re_str = utils.pretty_none(rank_no_re)
-
-                res += (
-                    f"& {r.name} "
-                    f"& {r.desc} "
-                    f"& {utils.pretty_none(r.ast_size)} "
-                    f"& {utils.pretty_none(r.endpoint_calls)} "
-                    f"& {utils.pretty_none(r.projects)} "
-                    f"& {utils.pretty_none(r.filters)} "
-                    f"& {utils.pretty_none(r.re_time)} "
-                    f"& {utils.pretty_none(r.syn_time)} "
-                    f"& {rank_no_re_str} "
-                    f"& {median_rank_str} ")
-                res += r" \\"
-                res += "\n"
-            if i < len(self._suites) - 1:
-                res += "\\hline\n"
-
-        res += ("\\bottomrule"
-                "\\end{tabular}}")
-
-        # print(res)
-
-        if output:
-            with open(os.path.join(output, "results.tex"), "w") as of:
-                of.write(res)
-                print(f"written to {os.path.join(output, 'results.tex')}")
 
     def print_appendix(self, output=None):
         res = ("% auto-generated: ./bench.py, type queries and solutions\n"

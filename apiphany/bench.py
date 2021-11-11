@@ -17,7 +17,7 @@ import os
 import pickle
 import math
 import cProfile
-from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
+from matplotlib.ticker import (AutoMinorLocator)
 
 from analyzer import dynamic
 from benchmarks.benchmark import BenchConfig, Bencher, BenchmarkResult
@@ -68,6 +68,8 @@ def build_cmd_parser():
         help="Prune methods and witnesses to get the target coverage")
     parser.add_argument("--with-partials", action='store_true',
         help="Whether to include partial object constructions")
+    parser.add_argument("--no-merge", action='store_true',
+        help="Whether to merge locations")
     parser.add_argument("--uncovered", type=consts.UncoveredOption,
         choices=list(consts.UncoveredOption),
         default=consts.UncoveredOption.EXCLUDE,
@@ -97,8 +99,8 @@ def build_cmd_parser():
         help="Whether to get place stats")
     
     # plotting options
-    parser.add_argument("--print-results", action="store_true",
-        help="Whether to print results.tex")
+    parser.add_argument("--print-results",
+        help="Whether to print results.tex for the given exp name")
     parser.add_argument("--print-api-info", action="store_true",
         help="Whether to print api info")
     parser.add_argument("--plot-all", nargs='+',
@@ -118,7 +120,6 @@ def build_cmd_parser():
         method_coverage=1.0,
         conversion_fair=False,
         primitive_as_return=False,
-        print_results=False,
         print_api_info=False,
         cache=False)
     return parser
@@ -126,7 +127,7 @@ def build_cmd_parser():
 
 
 def load_exp_results(data_dir, exp_name, repeat_exp=3):
-    all_entries = []
+    all_entries = {}
     
     for api in consts.APIS:
         api_dir = os.path.join(data_dir, exp_name, api, "iter_0")
@@ -137,26 +138,27 @@ def load_exp_results(data_dir, exp_name, repeat_exp=3):
         for i in range(repeat_exp):
             cache_path = os.path.join(
                 data_dir, exp_name, api, f"iter_{i}", consts.FILE_RESULTS)
-            print("Loading", cache_path)
-            with open(cache_path, "rb") as f:
-                d = pickle.load(f)
+            if os.path.exists(cache_path):
+                print("Loading", cache_path)
+                with open(cache_path, "rb") as f:
+                    d = pickle.load(f)
 
-            if latex_entries is None:
-                latex_entries = [[] for _ in range(len(d["results"]))]
+                if latex_entries is None:
+                    latex_entries = [[] for _ in range(len(d["results"]))]
 
-            for j, res in enumerate(d["results"]):
-                latex_entries[j].append(res)
+                for j, res in enumerate(d["results"]):
+                    latex_entries[j].append(res)
 
         entries = []
         for reps in latex_entries:
             entry = reps[0]
-            entry.syn_time = utils.avg([rep.syn_time for rep in reps if rep.syn_time is not None])
-            entry.re_time = utils.avg([rep.re_time for rep in reps if rep.re_time is not None])
+            entry.syn_time = [rep.syn_time for rep in reps if rep.syn_time is not None]
+            entry.re_time = [rep.re_time for rep in reps if rep.re_time is not None]
             ranks = [rep.ranks[0] for rep in reps if rep.ranks is not None]
             entry.ranks = ranks if ranks else None
             entries.append(entry)
 
-        all_entries += entries
+        all_entries[api] = entries
 
     # print(all_entries)
     return all_entries
@@ -165,7 +167,11 @@ def load_exp_results(data_dir, exp_name, repeat_exp=3):
 def plot_ranks(experiments, data_dir, output=None):
     # load results for all experiments
     for exp in experiments:
-        results = load_exp_results(data_dir, exp, 1)
+        api_results = load_exp_results(data_dir, exp, 1)
+        results = []
+        for r in api_results.values():
+            results += r
+
         ranks_re = []
         ranks_no_re = []
         for result in results:
@@ -179,28 +185,32 @@ def plot_ranks(experiments, data_dir, output=None):
         cnt_ranks_no_re = [sum([1 for x in ranks_no_re if x <= i]) for i in range(0,50000)]
 
         # plot core data
-        fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
-        fig.subplots_adjust(wspace=0.05)  # adjust space between axes
+        fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True, figsize=(4,2.5))
+        
 
         ymax = math.ceil(consts.TOTAL_BENCHMARKS / 2.) * 2 + 1
-        ax1.set_xlim(0, 15)
+        ax1.set_xlim(0, 20)
         ax2.set_xscale('log')
-        ax2.set_xlim(15, 50000)
+        ax2.set_xlim(20, 50000)
         ax1.set_ylim(0, ymax)
         ax1.set_xlabel("Rank", loc="right")
         ax1.set_ylabel("# benchmarks")
-        ax1.yaxis.set_ticks(range(0,ymax+1,2))
-        ax1.xaxis.set_ticks([0,3,6,9,10,12,15])
+        # ax1.yaxis.set_minor_locator(AutoMinorLocator())
+        # ax1.xaxis.set_minor_locator(AutoMinorLocator())
+        # ax2.yaxis.set_minor_locator(AutoMinorLocator())
+        # ax2.xaxis.set_minor_locator(AutoMinorLocator())
+        # ax1.yaxis.set_ticks(range(0,ymax+1,3))
+        ax1.xaxis.set_ticks([0,5,10,15,20])
         # ax1.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62", marker="^", markevery=ranks_re)
         # ax1.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb", marker="d", markevery=ranks_no_re)
         # ax2.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62", marker="^", markevery=ranks_re)
-        # ax2.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb", marker="d", markevery=ranks_no_re)
-        ax1.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
-        ax1.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
-        ax2.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62")
-        ax2.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb")
-        ax1.hlines(consts.TOTAL_BENCHMARKS, 0, 15, linestyles='dashed', label="max solved benchmarks", colors="0.8")
-        ax2.hlines(consts.TOTAL_BENCHMARKS, 15, 50000, linestyles='dashed', label="max solved benchmarks", colors="0.8")
+        # ax2.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb", marker="d", markevery=ranks_no_re)lo
+        ax1.plot(cnt_ranks_re, label="w/ RE")
+        ax1.plot(cnt_ranks_no_re, label="w/o RE")
+        ax2.plot(cnt_ranks_re, label="w/ RE")
+        ax2.plot(cnt_ranks_no_re, label="w/o RE")
+        ax1.hlines(consts.TOTAL_BENCHMARKS, 0, 20, linestyles='dotted', label="max #benchmarks", colors="0.8")
+        ax2.hlines(consts.TOTAL_BENCHMARKS, 20, 50000, linestyles='dotted', label="max #benchmarks", colors="0.8")
         ax2.legend(loc="best")
 
         # set border lines
@@ -212,7 +222,7 @@ def plot_ranks(experiments, data_dir, output=None):
 
         # plot break lines
         d = .5  # proportion of vertical to horizontal extent of the slanted line
-        kwargs = dict(marker=[(-d, -1), (d, 1)], markersize=12,
+        kwargs = dict(marker=[(-d, -1), (d, 1)], markersize=5,
                     linestyle="none", color='k', mec='k', mew=1, clip_on=False)
         ax2.plot([0, 0], [0, 1], transform=ax2.transAxes, **kwargs)
         ax1.plot([1, 1], [0, 1], transform=ax1.transAxes, **kwargs)
@@ -224,55 +234,171 @@ def plot_ranks(experiments, data_dir, output=None):
         else:
             output_path = "ranks.png"
 
+        plt.tight_layout()
+        fig.subplots_adjust(wspace=0.05)  # adjust space between axes
+
         plt.savefig(output_path)
 
-def plot_solved(experiments, data_dir, output=None):
+def compute_confidence_interval(xs):
+    # confidence=0.99
+    # compute confidence interval for a list of numbers
+    # https://stackoverflow.com/questions/15033511/compute-a-confidence-interval-from-sample-data
+    # print(xs)
+    n = len(xs)
+    mean = sum(xs) / n
+    std = math.sqrt(sum((x - mean)**2 for x in xs) / n)
+    z_score = 31.6 if n == 3 else 1
+    h = z_score * std / math.sqrt(n)
+    # print(mean - h, mean, mean + h)
+    return mean, h
+
+def plot_with_intervals(ax, xs, ys, **kwargs):
+    means = [x[0] for x in xs]
+    errors = [[min(x[0], x[1]) for x in xs], [x[1] for x in xs]]
+    lefts = [max(0, x[0] - x[1]) for x in xs]
+    rights = [x[0] + x[1] for x in xs]
+    ax.plot(means, ys, **kwargs)
+    
+    ax.fill_betweenx(ys, sorted(lefts), sorted(rights), alpha=.25)
+
+
+def plot_solved(experiments, data_dir, repeat_exp=1, output=None):
     # load results for all experiments
     times_dict = {}
     for exp in experiments:
-        results = load_exp_results(data_dir, exp, 1)
+        api_results = load_exp_results(data_dir, exp, repeat_exp)
         times = []
-        for result in results:
-            if result is None or result.ranks is None:
-                continue
+        for results in api_results.values():
+            for result in results:
+                if result is None or result.ranks is None:
+                    continue
 
-            times.append(result.syn_time)
+                m, h = compute_confidence_interval(result.syn_time)
+                times.append((m, h))
 
-        times_dict[exp] = sorted(times)
+        times_dict[exp] = sorted(times, key=lambda x: x[0])
 
     # plot core data
-    fig, ax = plt.subplots(1, 1)
+    fig, ax = plt.subplots(1, 1, figsize=(4, 2.5))
+    # ax.grid()
     ymax = math.ceil(consts.TOTAL_BENCHMARKS / 2.) * 2 + 1
     ax.set_ylim(0, ymax)
-    ax.set_xlim(0, consts.TIMEOUT)
-    # ax.set_xscale('log')
-    ax.yaxis.set_ticks(range(0,ymax+1,5))
+    ax.set_xlim(-4, consts.TIMEOUT)
     ax.yaxis.set_minor_locator(AutoMinorLocator())
     ax.xaxis.set_minor_locator(AutoMinorLocator())
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("# solved benchmarks")
 
-    markers = ["^", "d", "o", "s", "*"]
-    colors = ["#fc8d62", "#8da0cb"]
+    markers = ["x", "o", "v", "+", "*"]
+    # colors = ["#fc8d62", "#8da0cb"]
+    label_mapping = {
+        "apiphany_repeat": "APIphany",
+        "apiphany_no_semantic": "APIphany-NoSemantic",
+        "apiphany_no_merge": "APIphany-NoMerge",
+    }
     for i, (exp, xs) in enumerate(times_dict.items()):
-        ys = list(range(len(xs)+1))
-        ax.plot([0]+xs+[300], ys+[len(xs)], label=exp, marker=markers[i], color=colors[i])
+        ys = list(range(1, len(xs)+1))
+        label = label_mapping.get(exp, exp)
+        plot_with_intervals(
+            ax, xs + [(consts.TIMEOUT + 10, 0)], ys + ys[-1:], 
+            label=label, 
+            marker=markers[i], 
+            markersize=5,
+            # linestyle="--",
+        )
 
-    ax.hlines(consts.TOTAL_BENCHMARKS, 0, 120, linestyles='dashed', label="max solved benchmarks", colors="0.8")
-    ax.legend(loc="center right")
-    # plt.tight_layout()
+    ax.axhline(y=consts.TOTAL_BENCHMARKS, linestyle='dashed', label="max #benchmarks", color="0.8")
+    ax.legend(loc="best")
+    plt.tight_layout()
     plt.savefig(os.path.join(output, "solved.png"))
+
+def print_benchmark_results(results, output=None):
+    res = ("% auto-generated: ./bench.py, table 2\n"
+            "\\resizebox{\\textwidth}{!}{"
+            "\\begin{tabular}{l|lp{7.5cm}|rrrr|rr|rr}\n"
+            "\\toprule\n"
+            "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{4}{c|}{Solution} & \\multicolumn{2}{c|}{Timing} & \\multicolumn{2}{c}{Rank} \\\\\n"
+            "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9} \\cmidrule(lr){10-11} \n"
+            "API & ID & Description & size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & $t_{Total}$ & $t_{RE}$ & w/o RE & w/ RE \\\\\n"
+            "\\midrule")
+    res += "\n"
+
+    for i, (api, bench_results) in enumerate(results.items()):
+        res += f"\\multirow{{{len(bench_results)}}}{{*}}{{\\{api}}} "
+        for r in bench_results:
+            if r is None:
+                continue
+
+            # print(r.name)
+            ranks = r.ranks
+            if ranks is None:
+                median_rank = None
+            else:
+                median_rank = utils.median(ranks)
+            
+            rank_no_re = r.rank_no_re
+            # if r.rank_no_re_rng is None:
+            #     rank_no_re = None
+            # else:
+            #     rank_no_re = f"{r.rank_no_re_rng[0]}-{r.rank_no_re_rng[1]}"
+            
+            if median_rank is not None:
+                if median_rank <= rank_no_re:
+                    median_rank_str = f"\\textbf{{{median_rank}}}"
+                else:
+                    median_rank_str = str(median_rank)
+
+                if rank_no_re <= median_rank:
+                    rank_no_re_str = f"\\textbf{{{rank_no_re}}}"
+                else:
+                    rank_no_re_str = str(rank_no_re)
+            else:
+                median_rank_str = utils.pretty_none(median_rank)
+                rank_no_re_str = utils.pretty_none(rank_no_re)
+
+            res += (
+                f"& {r.name} "
+                f"& {r.desc} "
+                f"& {utils.pretty_none(r.ast_size)} "
+                f"& {utils.pretty_none(r.endpoint_calls)} "
+                f"& {utils.pretty_none(r.projects)} "
+                f"& {utils.pretty_none(r.filters)} "
+                f"& {utils.pretty_none(utils.avg(r.syn_time))} "
+                f"& {utils.pretty_none(utils.avg(r.re_time))} "
+                f"& {rank_no_re_str} "
+                f"& {median_rank_str} ")
+            res += r" \\"
+            res += "\n"
+        if i < len(results) - 1:
+            res += "\\hline\n"
+
+    res += ("\\bottomrule"
+            "\\end{tabular}}")
+
+    # print(res)
+
+    if output:
+        with open(os.path.join(output, "results.tex"), "w") as of:
+            of.write(res)
+            print(f"written to {os.path.join(output, 'results.tex')}")
 
 def main():
     cmd_parser = build_cmd_parser()
     args = cmd_parser.parse_args()
+
+    plt.rcParams.update({'font.size': 8})
+
+    if args.print_results:
+        results = load_exp_results(args.data_dir, args.print_results, args.repeat_exp)
+        print_benchmark_results(results, args.output)
+        return
 
     if args.plot_all or args.plot_solved:
         experiments = args.plot_all
         if experiments is None:
             experiments = args.plot_solved
 
-        plot_solved(experiments, args.data_dir, args.output)
+        plot_solved(experiments, args.data_dir, args.repeat_exp, args.output)
 
     if args.plot_all or args.plot_ranks:
         experiments = args.plot_all
@@ -304,6 +430,7 @@ def main():
             prim_as_return=args.primitive_as_return,
             syntactic_only=args.syntactic_only,
             with_partials=args.with_partials,
+            no_merge=args.no_merge,
         )
         b = Bencher(
             args.exp_name,
@@ -320,24 +447,23 @@ def main():
             rep = args.repeat_exp
 
         # with cProfile.Profile() as p:
-        for i in range(rep):
-            print("***********************************************************")
-            print(f"Running iteration #{i}")
+        print("***********************************************************")
+        print(f"Running experiment...")
 
-            b.run(
-                args.data_dir,
-                args.suites,
-                args.benchmarks,
-                output=args.output,
-                print_api=args.print_api_info,
-                print_results=args.print_results,
-                print_appendix=False,
-                plot_ranks=False,
-                cached_results=args.cache)
+        b.run(
+            args.data_dir,
+            args.suites,
+            args.benchmarks,
+            output=args.output,
+            print_api=args.print_api_info,
+            print_results=args.print_results,
+            print_appendix=False,
+            plot_ranks=False,
+            cached_results=args.cache)
 
-            # p.print_stats()
-            print(f"Iteration #{i} completed")
-            print("***********************************************************")
+        # p.print_stats()
+        print(f"Experiment completed")
+        print("***********************************************************")
 
 if __name__ == '__main__':
     main()

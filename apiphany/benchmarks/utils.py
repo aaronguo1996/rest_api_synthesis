@@ -120,6 +120,7 @@ def avg(lst):
         return None
 
 def median(lst):
+    lst = sorted(lst)
     if len(lst) % 2 == 0:
         return (lst[len(lst) // 2 - 1] + lst[len(lst) // 2]) / 2
     else:
@@ -211,7 +212,7 @@ def get_petri_net_data(exp_dir):
         numbers = []
         line = f.readline()
         while line:
-            numbers.append(int(line))
+            numbers.append(int(line) if "None" not in line else 0)
             line = f.readline()
 
     return numbers[0], numbers[1], numbers[2]

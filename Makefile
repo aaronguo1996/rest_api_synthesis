@@ -2,6 +2,8 @@
 
 .PHONY: clean build run
 
+SHELL=/bin/bash # Use bash syntax
+
 # default directory for storing the collected witnesses
 DEFAULT_EXP_DIR=default_apiphany
 # default experiment name
@@ -12,7 +14,7 @@ BENCH_EXE=python $(BENCH_SRC)
 # reps
 REPEAT_EXP=1
 # experiments
-EXPS=apiphany apiphany_no_semantic
+EXPS=apiphany_repeat apiphany_no_semantic apiphany_no_merge
 # optional args
 ARGS=
 # params
@@ -39,16 +41,19 @@ generate-full-exclude generate-full-syntactic generate-onethird-exclude generate
 	cd .. ; \
 
 run-full-exclude run-full-syntactic run-onethird-exclude run-onethird-syntactic run-twothirds-exclude run-twothirds-syntactic: build
-	for suite in "squareapi" "slack" "stripe" ; do \
-		cd apiphany && $(BENCH_EXE) . --data-dir ../experiment_data \
-			--exp-name $(EXP_NAME) \
-			--method-coverage $(coverage_$(call word-dash,$@,2)) \
-			--uncovered $(uncovered_$(call word-dash,$@,3)) \
-			--repeat-exp $(REPEAT_EXP) \
-			--suites $$suite \
-			--with-partials \
-			$(ARGS); \
-		cd .. ; \
+	rep=1 ; while [[ $$rep -le $(REPEAT_EXP) ]] ; do \
+		for suite in "squareapi" "slack" "stripe" ; do \
+			cd apiphany && $(BENCH_EXE) . --data-dir ../experiment_data \
+				--exp-name $(EXP_NAME) \
+				--method-coverage $(coverage_$(call word-dash,$@,2)) \
+				--uncovered $(uncovered_$(call word-dash,$@,3)) \
+				--repeat-exp $(REPEAT_EXP) \
+				--suites $$suite \
+				--with-partials \
+				$(ARGS) ; \
+			cd .. ; \
+		done ; \
+		((rep = rep + 1)) ; \
 	done
 
 plot-all plot-ranks plot-solved:
