@@ -156,18 +156,41 @@ def load_exp_results(data_dir, exp_name, repeat_exp=3):
             entry.re_time = [rep.re_time for rep in reps if rep.re_time is not None]
             ranks = [rep.ranks[0] for rep in reps if rep.ranks is not None]
             entry.ranks = ranks if ranks else None
+            entry.rank_no_re = [rep.rank_no_re for rep in reps if rep.rank_no_re is not None]
             entries.append(entry)
 
         all_entries[api] = entries
 
     # print(all_entries)
     return all_entries
-    
 
-def plot_ranks(experiments, data_dir, output=None):
+def compute_confidence_interval(xs, f):
+    # confidence=0.99
+    # compute confidence interval for a list of numbers
+    # https://stackoverflow.com/questions/15033511/compute-a-confidence-interval-from-sample-data
+    # print(xs)
+    n = len(xs)
+    mean = sum(xs) / n
+    std = math.sqrt(sum((x - mean)**2 for x in xs) / n)
+    z_score = 8.61 if n > 1 else 1
+    h = z_score * std / math.sqrt(n)
+    # print(mean - h, mean, mean + h)
+    return f(xs), mean - h, mean + h
+
+def plot_with_intervals(ax, xs, ys, **kwargs):
+    means = [x[0] for x in xs]
+    errors = [[min(x[0], x[1]) for x in xs], [x[1] for x in xs]]
+    lefts = [max(0, x[0] - x[1]) for x in xs]
+    rights = [x[0] + x[1] for x in xs]
+    ax.plot(means, ys, **kwargs)
+    
+    ax.fill_betweenx(ys, sorted(lefts), sorted(rights), alpha=.25)
+
+
+def plot_ranks(experiments, data_dir, repeat_exp=1, output=None):
     # load results for all experiments
     for exp in experiments:
-        api_results = load_exp_results(data_dir, exp, 1)
+        api_results = load_exp_results(data_dir, exp, repeat_exp)
         results = []
         for r in api_results.values():
             results += r
@@ -178,20 +201,32 @@ def plot_ranks(experiments, data_dir, output=None):
             if result is None or result.ranks is None:
                 continue
 
-            ranks_re.append(utils.median(result.ranks))
-            ranks_no_re.append(result.rank_no_re)
+            ranks_re.append(compute_confidence_interval(result.ranks, utils.median))
+            ranks_no_re.append(compute_confidence_interval(result.rank_no_re, utils.median))
     
-        cnt_ranks_re = [sum([1 for x in ranks_re if x <= i]) for i in range(0,50000)]
-        cnt_ranks_no_re = [sum([1 for x in ranks_no_re if x <= i]) for i in range(0,50000)]
+        cnt_ranks_re = [sum([1 for x in ranks_re if x[0] <= i]) for i in range(0,50000)]
+        cnt_ranks_re_high = [sum([1 for x in ranks_re if max(x[1], 0) <= i]) for i in range(0,50000)]
+        cnt_ranks_re_low = [sum([1 for x in ranks_re if x[2] <= i]) for i in range(0,50000)]
+        cnt_ranks_no_re = [sum([1 for x in ranks_no_re if x[0] <= i]) for i in range(0,50000)]
+        cnt_ranks_no_re_high = [sum([1 for x in ranks_no_re if max(x[1], 0) <= i]) for i in range(0,50000)]
+        cnt_ranks_no_re_low = [sum([1 for x in ranks_no_re if x[2] <= i]) for i in range(0,50000)]
+        # print(ranks_no_re)
 
         # plot core data
         fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True, figsize=(4,2.5))
         
 
         ymax = math.ceil(consts.TOTAL_BENCHMARKS / 2.) * 2 + 1
-        ax1.set_xlim(0, 20)
+        # ys = list(range(0, len(ranks_re) + 1)) + [len(ranks_re)]
+        # re_xs = [0] + sorted([x[0] for x in ranks_re]) + [50001]
+        # re_high = [0] + sorted([x[1] for x in ranks_re])+ [50001]
+        # re_low = [0] + sorted([x[2] for x in ranks_re])+ [50001]
+        # no_re_xs = [0] + sorted([x[0] for x in ranks_no_re]) + [50001]
+        # no_re_high = [0] + sorted([x[1] for x in ranks_no_re])+ [50001]
+        # no_re_low = [0] + sorted([x[2] for x in ranks_no_re])+ [50001]
+        ax1.set_xlim(0, 15)
         ax2.set_xscale('log')
-        ax2.set_xlim(20, 50000)
+        ax2.set_xlim(15, 50000)
         ax1.set_ylim(0, ymax)
         ax1.set_xlabel("Rank", loc="right")
         ax1.set_ylabel("# benchmarks")
@@ -200,15 +235,38 @@ def plot_ranks(experiments, data_dir, output=None):
         # ax2.yaxis.set_minor_locator(AutoMinorLocator())
         # ax2.xaxis.set_minor_locator(AutoMinorLocator())
         # ax1.yaxis.set_ticks(range(0,ymax+1,3))
-        ax1.xaxis.set_ticks([0,5,10,15,20])
-        # ax1.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62", marker="^", markevery=ranks_re)
-        # ax1.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb", marker="d", markevery=ranks_no_re)
-        # ax2.plot(cnt_ranks_re, label="w/ RE", color="#fc8d62", marker="^", markevery=ranks_re)
-        # ax2.plot(cnt_ranks_no_re, label="w/o RE", color="#8da0cb", marker="d", markevery=ranks_no_re)lo
+        ax1.xaxis.set_ticks([0,3,6,9,12,15])
+        # ax1.plot(re_xs, ys, label="w/ RE")
+        # ax1.fill_betweenx(ys, re_low, re_high, alpha=.25)
+        # ax1.plot(no_re_xs, ys, label="w/o RE")
+        # ax1.fill_betweenx(ys, no_re_low, no_re_high, alpha=.25)
+        # ax2.plot(re_xs, ys, label="w/ RE")
+        # ax2.fill_betweenx(ys, re_low, re_high, alpha=.25)
+        # ax2.plot(no_re_xs, ys, label="w/o RE")
+        # ax2.fill_betweenx(ys, no_re_low, no_re_high, alpha=.25)
+
         ax1.plot(cnt_ranks_re, label="w/ RE")
+        ax1.fill_between(range(0,50000), cnt_ranks_re_low, cnt_ranks_re_high, alpha=.25)
+        # dummy plots to get the next color
+        ax1.plot([0])
+        ax1.fill_between([0],[0],[0])
+        ax1.plot([0])
+        ax1.fill_between([0],[0],[0])
+        #
         ax1.plot(cnt_ranks_no_re, label="w/o RE")
+        ax1.fill_between(range(0,50000), cnt_ranks_no_re_low, cnt_ranks_no_re_high, alpha=.25)
+
         ax2.plot(cnt_ranks_re, label="w/ RE")
+        ax2.fill_between(range(0,50000), cnt_ranks_re_low, cnt_ranks_re_high, alpha=.25)
+        # dummy plots to get the next color
+        ax2.plot([0])
+        ax2.fill_between([0],[0],[0])
+        ax2.plot([0])
+        ax2.fill_between([0],[0],[0])
+        #
         ax2.plot(cnt_ranks_no_re, label="w/o RE")
+        ax2.fill_between(range(0,50000), cnt_ranks_no_re_low, cnt_ranks_no_re_high, alpha=.25)
+
         ax1.hlines(consts.TOTAL_BENCHMARKS, 0, 20, linestyles='dotted', label="max #benchmarks", colors="0.8")
         ax2.hlines(consts.TOTAL_BENCHMARKS, 20, 50000, linestyles='dotted', label="max #benchmarks", colors="0.8")
         ax2.legend(loc="best")
@@ -239,29 +297,6 @@ def plot_ranks(experiments, data_dir, output=None):
 
         plt.savefig(output_path)
 
-def compute_confidence_interval(xs):
-    # confidence=0.99
-    # compute confidence interval for a list of numbers
-    # https://stackoverflow.com/questions/15033511/compute-a-confidence-interval-from-sample-data
-    # print(xs)
-    n = len(xs)
-    mean = sum(xs) / n
-    std = math.sqrt(sum((x - mean)**2 for x in xs) / n)
-    z_score = 31.6 if n == 3 else 1
-    h = z_score * std / math.sqrt(n)
-    # print(mean - h, mean, mean + h)
-    return mean, h
-
-def plot_with_intervals(ax, xs, ys, **kwargs):
-    means = [x[0] for x in xs]
-    errors = [[min(x[0], x[1]) for x in xs], [x[1] for x in xs]]
-    lefts = [max(0, x[0] - x[1]) for x in xs]
-    rights = [x[0] + x[1] for x in xs]
-    ax.plot(means, ys, **kwargs)
-    
-    ax.fill_betweenx(ys, sorted(lefts), sorted(rights), alpha=.25)
-
-
 def plot_solved(experiments, data_dir, repeat_exp=1, output=None):
     # load results for all experiments
     times_dict = {}
@@ -273,8 +308,8 @@ def plot_solved(experiments, data_dir, repeat_exp=1, output=None):
                 if result is None or result.ranks is None:
                     continue
 
-                m, h = compute_confidence_interval(result.syn_time)
-                times.append((m, h))
+                m, l, h = compute_confidence_interval(result.syn_time, utils.avg)
+                times.append((m, l, h))
 
         times_dict[exp] = sorted(times, key=lambda x: x[0])
 
@@ -292,6 +327,7 @@ def plot_solved(experiments, data_dir, repeat_exp=1, output=None):
     markers = ["x", "o", "v", "+", "*"]
     # colors = ["#fc8d62", "#8da0cb"]
     label_mapping = {
+        "apiphany": "APIphany",
         "apiphany_repeat": "APIphany",
         "apiphany_no_semantic": "APIphany-NoSemantic",
         "apiphany_no_merge": "APIphany-NoMerge",
@@ -299,13 +335,12 @@ def plot_solved(experiments, data_dir, repeat_exp=1, output=None):
     for i, (exp, xs) in enumerate(times_dict.items()):
         ys = list(range(1, len(xs)+1))
         label = label_mapping.get(exp, exp)
-        plot_with_intervals(
-            ax, xs + [(consts.TIMEOUT + 10, 0)], ys + ys[-1:], 
-            label=label, 
-            marker=markers[i], 
-            markersize=5,
-            # linestyle="--",
-        )
+        means = [x[0] for x in xs] + [consts.TIMEOUT + 10]
+        lefts = [x[1] for x in xs] + [consts.TIMEOUT + 10]
+        rights = [x[2] for x in xs] + [consts.TIMEOUT + 10]
+        ys += ys[-1:]
+        ax.plot(means, ys, label=label, marker=markers[i], markersize=5,)
+        ax.fill_betweenx(ys, sorted(lefts), sorted(rights), alpha=.25)
 
     ax.axhline(y=consts.TOTAL_BENCHMARKS, linestyle='dashed', label="max #benchmarks", color="0.8")
     ax.legend(loc="best")
@@ -329,7 +364,7 @@ def print_benchmark_results(results, output=None):
             if r is None:
                 continue
 
-            # print(r.name)
+            # print(r.name, r.ranks)
             ranks = r.ranks
             if ranks is None:
                 median_rank = None
@@ -405,7 +440,7 @@ def main():
         if experiments is None:
             experiments = args.plot_ranks
 
-        plot_ranks(experiments, args.data_dir, args.output)
+        plot_ranks(experiments, args.data_dir, args.repeat_exp, args.output)
 
     if (not args.plot_all and
         not args.plot_solved and

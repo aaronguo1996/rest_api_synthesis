@@ -14,7 +14,7 @@ BENCH_EXE=python $(BENCH_SRC)
 # reps
 REPEAT_EXP=1
 # experiments
-EXPS=apiphany_repeat apiphany_no_semantic apiphany_no_merge
+EXPS=apiphany apiphany_no_semantic apiphany_no_merge
 # optional args
 ARGS=
 # params
