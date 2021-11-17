@@ -43,8 +43,8 @@ STR_RESPONSE = "Response"
 def _create_annot_table(methods, entries, log_analyzer):
     def get_semantic_type(p):
         s = set([str(t.type) for t in log_analyzer.dsu.get_group(p)])
-        s.add(str(p.type))
-        print(s)
+        # s.add(str(p.type))
+        print("get_semantic_type", s)
         return list(s)
 
     def wrap_terms(lst):
