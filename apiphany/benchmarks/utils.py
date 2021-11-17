@@ -190,10 +190,10 @@ def index_entries(entries, skip_fields):
         # if fun == "/v2/orders/batch-retrieve_POST":
         #     print(index_result[fun].keys())
 
-    for fun, fun_results in index_result.items():
-        for param, param_results in fun_results.items():
-            if len(param_results) > 10:
-                index_result[fun][param] = param_results[-10:]
+    # for fun, fun_results in index_result.items():
+    #     for param, param_results in fun_results.items():
+    #         if len(param_results) > 10:
+    #             index_result[fun][param] = param_results[-10:]
                 
     return index_result
 

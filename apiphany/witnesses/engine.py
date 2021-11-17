@@ -84,7 +84,7 @@ class BasicGenerator:
         if isinstance(param_type, types.ArrayType):
             return []
         elif isinstance(param_type, types.PrimInt):
-            int_range = defined_regex or range(0, 1000)
+            int_range = defined_regex or range(1000, 100000)
             return random.choice(int_range)
         elif isinstance(param_type, types.PrimNum):
             float_range = defined_regex or (0, 1)
@@ -185,8 +185,13 @@ class SaturationThread(BasicGenerator):
         #     param_val = "PXr1SGsIfKZOQ4OvzaMRj6AfQe4F"
         # elif arg_name == "order":
         #     param_val = {"line_items": [{"uid": "nuRLk7cO8xJXteDuCykB8B","quantity": "3","name": "eren's onlyfans Subscription","base_price_money": {"amount": 420,"currency": "USD"},"note": "Cadence: Weekly, Billing Period: Sunday, June 27, 2021 - Sunday, Nov 3, 2021","item_type": "ITEM"}],"version": 3}
-        # elif self._analyzer.dsu.find(param) and arg_name != defs.DOC_NAME and arg_name != defs.DOC_TYPE:
-        if self._analyzer.dsu.find(param) and arg_name != defs.DOC_NAME and arg_name != defs.DOC_TYPE:
+        if arg_name == "currency":
+            param_val = "usd"
+        elif arg_name == "customer":
+            param_val = "cus_JXqRVg8RTl3qu4"
+        elif self._analyzer.dsu.find(param) and arg_name != defs.DOC_NAME and arg_name != defs.DOC_TYPE:
+        
+        # if self._analyzer.dsu.find(param) and arg_name != defs.DOC_NAME and arg_name != defs.DOC_TYPE:
             print(
                 f"Trying fill parameter {arg_name} by real dependencies")
             # if we already have the value bank for this variable

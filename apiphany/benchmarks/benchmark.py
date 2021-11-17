@@ -53,7 +53,9 @@ class BenchmarkResult:
         self.name = name
         self.desc = desc
         self.rank_no_re = None
+        self.rank_no_re_before_sol = None
         self.rank_no_re_rng = None
+        self.rank_before_sol = None
         self.ranks = None
         self.ast_size = None
         self.projects = None
@@ -79,13 +81,14 @@ class APIInfo:
         self.annotations = annotations
 
 class Benchmark:
-    def __init__(self, name, desc, source, inputs, output, solutions):
+    def __init__(self, name, desc, source, inputs, output, solutions, is_effectful):
         self.name = name
         self.description = desc
         self.source = source
         self.inputs = inputs
         self.output = output
         self.solutions = solutions
+        self.is_effectful = is_effectful
         self.latex_entry = BenchmarkResult(name, desc)
 
     def run(self, exp_dir, entries, indexed_entries, configuration, analyzer, runtime_config):
@@ -167,9 +170,12 @@ class Benchmark:
         re_time = None
         solution_found = False
         rank = None
+        candidates_lower = []
         for rank, (syn_time, sol_prog, re_time, cost) in enumerate(sorted_candidates):            
             # print(rank, cost, sol_prog.has_conversion())
             # print(rank, sol_prog)
+            candidates_lower.append((syn_time, sol_prog, re_time, cost))
+
             if sol_prog in self.solutions:
                 print("Solution found")
                 print(sol_prog, "has cost", cost)
@@ -179,16 +185,19 @@ class Benchmark:
         if rank is not None:
             rank += 1
 
-        candidates_no_re = sorted_candidates
         if solution_found:
-            candidates_no_re = [c for c in sorted_candidates if c[0] <= syn_time]
+            candidates_no_re = len(candidates)
+            candidates_before_sol = [c for c in sorted_candidates if c[0] <= syn_time]
             self.latex_entry.ranks = [rank]
-            print(f"PASS, Ranks {rank} vs {len(candidates_no_re)}")
+            rank_before_sol = len([c for c in candidates_lower if c[0] <= syn_time])
+            self.latex_entry.rank_before_sol = rank_before_sol
+            print(f"PASS, Ranks {rank} vs {candidates_no_re}")
             self.latex_entry.mean_rank = rank
             self.latex_entry.median_rank = rank
             self.latex_entry.syn_time = syn_time
             self.latex_entry.re_time = re_time
-            self.latex_entry.rank_no_re = len(candidates_no_re)
+            self.latex_entry.rank_no_re = candidates_no_re
+            self.latex_entry.rank_no_re_before_sol = len(candidates_before_sol)
             self.latex_entry.candidates = len(candidates)
             self.latex_entry.paths = paths
         else:
@@ -447,12 +456,29 @@ class BenchmarkSuite:
             places = d["places"]
             transitions = d["transitions"]
             latex_entries = d["results"]
+
+            print("places", places)
+            print("transitions", transitions)
+            # update the solution sizes
+            for i, e in enumerate(latex_entries):
+                e.ast_size = len(self.benchmarks[i].solutions[0].collect_exprs())
+                # print(self.benchmarks[i].solutions[0])
+                # print(e.ast_size)
+
+            with open(cache_path, "wb") as f:
+                pickle.dump({
+                    "places": places,
+                    "transitions": transitions,
+                    "results": latex_entries,
+                }, f)
         else:
+            places = None
+            transitions = None
             for benchmark in self.benchmarks:
                 if names is not None and benchmark.name not in names:
                     continue
 
-                places, transitions, path_cnt, solutions = benchmark.run(
+                bench_places, bench_transitions, path_cnt, solutions = benchmark.run(
                     self._iter_dir, 
                     self._typed_entries,
                     indexed_entries, 
@@ -460,6 +486,12 @@ class BenchmarkSuite:
                     self._log_analyzer,
                     runtime_config
                 )
+
+                if bench_places is not None and places is None:
+                    places = bench_places
+
+                if bench_transitions is not None and transitions is None:
+                    transitions = bench_transitions
 
                 if not runtime_config.synthesis_only:
                     flat_solutions = []
@@ -491,6 +523,7 @@ class Bencher:
         print_api=False, 
         print_results=False, 
         print_appendix=False, 
+        print_small=False,
         plot_ranks=False, 
         output=None):
         place_counts = []
@@ -536,7 +569,7 @@ class Bencher:
         self._config.generate_witness = abs(self._config.method_coverage - 1.0) > 1e-6
 
         if print_api:
-            self.print_api_info(place_counts, trans_counts, output)
+            self.print_api_info(place_counts, trans_counts, print_small, output)
 
         if print_results:
             self.print_benchmark_results(benchmark_results, output)
@@ -544,14 +577,23 @@ class Bencher:
         if plot_ranks:
             self.plot_ranks(benchmark_results, output)
 
-    def print_api_info(self, places, transitions, output=None):
-        res = (
-            "\\small\\begin{tabular}{l|rrrr|rr|rr}\n"
+    def print_api_info(self, places, transitions, small=False, output=None):
+        if small:
+            res = (
+            "\\small\\begin{tabular}{l|rrrr|rr}\n"
             "\\toprule\n"
-            "& \\multicolumn{4}{c|}{API size} & \\multicolumn{2}{c|}{API Analysis} & \\multicolumn{2}{c}{TTN size} \\\\\n"
-            "\\cmidrule(lr){2-5} \\cmidrule(lr){6-7} \\cmidrule(lr){8-9}\n"
-            "API & $|\\Lambda.f|$ & $n_{args}$ & $|\\Lambda.o|$ & $s_{objs}$ & $|\\witnesses|$ & $|\\sema{\\Lambda}.f|$ & $|P|$ & $|T|$ \\\\\n"
+            "& \\multicolumn{4}{c|}{API size} & \\multicolumn{2}{c}{API Analysis} \\\\\n"
+            "\\cmidrule(lr){2-5} \\cmidrule(lr){6-7} \n"
+            "API & $|\\Lambda.f|$ & $n_{args}$ & $|\\Lambda.o|$ & $s_{objs}$ & $|\\witnesses|$ & $n_{cov}$ \\\\\n"
             "\\midrule\n")
+        else:
+            res = (
+                "\\small\\begin{tabular}{l|rrrr|rr|rr}\n"
+                "\\toprule\n"
+                "& \\multicolumn{4}{c|}{API size} & \\multicolumn{2}{c|}{API Analysis} & \\multicolumn{2}{c}{TTN size} \\\\\n"
+                "\\cmidrule(lr){2-5} \\cmidrule(lr){6-7} \\cmidrule(lr){8-9}\n"
+                "API & $|\\Lambda.f|$ & $n_{args}$ & $|\\Lambda.o|$ & $s_{objs}$ & $|\\witnesses|$ & $n_{cov}$ & $|P|$ & $|T|$ \\\\\n"
+                "\\midrule\n")
         res += "\n"
 
         for i, suite in enumerate(self._suites):
@@ -565,9 +607,13 @@ class Bencher:
                     f"& {api_info.obj_num} "
                     f"& {min(api_info.obj_sizes)} - {max(api_info.obj_sizes)} "
                     f"& {api_info.gen_w} "
-                    f"& {api_info.ep_covered} "
-                    f"& {places[i]} "
-                    f"& {transitions[i]}")
+                    f"& {api_info.ep_covered} ")
+                
+                if not small:
+                    res += (
+                        f"& {places[i]} "
+                        f"& {transitions[i]}")
+                
                 res += r" \\"
                 res += "\n"
 
@@ -598,26 +644,25 @@ class Bencher:
                 res += f"\\textbf{{{bench.name}. {bench.description}}}\n\n"
 
                 # Input to output
-                input_vals = ""
-                input_vals += "{"
-                input_vals += ', '.join([f"{k}: {v}" for k, v in bench.inputs.items()])
-                input_vals += "}"
-                output_val = f"{bench.output}"
-                
-                res += (f"\emph{{Type query}}: "
-                        "\\lstinline[style=dsl,basicstyle=\\ttfamily,breakatwhitespace,breaklines=true,postbreak=\\mbox{\\textcolor{red}{$\\hookrightarrow$}\\space}]!"
-                        f"{input_vals} --> {output_val}!\n\n")
+                input_vals = ',\n  '.join([f"{k}: {v}" for k, v in bench.inputs.items()])
+                output_val = bench.output
+                newline = '\n'
+                res += ("Type query: "
+                        "\\begin{lstlisting}[style=dsl,basicstyle=\\ttfamily\\footnotesize,xleftmargin=5pt,breaklines=true,postbreak=\\mbox{\\textcolor{red}{$\\hookrightarrow$}\\space}]\n"
+                        f"{{ {input_vals} {newline if ',' in input_vals else ''}}} -> {output_val}"
+                        "\n\n\\end{lstlisting}\n\n")
                 
                 # Target solution
-                res += ("\\begin{lstlisting}[style=dsl,basicstyle=\\ttfamily\\footnotesize,xleftmargin=5pt,breaklines=true,postbreak=\\mbox{\\textcolor{red}{$\\hookrightarrow$}\\space}]\n"
+                res += ("Solution:\n"
+                        "\\begin{lstlisting}[style=dsl,basicstyle=\\ttfamily\\footnotesize,xleftmargin=5pt,breaklines=true,postbreak=\\mbox{\\textcolor{red}{$\\hookrightarrow$}\\space}]\n"
                         f"{bench.solutions[0]}\n"
                         "\\end{lstlisting}\n\n")
 
                 # Source
                 if bench.source:
-                    res += ("\\vspace{-0.25em}{\\scriptsize\\emph{Source: \\url{"
+                    res += ("\\vspace{-0.25em}{\\footnotesize Source: \\url{"
                             f"{bench.source}"
-                            "}}}\n\n")
+                            "}\n\n")
                     
                 res += "\\vspace{1em}\n\n"
 

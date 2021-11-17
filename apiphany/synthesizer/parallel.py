@@ -58,7 +58,8 @@ def get_results(synthesizer, analyzer, encoder,
             #     flush=True)
             path = encoder.solve()
             while path is not None:
-                # print("Found a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
+                # if path_len == 5:
+                print("Found a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
                 end = time.time()
                 # print(path)
                 path_count += 1
@@ -68,7 +69,8 @@ def get_results(synthesizer, analyzer, encoder,
 
                 for p in set(programs):
                     if p not in solution_set:
-                        # print(p)
+                        # if path_len == 5:
+                        #     print(p)
                         solution_set.add(p)
                         re_start = time.time()
                         if run_re:
@@ -84,9 +86,9 @@ def get_results(synthesizer, analyzer, encoder,
                         #     return consts.SearchStatus.NOT_FOUND
 
                         if p == expected_solution:
-                            print("Found expected solution", flush=True)
-                            solution_set.add(p)
-                            return consts.SearchStatus.FOUND_EXPECTED
+                            print("Found expected solution | Time:", time.time() - start, flush=True)
+                            # solution_set.add(p)
+                            # return consts.SearchStatus.FOUND_EXPECTED
 
                 encoder.block_prev()
                 path = encoder.solve()
@@ -297,24 +299,22 @@ def spawn_encoders(synthesizer, analyzer, entries,
         resource.setrlimit(resource.RLIMIT_AS, (memlimit, hard))
 
     try:
-        with pebble.ProcessPool(
-            max_workers=solver_num, 
-            initializer=initializer, 
-            initargs=[30*10**9 / solver_num]) as executor:
-            futures = []
-            for path_len in range(consts.DEFAULT_LENGTH_LIMIT + 1):
-                res = executor.schedule(run_encoder,
-                    args=(synthesizer, analyzer, entries,
-                    inputs, outputs, is_array_output, expected_solution, 
-                    runtime_config, all_solutions, path_len), 
-                    timeout=timeout)
-                futures.append(res)
-
+        with pebble.ProcessPool(max_workers=solver_num) as executor:
             try:
+                futures = []
+                for path_len in range(consts.DEFAULT_LENGTH_LIMIT + 1):
+                    res = executor.schedule(run_encoder,
+                        args=(synthesizer, analyzer, entries,
+                        inputs, outputs, is_array_output, expected_solution, 
+                        runtime_config, all_solutions, path_len), 
+                        timeout=timeout)
+                    futures.append(res)
+
+            
                 for future in as_completed(futures):
                     num_place, num_trans, status = future.result(timeout=timeout)
-                    if status == consts.SearchStatus.FOUND_EXPECTED:
-                        break
+                    # if status == consts.SearchStatus.FOUND_EXPECTED:
+                    #     break
             except TimeoutError:
                 print("TIMEOUT", flush=True)
             except pebble.ProcessExpired as e:
@@ -325,10 +325,18 @@ def spawn_encoders(synthesizer, analyzer, entries,
                 num_place = None
                 num_trans = None
                 print("Reached resource limit:", e, flush=True)
-
+            except MemoryError as e:
+                num_place = None
+                num_trans = None
+                print("Reached resource limit:", e, flush=True)
+            
             executor.stop()
             executor.join()
     except resource.error as e:
+        num_place = None
+        num_trans = None
+        print("Reached resource limit:", e, flush=True)
+    except MemoryError as e:
         num_place = None
         num_trans = None
         print("Reached resource limit:", e, flush=True)

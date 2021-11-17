@@ -46,7 +46,7 @@ class AppExpr(Expression):
 
     def __str__(self):
         arg_strs = [f"{x}={arg}" for x, arg in self._args]
-        return f"{self._fun}({', '.join(arg_strs)})"
+        return f"{self._fun.replace('.', '_')}({', '.join(arg_strs)})"
 
     def __eq__(self, other):
         if not isinstance(other, AppExpr):
@@ -920,7 +920,7 @@ class AssignExpr(Expression):
         )
 
     def collect_exprs(self):
-        return [self] + self._rhs.collect_exprs()
+        return self._rhs.collect_exprs()
 
     def to_graph(self, graph):
         # print(self)

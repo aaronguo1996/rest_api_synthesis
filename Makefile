@@ -14,7 +14,7 @@ BENCH_EXE=python $(BENCH_SRC)
 # reps
 REPEAT_EXP=1
 # experiments
-EXPS=apiphany apiphany_no_semantic apiphany_no_merge
+EXPS=apiphany_full_timeout apiphany_no_semantic apiphany_no_merge
 # optional args
 ARGS=
 # params
@@ -42,7 +42,7 @@ generate-full-exclude generate-full-syntactic generate-onethird-exclude generate
 
 run-full-exclude run-full-syntactic run-onethird-exclude run-onethird-syntactic run-twothirds-exclude run-twothirds-syntactic: build
 	rep=1 ; while [[ $$rep -le $(REPEAT_EXP) ]] ; do \
-		for suite in "squareapi" "slack" "stripe" ; do \
+		for suite in "stripe" ; do \
 			cd apiphany && $(BENCH_EXE) . --data-dir ../experiment_data \
 				--exp-name $(EXP_NAME) \
 				--method-coverage $(coverage_$(call word-dash,$@,2)) \
@@ -56,11 +56,20 @@ run-full-exclude run-full-syntactic run-onethird-exclude run-onethird-syntactic 
 		((rep = rep + 1)) ; \
 	done
 
-plot-all plot-ranks plot-solved:
+plot-all: plot-ranks plot-solved
+
+plot-solved:
 	cd apiphany && $(BENCH_EXE) . --data-dir ../experiment_data \
 		--exp-name $(EXP_NAME) \
 		--$@ $(EXPS)\
 		--repeat-exp $(REPEAT_EXP)
+
+plot-ranks:
+	cd apiphany && $(BENCH_EXE) . --data-dir ../experiment_data \
+		--exp-name $(EXP_NAME) \
+		--$@ apiphany_full_timeout \
+		--repeat-exp $(REPEAT_EXP)
+
 clean:
 	rm -f apiphany/apiphany.*.so
 	cd experiment_data && for dir in *; do \

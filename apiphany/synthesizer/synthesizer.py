@@ -253,6 +253,8 @@ class Synthesizer:
             # "projection(subscription_item, price)_",
             # "/v1/customers/{customer}/sources/{id}_DELETE",
             # "/v1/invoiceitems_POST",
+            # "/v1/invoices_POST",
+            # "/v1/invoices/{invoice}/send_POST",
             # 'projection(product, active)_',
             # "/v1/invoices_GET",
             # "/v1/charges/{charge}_GET",
@@ -277,6 +279,9 @@ class Synthesizer:
             # "projection(customer, default_source)_",
             # "projection(payment_source, type)_"
             # "/v1/account_GET",
+            # "/v1/payment_methods_GET",
+            # "/v1/payment_intents_POST",
+            # "/v1/payment_intents/{intent}/confirm_POST",
 
             # "/admin.users.session.invalidate_POST",
             # "/admin.conversations.search_GET",

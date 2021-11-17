@@ -27,7 +27,8 @@ slack_minimal = [
                     ProjectionExpr(VarExpr("x2"), "channel")
                 ]
             )
-        ]
+        ],
+        True,
     ),
 ]
 
@@ -54,6 +55,7 @@ slack_benchmarks = [
                 ]
             ),
         ],
+        False,
     ),
     Benchmark(
         "1.2",
@@ -74,6 +76,7 @@ slack_benchmarks = [
                 ]
             ),
         ],
+        True,
     ),
     Benchmark(
         "1.3",
@@ -95,6 +98,7 @@ slack_benchmarks = [
                 ]
             ),
         ],
+        False,
     ),
     Benchmark(
         "1.4",
@@ -117,7 +121,8 @@ slack_benchmarks = [
                     VarExpr("x3")
                 ]
             )
-        ]
+        ],
+        False,
     ),
     Benchmark(
         "1.5",
@@ -138,7 +143,8 @@ slack_benchmarks = [
                     ProjectionExpr(VarExpr("x2"), "channel")
                 ]
             )
-        ]
+        ],
+        True,
     ),
     Benchmark(
         "1.6",
@@ -158,7 +164,8 @@ slack_benchmarks = [
                     ProjectionExpr(VarExpr("x2"), "message")
                 ]
             )
-        ]
+        ],
+        True,
     ),
     Benchmark(
         "1.7",
@@ -179,7 +186,8 @@ slack_benchmarks = [
                     ProjectionExpr(VarExpr("x2"), "message")
                 ]
             )
-        ]
+        ],
+        True,
     ),
     Benchmark(
         "1.8",
@@ -199,6 +207,7 @@ slack_benchmarks = [
                 ]
             ),
         ],
+        False,
     ),
 ]
 
@@ -233,7 +242,8 @@ stripe_minimal = [
                     VarExpr("x3")
                 ]
             )
-        ]
+        ],
+        True,
     ),
 ]
 
@@ -257,30 +267,9 @@ stripe_benchmarks = [
                     VarExpr("x3")
                 ]
             )
-        ]
+        ],
+        True,
     ),
-    # Benchmark(
-    #     "2.2",
-    #     "Charge a saved card given customer id",
-    #     {
-    #         "customer_id": types.PrimString("customer.id"),
-    #         "cur": types.PrimString("fee.currency"),
-    #         "amt": types.PrimInt("price.unit_amount"),
-    #         "pm_type": types.PrimString("token.type"),
-    #     },
-    #     types.SchemaObject("payment_intent"),
-    #     [
-    #         Program(
-    #             ["customer_id", "cur", "amt", "pm_type"],
-    #             [
-    #                 AssignExpr("x1", AppExpr("/v1/payment_methods_GET", [("customer", VarExpr("customer_id")), ("type", VarExpr("pm_type"))]), False),
-    #                 AssignExpr("x2", AppExpr("/v1/payment_intents_POST", [("customer", VarExpr("customer_id")), ("payment_method", ProjectionExpr(VarExpr("x1"), "id")), ("currency", VarExpr("cur")), ("amount", VarExpr("amt"))]), False),
-    #                 AssignExpr("x3", AppExpr("/v1/payment_intents/{intent}/confirm", [("intent", ProjectionExpr(VarExpr("x2"), "id"))]), False),
-    #                 VarExpr("x3")
-    #             ]
-    #         ),
-    #     ]
-    # ),
     Benchmark(
         "2.2",
         "Subscribe to multiple items",
@@ -301,7 +290,8 @@ stripe_benchmarks = [
                     VarExpr("x3")
                 ]
             )
-        ]
+        ],
+        True,
     ),
     Benchmark(
         "2.3",
@@ -324,28 +314,9 @@ stripe_benchmarks = [
                     VarExpr("x2")
                 ]
             )
-        ]
+        ],
+        True,
     ),
-    # Benchmark(
-    #     "2.5",
-    #     "Sending invoice to a customer",
-    #     {
-    #         "customer_id": types.PrimString("customer.id"),
-    #         "price_id": types.PrimString("plan.id"),
-    #     },
-    #     types.SchemaObject("invoice"),
-    #     [
-    #         Program(
-    #             ["customer_id", "price_id"],
-    #             [
-    #                 AssignExpr("x1", AppExpr("/v1/invoiceitems_POST", [("customer", VarExpr("customer_id")), ("price", VarExpr("price_id"))]), False),
-    #                 AssignExpr("x2", AppExpr("/v1/invoices_POST", [("customer", ProjectionExpr(VarExpr("x1"), "customer"))]), False),
-    #                 AssignExpr("x3", AppExpr("/v1/invoices/{invoice}/send_POST", [("invoice", ProjectionExpr(VarExpr("x2"), "id"))]), False),
-    #                 VarExpr("x3")
-    #             ]
-    #         )
-    #     ]
-    # ),
     Benchmark(
         "2.4",
         "Retrieve a customer by email",
@@ -364,7 +335,8 @@ stripe_benchmarks = [
                     VarExpr("x1")
                 ]
             )
-        ]
+        ],
+        False,
     ),
     Benchmark(
         "2.5",
@@ -384,7 +356,8 @@ stripe_benchmarks = [
                     VarExpr("x3")
                 ]
             )
-        ]
+        ],
+        False,
     ),
     Benchmark(
         "2.6",
@@ -404,7 +377,8 @@ stripe_benchmarks = [
                     VarExpr("x2")
                 ]
             )
-        ]
+        ],
+        True,
     ),
     Benchmark(
         "2.7",
@@ -422,7 +396,8 @@ stripe_benchmarks = [
                     ProjectionExpr(VarExpr("x1"), "email")
                 ]
             )
-        ]
+        ],
+        False,
     ),
     Benchmark(
         "2.8",
@@ -444,7 +419,8 @@ stripe_benchmarks = [
                     ProjectionExpr(VarExpr("x4"), "email")
                 ]
             )
-        ]
+        ],
+        False,
     ),
     Benchmark(
         "2.9",
@@ -464,26 +440,9 @@ stripe_benchmarks = [
                     # ProjectionExpr(ProjectionExpr(VarExpr("x1"), "card"), "last4")
                 ]
             )
-        ]
+        ],
+        False,
     ),
-    # Benchmark(
-    #     "2.12",
-    #     "Delete a card for a customer",
-    #     {
-    #         "customer_id": types.SchemaObject("customer.id"),
-    #     },
-    #     types.SchemaObject("payment_source"),
-    #     [
-    #         Program(
-    #             ["customer_id"],
-    #             [
-    #                 AssignExpr("x1", AppExpr("/v1/customers/{customer}_GET", [("customer", VarExpr("customer_id"))]), False),
-    #                 AssignExpr("x2", AppExpr("/v1/customers/{customer}/sources/{id}_DELETE", [("customer", VarExpr("customer_id")), ("source", ProjectionExpr(VarExpr("x1"), "default_source"))]), False),
-    #                 VarExpr("x3")
-    #             ]
-    #         )
-    #     ]
-    # ),
     Benchmark(
         "2.10",
         "Update payment methods for a user's subscriptions",
@@ -503,7 +462,8 @@ stripe_benchmarks = [
                     VarExpr("x2")
                 ]
             )
-        ]
+        ],
+        True,
     ),
     Benchmark(
         "2.11",
@@ -522,8 +482,54 @@ stripe_benchmarks = [
                     VarExpr("x1")
                 ]
             )
-        ]
-    )
+        ],
+        True,
+    ),
+    Benchmark(
+        "2.12",
+        "Save a card during payment",
+        "https://github.com/stripe-samples/saving-card-after-payment/blob/master/without-webhooks/server/node/server.js",
+        {
+            "cur": types.PrimString("fee.currency"),
+            "amt": types.PrimInt("plan.amount"),
+            "pm": types.PrimString("payment_method.id"),
+        },
+        types.SchemaObject("payment_intent"),
+        [
+            Program(
+                ["cur", "amt", "pm"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/customers_POST", []), False),
+                    AssignExpr("x2", AppExpr("/v1/payment_intents_POST", [("customer", ProjectionExpr(VarExpr("x1"), "id")), ("payment_method", VarExpr("pm")), ("currency", VarExpr("cur")), ("amount", VarExpr("amt"))]), False),
+                    AssignExpr("x3", AppExpr("/v1/payment_intents/{intent}/confirm_POST", [("intent", ProjectionExpr(VarExpr("x2"), "id"))]), False),
+                    VarExpr("x3")
+                ]
+            ),
+        ],
+        True,
+    ),
+    Benchmark(
+        "2.13",
+        "Send an invoice to a customer",
+        "https://stripe.com/docs/invoicing/integration#send-invoice",
+        {
+            "customer_id": types.PrimString("customer.id"),
+            "price_id": types.PrimString("plan.id"),
+        },
+        types.SchemaObject("invoice"),
+        [
+            Program(
+                ["customer_id", "price_id"],
+                [
+                    AssignExpr("x1", AppExpr("/v1/invoiceitems_POST", [("customer", VarExpr("customer_id")), ("price", VarExpr("price_id"))]), False),
+                    AssignExpr("x2", AppExpr("/v1/invoices_POST", [("customer", ProjectionExpr(VarExpr("x1"), "customer"))]), False),
+                    AssignExpr("x3", AppExpr("/v1/invoices/{invoice}/send_POST", [("invoice", ProjectionExpr(VarExpr("x2"), "id"))]), False),
+                    VarExpr("x3")
+                ]
+            )
+        ],
+        True,
+    ),
 ]
 
 stripe_suite = BenchmarkSuite(
@@ -554,6 +560,7 @@ square_minimal = [
                 ]
             )
         ],
+        False,
     ),
 ]
 
@@ -575,6 +582,7 @@ square_benchmarks = [
                 ]
             )
         ],
+        False,
     ),
     Benchmark(
         "3.2",
@@ -610,6 +618,7 @@ square_benchmarks = [
                 ]
             )
         ],
+        False,
     ),
     Benchmark(
         "3.3",
@@ -631,6 +640,7 @@ square_benchmarks = [
                 ]
             )
         ],
+        False,
     ),
     Benchmark(
         "3.4",
@@ -649,6 +659,7 @@ square_benchmarks = [
                 ]
             )
         ],
+        False,
     ),
     Benchmark(
         "3.5",
@@ -673,6 +684,7 @@ square_benchmarks = [
                 ]
             )
         ],
+        True,
     ),
     Benchmark(
         "3.6",
@@ -691,6 +703,7 @@ square_benchmarks = [
                 ]
             )
         ],
+        False,
     ),
     Benchmark(
         "3.7",
@@ -710,6 +723,7 @@ square_benchmarks = [
                 ]
             )
         ],
+        False,
     ),
     Benchmark(
         "3.8",
@@ -731,6 +745,7 @@ square_benchmarks = [
                 ]
             )
         ],
+        False,
     ),
     Benchmark(
         "3.9",
@@ -760,11 +775,12 @@ square_benchmarks = [
                 ]
             )
         ],
+        False,
     ),
     Benchmark(
         "3.10",
         "Delete catalog items with names",
-        "https://github.com/square/catalog-api-demo/blob/85b6754c90fa7b66fc5e605ee7a344314537eade/src/main/java/com/squareup/catalog/demo/example/DeleteCategoryExample.java#L65",
+        "https://github.com/square/catalog-api-demo/blob/85b6754c90fa7b66fc5e605ee7a344314537eade/src/main/java/com/squareup/catalog/demo/example/DeleteCategoryExample.java",
         {
             "item_type": types.PrimString("CatalogObject.type"),
             "names": types.ArrayType(None, types.PrimString("CatalogItem.name"))
@@ -785,11 +801,12 @@ square_benchmarks = [
                 ]
             )
         ],
+        True,
     ),
     Benchmark(
         "3.11",
         "Delete all catalog items",
-        "https://github.com/square/catalog-api-demo/blob/85b6754c90fa7b66fc5e605ee7a344314537eade/src/main/java/com/squareup/catalog/demo/example/DeleteAllItemsExample.java#L45",
+        "https://github.com/square/catalog-api-demo/blob/85b6754c90fa7b66fc5e605ee7a344314537eade/src/main/java/com/squareup/catalog/demo/example/DeleteAllItemsExample.java",
         {
         },
         types.ArrayType(None, types.PrimString("CatalogObject.id")),
@@ -804,6 +821,7 @@ square_benchmarks = [
                 ]
             )
         ],
+        True,
     ),
 ]
 

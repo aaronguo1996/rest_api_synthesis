@@ -98,14 +98,8 @@
         "endpoint": null,
         "producer": [
             {
-                "endpoint": "/v1/invoices",
-                "method": "get",
-                "path": "data/[?]/id"
-            },
-            {
-                "endpoint": "/v1/invoices",
-                "method": "post",
-                "path": "id"
+                "enum": ["in_1JrCq4DLm14arRKVaEH11ZEi"],
+                "combine": false
             }
         ]
     },
@@ -186,6 +180,16 @@
                 "endpoint": "/v1/payment_intents",
                 "method": "post",
                 "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "intent",
+        "endpoint": "/v1/payment_intents/{intent}/confirm",
+        "producer": [
+            {
+                "enum": ["pi_3Jw0LsDLm14arRKV2sVmsvDp", "pi_3Jw0LsDLm14arRKV0Ahm3vBV", "pi_3Jw0LsDLm14arRKV1B8zjKfj"],
+                "combine": false
             }
         ]
     },
@@ -289,14 +293,8 @@
         "endpoint": null,
         "producer": [
             {
-                "endpoint": "/v1/payment_methods",
-                "method": "get",
-                "path": "data/[?]/id"
-            },
-            {
-                "endpoint": "/v1/payment_methods",
-                "method": "post",
-                "path": "id"
+                "enum": ["card_1J1nmJDLm14arRKVVkwe9RIJ"],
+                "combine": false
             }
         ]
     },

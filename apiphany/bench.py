@@ -18,6 +18,7 @@ import pickle
 import math
 import cProfile
 from matplotlib.ticker import (AutoMinorLocator)
+import scipy.stats as st
 
 from analyzer import dynamic
 from benchmarks.benchmark import BenchConfig, Bencher, BenchmarkResult
@@ -103,6 +104,10 @@ def build_cmd_parser():
         help="Whether to print results.tex for the given exp name")
     parser.add_argument("--print-api-info", action="store_true",
         help="Whether to print api info")
+    parser.add_argument("--print-small", action="store_true",
+        help="Whether to print small tables")
+    parser.add_argument("--print-appendix", action="store_true",
+        help="Whether to print appendix")
     parser.add_argument("--plot-all", nargs='+',
         help="Whether to plot all available charts for given experiments")
     parser.add_argument("--plot-solved", nargs='*',
@@ -121,6 +126,7 @@ def build_cmd_parser():
         conversion_fair=False,
         primitive_as_return=False,
         print_api_info=False,
+        print_appendix=False,
         cache=False)
     return parser
 
@@ -157,6 +163,10 @@ def load_exp_results(data_dir, exp_name, repeat_exp=3):
             ranks = [rep.ranks[0] for rep in reps if rep.ranks is not None]
             entry.ranks = ranks if ranks else None
             entry.rank_no_re = [rep.rank_no_re for rep in reps if rep.rank_no_re is not None]
+            rank_before_sol = [rep.rank_before_sol for rep in reps if rep.rank_before_sol is not None]
+            entry.rank_before_sol = rank_before_sol if rank_before_sol else None
+            rank_no_re_before_sol = [rep.rank_no_re_before_sol for rep in reps if rep.rank_no_re_before_sol is not None]
+            entry.rank_no_re_before_sol = rank_no_re_before_sol if rank_no_re_before_sol else None
             entries.append(entry)
 
         all_entries[api] = entries
@@ -164,7 +174,7 @@ def load_exp_results(data_dir, exp_name, repeat_exp=3):
     # print(all_entries)
     return all_entries
 
-def compute_confidence_interval(xs, f):
+def compute_confidence_interval(xs, alpha, f):
     # confidence=0.99
     # compute confidence interval for a list of numbers
     # https://stackoverflow.com/questions/15033511/compute-a-confidence-interval-from-sample-data
@@ -172,10 +182,9 @@ def compute_confidence_interval(xs, f):
     n = len(xs)
     mean = sum(xs) / n
     std = math.sqrt(sum((x - mean)**2 for x in xs) / n)
-    z_score = 8.61 if n > 1 else 1
+    z_score = st.t.ppf(alpha, n - 1)
     h = z_score * std / math.sqrt(n)
-    # print(mean - h, mean, mean + h)
-    return f(xs), mean - h, mean + h
+    return f(xs), max(0, mean - h), mean + h
 
 def plot_with_intervals(ax, xs, ys, **kwargs):
     means = [x[0] for x in xs]
@@ -197,12 +206,16 @@ def plot_ranks(experiments, data_dir, repeat_exp=1, output=None):
 
         ranks_re = []
         ranks_no_re = []
+        ranks_re_before_sol = []
+        ranks_no_re_before_sol = []
         for result in results:
             if result is None or result.ranks is None:
                 continue
 
-            ranks_re.append(compute_confidence_interval(result.ranks, utils.median))
-            ranks_no_re.append(compute_confidence_interval(result.rank_no_re, utils.median))
+            ranks_re.append(compute_confidence_interval(result.ranks, 0.975, utils.median))
+            ranks_no_re.append(compute_confidence_interval(result.rank_no_re, 0.975, utils.median))
+            ranks_re_before_sol.append(compute_confidence_interval(result.rank_before_sol, 0.975, utils.median))
+            ranks_no_re_before_sol.append(compute_confidence_interval(result.rank_no_re_before_sol, 0.975, utils.median))
     
         cnt_ranks_re = [sum([1 for x in ranks_re if x[0] <= i]) for i in range(0,50000)]
         cnt_ranks_re_high = [sum([1 for x in ranks_re if max(x[1], 0) <= i]) for i in range(0,50000)]
@@ -210,6 +223,12 @@ def plot_ranks(experiments, data_dir, repeat_exp=1, output=None):
         cnt_ranks_no_re = [sum([1 for x in ranks_no_re if x[0] <= i]) for i in range(0,50000)]
         cnt_ranks_no_re_high = [sum([1 for x in ranks_no_re if max(x[1], 0) <= i]) for i in range(0,50000)]
         cnt_ranks_no_re_low = [sum([1 for x in ranks_no_re if x[2] <= i]) for i in range(0,50000)]
+        cnt_ranks_re_before_sol = [sum([1 for x in ranks_re_before_sol if x[0] <= i]) for i in range(0,50000)]
+        cnt_ranks_re_before_sol_high = [sum([1 for x in ranks_re_before_sol if max(x[1], 0) <= i]) for i in range(0,50000)]
+        cnt_ranks_re_before_sol_low = [sum([1 for x in ranks_re_before_sol if x[2] <= i]) for i in range(0,50000)]
+        cnt_ranks_no_re_before_sol = [sum([1 for x in ranks_no_re_before_sol if x[0] <= i]) for i in range(0,50000)]
+        cnt_ranks_no_re_before_sol_high = [sum([1 for x in ranks_no_re_before_sol if max(x[1], 0) <= i]) for i in range(0,50000)]
+        cnt_ranks_no_re_before_sol_low = [sum([1 for x in ranks_no_re_before_sol if x[2] <= i]) for i in range(0,50000)]
         # print(ranks_no_re)
 
         # plot core data
@@ -234,8 +253,8 @@ def plot_ranks(experiments, data_dir, repeat_exp=1, output=None):
         # ax1.xaxis.set_minor_locator(AutoMinorLocator())
         # ax2.yaxis.set_minor_locator(AutoMinorLocator())
         # ax2.xaxis.set_minor_locator(AutoMinorLocator())
-        # ax1.yaxis.set_ticks(range(0,ymax+1,3))
-        ax1.xaxis.set_ticks([0,3,6,9,12,15])
+        ax1.yaxis.set_ticks(list(range(0,ymax+1,5)) + [consts.TOTAL_BENCHMARKS])
+        ax1.xaxis.set_ticks([0,5,10,15])
         # ax1.plot(re_xs, ys, label="w/ RE")
         # ax1.fill_betweenx(ys, re_low, re_high, alpha=.25)
         # ax1.plot(no_re_xs, ys, label="w/o RE")
@@ -245,30 +264,39 @@ def plot_ranks(experiments, data_dir, repeat_exp=1, output=None):
         # ax2.plot(no_re_xs, ys, label="w/o RE")
         # ax2.fill_betweenx(ys, no_re_low, no_re_high, alpha=.25)
 
-        ax1.plot(cnt_ranks_re, label="w/ RE")
-        ax1.fill_between(range(0,50000), cnt_ranks_re_low, cnt_ranks_re_high, alpha=.25)
+        # ax1.plot(cnt_ranks_re, label="w/ RE", color="#1f77b4")
+        ax1.fill_between(range(0,50000), cnt_ranks_re_before_sol_high, cnt_ranks_re_low, alpha=.25)
+        # ax1.plot(cnt_ranks_re_before_sol, label="w/ RE before solution", color="#1f77b4")
+        ax1.fill_between(range(0,50000), cnt_ranks_re, cnt_ranks_re_before_sol, alpha=1, color="#1f77b4")
         # dummy plots to get the next color
+        ax1.plot([0])
         ax1.plot([0])
         ax1.fill_between([0],[0],[0])
         ax1.plot([0])
         ax1.fill_between([0],[0],[0])
         #
-        ax1.plot(cnt_ranks_no_re, label="w/o RE")
-        ax1.fill_between(range(0,50000), cnt_ranks_no_re_low, cnt_ranks_no_re_high, alpha=.25)
+        # ax1.plot(cnt_ranks_no_re, label="w/o RE")
+        # ax1.fill_between(range(0,50000), cnt_ranks_no_re, cnt_ranks_no_re_before_sol, alpha=1, color="#d62728")
+        ax1.plot(cnt_ranks_no_re_before_sol, label="w/o RE")
+        ax1.fill_between(range(0,50000), cnt_ranks_no_re_before_sol_high, cnt_ranks_no_re_before_sol_low, alpha=.25)
 
-        ax2.plot(cnt_ranks_re, label="w/ RE")
-        ax2.fill_between(range(0,50000), cnt_ranks_re_low, cnt_ranks_re_high, alpha=.25)
+        ax2.plot(cnt_ranks_re, label="w/ RE", color="#1f77b4")
+        ax2.fill_between(range(0,50000), cnt_ranks_re_before_sol_low, cnt_ranks_re_high, alpha=.25)
+        # ax2.plot(cnt_ranks_re_before_sol, label="w/ RE before solution", color="#1f77b4")
+        ax2.fill_between(range(0,50000), cnt_ranks_re, cnt_ranks_re_before_sol, alpha=1, color="#1f77b4")
         # dummy plots to get the next color
+        ax2.plot([0])
         ax2.plot([0])
         ax2.fill_between([0],[0],[0])
         ax2.plot([0])
         ax2.fill_between([0],[0],[0])
         #
-        ax2.plot(cnt_ranks_no_re, label="w/o RE")
-        ax2.fill_between(range(0,50000), cnt_ranks_no_re_low, cnt_ranks_no_re_high, alpha=.25)
+        ax2.plot(cnt_ranks_no_re_before_sol, label="w/o RE")
+        # ax2.fill_between(range(0,50000), cnt_ranks_no_re, cnt_ranks_no_re_before_sol, alpha=1, color="#d62728")
+        ax2.fill_between(range(0,50000), cnt_ranks_no_re_before_sol_low, cnt_ranks_no_re_before_sol_high, alpha=.25)
 
-        ax1.hlines(consts.TOTAL_BENCHMARKS, 0, 20, linestyles='dotted', label="max #benchmarks", colors="0.8")
-        ax2.hlines(consts.TOTAL_BENCHMARKS, 20, 50000, linestyles='dotted', label="max #benchmarks", colors="0.8")
+        ax1.hlines(consts.TOTAL_BENCHMARKS, 0, 20, linestyles='dashed', label="max #benchmarks", colors="0.8")
+        ax2.hlines(consts.TOTAL_BENCHMARKS, 20, 50000, linestyles='dashed', label="max #benchmarks", colors="0.8")
         ax2.legend(loc="best")
 
         # set border lines
@@ -308,7 +336,7 @@ def plot_solved(experiments, data_dir, repeat_exp=1, output=None):
                 if result is None or result.ranks is None:
                     continue
 
-                m, l, h = compute_confidence_interval(result.syn_time, utils.avg)
+                m, l, h = compute_confidence_interval(result.syn_time, 0.975, utils.avg)
                 times.append((m, l, h))
 
         times_dict[exp] = sorted(times, key=lambda x: x[0])
@@ -319,6 +347,7 @@ def plot_solved(experiments, data_dir, repeat_exp=1, output=None):
     ymax = math.ceil(consts.TOTAL_BENCHMARKS / 2.) * 2 + 1
     ax.set_ylim(0, ymax)
     ax.set_xlim(-4, consts.TIMEOUT)
+    ax.yaxis.set_ticks(list(range(0, ymax, 5)) + [consts.TOTAL_BENCHMARKS])
     ax.yaxis.set_minor_locator(AutoMinorLocator())
     ax.xaxis.set_minor_locator(AutoMinorLocator())
     ax.set_xlabel("Time (s)")
@@ -329,6 +358,7 @@ def plot_solved(experiments, data_dir, repeat_exp=1, output=None):
     label_mapping = {
         "apiphany": "APIphany",
         "apiphany_repeat": "APIphany",
+        "apiphany_full_timeout": "APIphany",
         "apiphany_no_semantic": "APIphany-NoSemantic",
         "apiphany_no_merge": "APIphany-NoMerge",
     }
@@ -339,7 +369,7 @@ def plot_solved(experiments, data_dir, repeat_exp=1, output=None):
         lefts = [x[1] for x in xs] + [consts.TIMEOUT + 10]
         rights = [x[2] for x in xs] + [consts.TIMEOUT + 10]
         ys += ys[-1:]
-        ax.plot(means, ys, label=label, marker=markers[i], markersize=5,)
+        ax.plot(means, ys, label=label, marker=markers[i], markersize=5)
         ax.fill_betweenx(ys, sorted(lefts), sorted(rights), alpha=.25)
 
     ax.axhline(y=consts.TOTAL_BENCHMARKS, linestyle='dashed', label="max #benchmarks", color="0.8")
@@ -347,20 +377,32 @@ def plot_solved(experiments, data_dir, repeat_exp=1, output=None):
     plt.tight_layout()
     plt.savefig(os.path.join(output, "solved.png"))
 
-def print_benchmark_results(results, output=None):
-    res = ("% auto-generated: ./bench.py, table 2\n"
-            "\\resizebox{\\textwidth}{!}{"
-            "\\begin{tabular}{l|lp{7.5cm}|rrrr|rr|rr}\n"
+def print_benchmark_results(suites, results, output=None, small=False):
+    if small:
+        res = ("% auto-generated: ./bench.py, table 2\n"
+            "\\begin{tabular}{c|l|rrrr|r|rrr}\n"
             "\\toprule\n"
-            "& \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{4}{c|}{Solution} & \\multicolumn{2}{c|}{Timing} & \\multicolumn{2}{c}{Rank} \\\\\n"
-            "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9} \\cmidrule(lr){10-11} \n"
-            "API & ID & Description & size & $n_{ep}$ & $n_{p}$ & $n_{g}$ & $t_{Total}$ & $t_{RE}$ & w/o RE & w/ RE \\\\\n"
+            "\\multirow{2}{*}{API} & \\multirow{2}{*}{ID} & \\multicolumn{4}{c|}{Solution Size} & \\multicolumn{1}{c|}{Time} & \\multicolumn{3}{c}{Rank} \\\\\n"
+            "\\cmidrule(lr){3-6} \\cmidrule(lr){8-10} \n"
+            " &  & AST & $n_{f}$ & $n_{p}$ & $n_{g}$ & (sec) & $r_{orig}$ & $r_{RE}$ & $r_{RE}^{TO}$ \\\\\n"
             "\\midrule")
-    res += "\n"
+        res += "\n"
+    else:
+        res = ("% auto-generated: ./bench.py, table 2\n"
+                "\\begin{tabular}{l|lp{6.5cm}|rrrr|rr|rrrr}\n"
+                "\\toprule\n"
+                "\\multirow{2}{*}{API} & \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{4}{c|}{Solution Size} & \\multicolumn{2}{c|}{Timing} & \\multicolumn{4}{c}{Rank} \\\\\n"
+                "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9} \\cmidrule(lr){10-13} \n"
+                " & ID & Description & AST & $n_{f}$ & $n_{p}$ & $n_{g}$ & $t_{Total}$ & $t_{RE}$ & $r_{orig}$ & $r_{RE}$ & $\\#$ cands & $r_{RE}^{TO}$ \\\\\n"
+                "\\midrule")
+        res += "\n"
 
     for i, (api, bench_results) in enumerate(results.items()):
-        res += f"\\multirow{{{len(bench_results)}}}{{*}}{{\\{api}}} "
-        for r in bench_results:
+        res += f"\\multirow{{{len(bench_results)}}}{{*}}{{\\rotatebox{{90}}{{\\{consts.APIS_LATEX[i]}}}}} "
+        suite = suites[i]
+        for j, r in enumerate(bench_results):
+            bench = suite.benchmarks[j]
+
             if r is None:
                 continue
 
@@ -371,51 +413,81 @@ def print_benchmark_results(results, output=None):
             else:
                 median_rank = utils.median(ranks)
             
-            rank_no_re = r.rank_no_re
+            if not r.rank_no_re:
+                rank_no_re = None
+            else:
+                rank_no_re = utils.median(r.rank_no_re)
             # if r.rank_no_re_rng is None:
             #     rank_no_re = None
             # else:
             #     rank_no_re = f"{r.rank_no_re_rng[0]}-{r.rank_no_re_rng[1]}"
             
             if median_rank is not None:
-                if median_rank <= rank_no_re:
-                    median_rank_str = f"\\textbf{{{median_rank}}}"
+                if not small and median_rank <= rank_no_re:
+                    median_rank_str = f"{median_rank}"
                 else:
                     median_rank_str = str(median_rank)
 
-                if rank_no_re <= median_rank:
-                    rank_no_re_str = f"\\textbf{{{rank_no_re}}}"
+                if not small and rank_no_re <= median_rank:
+                    rank_no_re_str = f"{rank_no_re}"
                 else:
                     rank_no_re_str = str(rank_no_re)
             else:
                 median_rank_str = utils.pretty_none(median_rank)
                 rank_no_re_str = utils.pretty_none(rank_no_re)
 
-            res += (
-                f"& {r.name} "
-                f"& {r.desc} "
-                f"& {utils.pretty_none(r.ast_size)} "
-                f"& {utils.pretty_none(r.endpoint_calls)} "
-                f"& {utils.pretty_none(r.projects)} "
-                f"& {utils.pretty_none(r.filters)} "
-                f"& {utils.pretty_none(utils.avg(r.syn_time))} "
-                f"& {utils.pretty_none(utils.avg(r.re_time))} "
-                f"& {rank_no_re_str} "
-                f"& {median_rank_str} ")
+            if r.rank_no_re_before_sol:
+                rank_no_re_before_sol_str = utils.median(r.rank_no_re_before_sol)
+                rank_before_sol_str = utils.median(r.rank_before_sol)
+            else:
+                rank_no_re_before_sol_str = utils.pretty_none(r.rank_no_re_before_sol)
+                rank_before_sol_str = utils.pretty_none(r.rank_before_sol)
+            
+            # print(r.name, r.rank_before_sol, r.ranks)
+
+            dagger = '$^{\\dagger}$'
+            if small:
+                res += (
+                    f"& {r.name}{dagger if bench.is_effectful else ''} "
+                    f"& {utils.pretty_none(r.ast_size)} "
+                    f"& {utils.pretty_none(r.endpoint_calls)} "
+                    f"& {utils.pretty_none(r.projects)} "
+                    f"& {utils.pretty_none(r.filters)} "
+                    f"& {utils.pretty_none(utils.avg(r.syn_time))} "
+                    f"& {rank_no_re_before_sol_str} "
+                    f"& {rank_before_sol_str} "
+                    f"& {median_rank_str} "
+                    )
+            else:
+                res += (
+                    f"& {r.name}{dagger if bench.is_effectful else ''} "
+                    f"& {bench.description} "
+                    f"& {utils.pretty_none(r.ast_size)} "
+                    f"& {utils.pretty_none(r.endpoint_calls)} "
+                    f"& {utils.pretty_none(r.projects)} "
+                    f"& {utils.pretty_none(r.filters)} "
+                    f"& {utils.pretty_none(utils.avg(r.syn_time))} "
+                    f"& {utils.pretty_none(utils.avg(r.re_time))} "
+                    f"& {rank_no_re_before_sol_str}"
+                    f"& {rank_before_sol_str}"
+                    f"& {rank_no_re_str} "
+                    f"& {median_rank_str} ")
+
             res += r" \\"
             res += "\n"
         if i < len(results) - 1:
             res += "\\hline\n"
 
     res += ("\\bottomrule"
-            "\\end{tabular}}")
+            "\\end{tabular}")
 
     # print(res)
 
     if output:
-        with open(os.path.join(output, "results.tex"), "w") as of:
+        filename = "results_short.tex" if small else "results.tex"
+        with open(os.path.join(output, filename), "w") as of:
             of.write(res)
-            print(f"written to {os.path.join(output, 'results.tex')}")
+            print(f"written to {filename}")
 
 def main():
     cmd_parser = build_cmd_parser()
@@ -423,9 +495,15 @@ def main():
 
     plt.rcParams.update({'font.size': 8})
 
+    suites = [
+        slack_suite,
+        stripe_suite,
+        square_suite,
+    ]
+
     if args.print_results:
         results = load_exp_results(args.data_dir, args.print_results, args.repeat_exp)
-        print_benchmark_results(results, args.output)
+        print_benchmark_results(suites, results, args.output, small=args.print_small)
         return
 
     if args.plot_all or args.plot_solved:
@@ -467,14 +545,7 @@ def main():
             with_partials=args.with_partials,
             no_merge=args.no_merge,
         )
-        b = Bencher(
-            args.exp_name,
-            [
-                slack_suite,
-                stripe_suite,
-                square_suite,
-            ],
-            config)
+        b = Bencher(args.exp_name, suites, config)
 
         if args.generate_witness_only:
             rep = 1
@@ -492,7 +563,8 @@ def main():
             output=args.output,
             print_api=args.print_api_info,
             print_results=args.print_results,
-            print_appendix=False,
+            print_appendix=args.print_appendix,
+            print_small=args.print_small,
             plot_ranks=False,
             cached_results=args.cache)
 

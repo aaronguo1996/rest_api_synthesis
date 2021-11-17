@@ -105,9 +105,9 @@ class ILPetriEncoder:
         # at this point, we know the solver has been run. if we can't find a
         if self._model.status == GRB.OPTIMAL:
             s = self._get_sol()
-            self._block.append(self._model.addConstr(
-                gp.quicksum(self._fires.sum(x, '*') for x in s) <= len(s) - 1, 
-                name='block'))
+            # self._block.append(self._model.addConstr(
+            #     gp.quicksum(self._fires.sum(x, i) for i, x in enumerate(s)) <= len(s) - 1, 
+            #     name='block'))
             transitions = [self._trans_names[t] for t in s]
             return transitions
         else:
