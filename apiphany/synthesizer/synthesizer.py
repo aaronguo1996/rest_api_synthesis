@@ -339,8 +339,8 @@ class Synthesizer:
             # "/v2/catalog/search-catalog-items_POST",
             # "projection(SearchCatalogObjectsResponse, objects)_",
             # "filter(CatalogObject, CatalogObject.item_data.tax_ids.[?])_"
-            '/stars.add_POST', '/conversations.list_GET', '/users.profile.get_GET', '/reminders.list_GET', '/users.conversations_GET'
-            # '/v1/balance_GET', '/v1/webhook_endpoints_GET', '/v1/transfers_GET', '/v1/subscription_items_GET', '/v1/tax_rates/{tax_rate}_POST'
+            # '/stars.add_POST', '/conversations.list_GET', '/users.profile.get_GET', '/reminders.list_GET', '/users.conversations_GET'
+            '/v1/balance_GET', '/v1/webhook_endpoints_GET', '/v1/transfers_GET', '/v1/subscription_items_GET', '/v1/tax_rates/{tax_rate}_POST'
             # '/v2/customers/groups_POST', '/v2/orders/{order_id}_GET', '/v2/payments/cancel_POST', '/v2/team-members/search_POST', '/v2/inventory/batch-retrieve-counts_POST'
         ]
 

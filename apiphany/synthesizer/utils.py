@@ -1,8 +1,9 @@
 from collections import defaultdict
 import consts
 from openapi import defs
-from schemas.types import SchemaObject, BaseType
+from schemas.types import SchemaObject, BaseType, ObjectType, UnionType, ArrayType
 import math
+from analyzer.utils import path_to_name
 
 def group_types(types):
     type_dict = defaultdict(int)
@@ -43,6 +44,7 @@ def _create_annot_table(methods, entries, log_analyzer):
     def get_semantic_type(p):
         s = set([str(t.type) for t in log_analyzer.dsu.get_group(p)])
         s.add(str(p.type))
+        print(s)
         return list(s)
 
     def wrap_terms(lst):
@@ -88,20 +90,27 @@ def _create_annot_table(methods, entries, log_analyzer):
 
         def response_semantic_types(self):
             groups = []
-            for entry in self.responses:
-                if type(entry.response.type) == SchemaObject:
-                    group = BaseType.object_lib.get(entry.response.type.name).aliases
-                    if str(entry.response.type) not in group:
-                        group.add(str(entry.response.type))
+            for response in self.responses:
+                if type(response.type) == SchemaObject:
+                    group = BaseType.object_lib.get(response.type.name).aliases
+                    if str(response.type) not in group:
+                        group.add(str(response.type))
                     groups.append(list(group))
                 else:
-                    groups.append(get_semantic_type(entry.response))
+                    # print(self,endpoint, get_semantic_type(response))
+                    groups.append(get_semantic_type(response))
             return groups
 
     endpoint_annots = []
     for endpoint in methods:
         e = entries.get(endpoint)
-        endpoint_annots.append(EndpointAnnot(endpoint, e.parameters, e.response.project_ad_hoc(log_analyzer)))
+        projs = e.response.project_ad_hoc(log_analyzer)
+        projs = [p.response for p in projs if
+                 not isinstance(p.response.type, ObjectType) and
+                 not isinstance(p.response.type, ArrayType) and
+                 not isinstance(p.response.type, UnionType)
+                 ]
+        endpoint_annots.append(EndpointAnnot(endpoint, e.parameters, projs))
 
     annot_table = open("annot_table.tex", "w")
     # We want to only write the api name once and we need to know how many rows it encompasses to write the table
@@ -122,7 +131,7 @@ def _create_annot_table(methods, entries, log_analyzer):
             write_api = False
             write_endpoint = False
             write_parameter = False
-            name = p.arg_name
+            name = path_to_name(p.path)
             expected_type = " " # This is to be filled out manually
             semantic_type = get_semantic_type(p)
             inferred_type = MULTICELL % (wrap_terms(semantic_type))
@@ -143,14 +152,14 @@ def _create_annot_table(methods, entries, log_analyzer):
             row = row.replace('_', '\\_')
             annot_table.write(row)
 
-        for i, (r, g) in enumerate(zip(endpoint_annot.responses, endpoint_annot.response_semantic_types())):
+        for i, (response, g) in enumerate(zip(endpoint_annot.responses, endpoint_annot.response_semantic_types())):
             api_col = MULTIROW % (api_row_num, API) if write_api else " "
             endpoint_col = MULTIROW % (endpoint_row_num, endpoint_annot.endpoint) if write_endpoint else " "
             response_col = MULTIROW % (response_row_num, STR_RESPONSE) if write_response else " "
             write_api = False
             write_endpoint = False
             write_response = False
-            name = r.response.arg_name
+            name = response.arg_name if response.arg_name != "" else "Response"
             expected_type = " " # This is to be filled out manually
             semantic_type = g
             inferred_type = MULTICELL % (wrap_terms(semantic_type))
@@ -169,39 +178,4 @@ def _create_annot_table(methods, entries, log_analyzer):
             row = row.replace('_', '\\_')
             annot_table.write(row)
 
-        # for entry in endpoint_annot.responses:
-            # print('hehe xd')
-            # if type(entry.response.type) == SchemaObject:
-                # print('hoo hoo x doo')
-                # print(BaseType.object_lib.get(entry.response.type.name))
-                # print(BaseType.object_lib.get(entry.response.type.name).aliases)
-                # group = list(BaseType.object_lib.get(entry.response.type.name).aliases)
-                # if len(group) > 0:
-                    # print(type(group[0]))
-            # else:
-                # print(log_analyzer.dsu.get_group(entry.response))
-
-    # print(log_analyzer.type_fields)
-    # for endpoint in methods:
-        # e = entries.get(endpoint)
-        # print('-----')
-        # print(endpoint)
-        # print([p for p in e.parameters])
-        # print([(p.arg_name, p.type, p.is_required, log_analyzer.dsu.get_group(p)) for p in e.parameters])
-        # print("BEBEOSAHFUIOEH", e.response.type)
-        # for entry in e.response.project_ad_hoc(log_analyzer):
-            # print('hehe xd')
-            # if type(entry.response.type) == SchemaObject:
-                # print('hoo hoo x doo')
-                # print(BaseType.object_lib.get(entry.response.type.name))
-                # print(BaseType.object_lib.get(entry.response.type.name).aliases)
-                # group = list(BaseType.object_lib.get(entry.response.type.name).aliases)
-                # if len(group) > 0:
-                    # print(type(group[0]))
-            # else:
-                # print(log_analyzer.dsu.get_group(entry.response))
-            # # print(type(entry.response.type))
-        # # responses = [Parameter(endpoint, field, "", "", required, None, field_type, None) for field, required, field_type in e.response.type.get_flattened_type_list()]
-        # # print("HIHIHI", self.log_analyzer.find_eq_param(responses[0]))
-        # print([(p.arg_name, p.type, p.is_required, self.log_analyzer.dsu.get_group(self.log_analyzer.find_eq_param(p))) for p in responses])
-
+        annot_table.write("\\hline")

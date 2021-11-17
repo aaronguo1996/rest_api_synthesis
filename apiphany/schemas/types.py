@@ -197,6 +197,8 @@ class ObjectType(BaseType):
         self.fields = []
 
     def __str__(self):
+        if self.name is not None:
+            return self.name
         return str(self.object_fields)
 
     @staticmethod

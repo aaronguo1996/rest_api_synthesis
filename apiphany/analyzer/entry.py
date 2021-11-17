@@ -286,8 +286,16 @@ class Parameter:
                 self.path == other.path)
 
     def __str__(self):
-        return self.arg_name + '_' + self.func_name + '_' + \
-            self.method.upper() + '_' + '.'.join(self.path)
+        s = f"{self.func_name}"
+        if self.array_level is None:
+            s += ".in"
+        else:
+            s += ".out"
+
+        s += '.' + '.'.join(['0' if p == defs.INDEX_ANY else p for p in self.path])
+        return s
+        # return self.arg_name + '_' + self.func_name + '_' + \
+            # self.method.upper() + '_' + '.'.join(self.path)
 
     def __repr__(self):
         return self.__str__()
@@ -420,7 +428,7 @@ class TraceEntry:
                 .get(defs.DOC_SCHEMA)
 
         # response_name = make_response_name(endpoint, method)
-        response_typ = types.construct_type(None, response_schema)
+        response_typ = types.construct_type(f"{endpoint}.out", response_schema)
         entry_response = Parameter(
             method, "", endpoint, [], True, 
             int(response_schema.get(defs.DOC_TYPE) == defs.TYPE_ARRAY), 
