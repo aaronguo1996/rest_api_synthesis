@@ -163,10 +163,10 @@ def load_exp_results(data_dir, exp_name, repeat_exp=3):
             ranks = [rep.ranks[0] for rep in reps if rep.ranks is not None]
             entry.ranks = ranks if ranks else None
             entry.rank_no_re = [rep.rank_no_re for rep in reps if rep.rank_no_re is not None]
-            rank_before_sol = [rep.rank_before_sol for rep in reps if rep.rank_before_sol is not None]
-            entry.rank_before_sol = rank_before_sol if rank_before_sol else None
-            rank_no_re_before_sol = [rep.rank_no_re_before_sol for rep in reps if rep.rank_no_re_before_sol is not None]
-            entry.rank_no_re_before_sol = rank_no_re_before_sol if rank_no_re_before_sol else None
+            # rank_before_sol = [rep.rank_before_sol for rep in reps if rep.rank_before_sol is not None]
+            # entry.rank_before_sol = rank_before_sol if rank_before_sol else None
+            # rank_no_re_before_sol = [rep.rank_no_re_before_sol for rep in reps if rep.rank_no_re_before_sol is not None]
+            # entry.rank_no_re_before_sol = rank_no_re_before_sol if rank_no_re_before_sol else None
             entries.append(entry)
 
         all_entries[api] = entries
@@ -243,9 +243,9 @@ def plot_ranks(experiments, data_dir, repeat_exp=1, output=None):
         # no_re_xs = [0] + sorted([x[0] for x in ranks_no_re]) + [50001]
         # no_re_high = [0] + sorted([x[1] for x in ranks_no_re])+ [50001]
         # no_re_low = [0] + sorted([x[2] for x in ranks_no_re])+ [50001]
-        ax1.set_xlim(0, 15)
+        ax1.set_xlim(0, 10)
         ax2.set_xscale('log')
-        ax2.set_xlim(15, 50000)
+        ax2.set_xlim(11, 50000)
         ax1.set_ylim(0, ymax)
         ax1.set_xlabel("Rank", loc="right")
         ax1.set_ylabel("# benchmarks")
@@ -254,7 +254,7 @@ def plot_ranks(experiments, data_dir, repeat_exp=1, output=None):
         # ax2.yaxis.set_minor_locator(AutoMinorLocator())
         # ax2.xaxis.set_minor_locator(AutoMinorLocator())
         ax1.yaxis.set_ticks(list(range(0,ymax+1,5)) + [consts.TOTAL_BENCHMARKS])
-        ax1.xaxis.set_ticks([0,5,10,15])
+        ax1.xaxis.set_ticks([0,5,10])
         # ax1.plot(re_xs, ys, label="w/ RE")
         # ax1.fill_betweenx(ys, re_low, re_high, alpha=.25)
         # ax1.plot(no_re_xs, ys, label="w/o RE")
@@ -295,8 +295,8 @@ def plot_ranks(experiments, data_dir, repeat_exp=1, output=None):
         # ax2.fill_between(range(0,50000), cnt_ranks_no_re, cnt_ranks_no_re_before_sol, alpha=1, color="#d62728")
         ax2.fill_between(range(0,50000), cnt_ranks_no_re_before_sol_low, cnt_ranks_no_re_before_sol_high, alpha=.25)
 
-        ax1.hlines(consts.TOTAL_BENCHMARKS, 0, 20, linestyles='dashed', label="max #benchmarks", colors="0.8")
-        ax2.hlines(consts.TOTAL_BENCHMARKS, 20, 50000, linestyles='dashed', label="max #benchmarks", colors="0.8")
+        ax1.hlines(consts.TOTAL_BENCHMARKS, 0, 10, linestyles='dashed', label="max #benchmarks", colors="0.8")
+        ax2.hlines(consts.TOTAL_BENCHMARKS, 10, 50000, linestyles='dashed', label="max #benchmarks", colors="0.8")
         ax2.legend(loc="best")
 
         # set border lines
@@ -359,8 +359,8 @@ def plot_solved(experiments, data_dir, repeat_exp=1, output=None):
         "apiphany": "APIphany",
         "apiphany_repeat": "APIphany",
         "apiphany_full_timeout": "APIphany",
-        "apiphany_no_semantic": "APIphany-NoSemantic",
-        "apiphany_no_merge": "APIphany-NoMerge",
+        "apiphany_no_semantic": "APIphany-Syn",
+        "apiphany_no_merge": "APIphany-Loc",
     }
     for i, (exp, xs) in enumerate(times_dict.items()):
         ys = list(range(1, len(xs)+1))
@@ -384,7 +384,7 @@ def print_benchmark_results(suites, results, output=None, small=False):
             "\\toprule\n"
             "\\multirow{2}{*}{API} & \\multirow{2}{*}{ID} & \\multicolumn{4}{c|}{Solution Size} & \\multicolumn{1}{c|}{Time} & \\multicolumn{3}{c}{Rank} \\\\\n"
             "\\cmidrule(lr){3-6} \\cmidrule(lr){8-10} \n"
-            " &  & AST & $n_{f}$ & $n_{p}$ & $n_{g}$ & (sec) & $r_{orig}$ & $r_{RE}$ & $r_{RE}^{TO}$ \\\\\n"
+            " &  & AST & $n_{f}$ & $n_{p}$ & $n_{g}$ & (sec) & \\rorig & \\rre & \\rreto \\\\\n"
             "\\midrule")
         res += "\n"
     else:
@@ -393,7 +393,7 @@ def print_benchmark_results(suites, results, output=None, small=False):
                 "\\toprule\n"
                 "\\multirow{2}{*}{API} & \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{4}{c|}{Solution Size} & \\multicolumn{2}{c|}{Timing} & \\multicolumn{4}{c}{Rank} \\\\\n"
                 "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9} \\cmidrule(lr){10-13} \n"
-                " & ID & Description & AST & $n_{f}$ & $n_{p}$ & $n_{g}$ & $t_{Total}$ & $t_{RE}$ & $r_{orig}$ & $r_{RE}$ & $\\#$ cands & $r_{RE}^{TO}$ \\\\\n"
+                " & ID & Description & AST & $n_{f}$ & $n_{p}$ & $n_{g}$ & $t_{\mathit{Total}}$ & $t_{\mathit{RE}}$ & \\rorig & \\rre & $\\#$ cands & \\rreto \\\\\n"
                 "\\midrule")
         res += "\n"
 

@@ -58,8 +58,8 @@ def get_results(synthesizer, analyzer, encoder,
             #     flush=True)
             path = encoder.solve()
             while path is not None:
-                # if path_len == 5:
-                print("Found a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
+                # if path_len == 9:
+                #     print("Found a path", path,"in", time.time() - start, "seconds at path length", path_len, flush=True)
                 end = time.time()
                 # print(path)
                 path_count += 1
@@ -69,7 +69,7 @@ def get_results(synthesizer, analyzer, encoder,
 
                 for p in set(programs):
                     if p not in solution_set:
-                        # if path_len == 5:
+                        # if path_len == 9:
                         #     print(p)
                         solution_set.add(p)
                         re_start = time.time()

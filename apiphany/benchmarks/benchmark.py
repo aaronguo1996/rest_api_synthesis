@@ -460,17 +460,17 @@ class BenchmarkSuite:
             print("places", places)
             print("transitions", transitions)
             # update the solution sizes
-            for i, e in enumerate(latex_entries):
-                e.ast_size = len(self.benchmarks[i].solutions[0].collect_exprs())
-                # print(self.benchmarks[i].solutions[0])
-                # print(e.ast_size)
+            # for i, e in enumerate(latex_entries):
+            #     e.ast_size = len(self.benchmarks[i].solutions[0].collect_exprs())
+            #     # print(self.benchmarks[i].solutions[0])
+            #     # print(e.ast_size)
 
-            with open(cache_path, "wb") as f:
-                pickle.dump({
-                    "places": places,
-                    "transitions": transitions,
-                    "results": latex_entries,
-                }, f)
+            # with open(cache_path, "wb") as f:
+            #     pickle.dump({
+            #         "places": places,
+            #         "transitions": transitions,
+            #         "results": latex_entries,
+            #     }, f)
         else:
             places = None
             transitions = None

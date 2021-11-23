@@ -313,7 +313,7 @@ class Synthesizer:
             # "projection(objs_conversation, last_read)_",
             # "projection(objs_conversation, id)_",
             # "projection(objs_comment, pinned_info)_",
-            # "projection(objs_user_profile, fields)_",
+            # "projection(objs_user_profile, email)_",
             # "filter(objs_message, objs_message.comment.pinned_info)_",
             # "projection({'members': [defs_bot_id], 'ok': defs_ok_true, 'response_metadata': {'next_cursor': next_cursor_/conversations.members_GET_response_metadata.next_cursor}}, members)_"
             # "projection(objs_conversation, version)_",

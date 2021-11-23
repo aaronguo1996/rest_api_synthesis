@@ -36,6 +36,8 @@ def update_type(skip_fields, entries, endpoints):
 
             param.type = match_param.type
 
+        e.response.type = entry_def.response.type
+
 def get_initial_witnesses(configuration, exp_dir, base_path, endpoints):
     trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
     skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
