@@ -9,3 +9,4 @@ xeger
 gurobipy
 matplotlib
 psutil
+scipy
