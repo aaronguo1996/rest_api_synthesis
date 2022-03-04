@@ -44,7 +44,7 @@ def build_cmd_parser():
     parser = argparse.ArgumentParser()
     
     # general commands
-    parser.add_argument("output", nargs='?',
+    parser.add_argument("output", nargs='?', default=".",
         help="Path to output latex table to")
     parser.add_argument("--data-dir", required=True,
         help="Path to data directory")
@@ -108,6 +108,8 @@ def build_cmd_parser():
         help="Whether to print small tables")
     parser.add_argument("--print-appendix", action="store_true",
         help="Whether to print appendix")
+    parser.add_argument("--print-csv", action="store_true",
+        help="Whether to print tables into csv files. Default is tex.")
     parser.add_argument("--plot-all", nargs='+',
         help="Whether to plot all available charts for given experiments")
     parser.add_argument("--plot-solved", nargs='*',
@@ -163,10 +165,10 @@ def load_exp_results(data_dir, exp_name, repeat_exp=3):
             ranks = [rep.ranks[0] for rep in reps if rep.ranks is not None]
             entry.ranks = ranks if ranks else None
             entry.rank_no_re = [rep.rank_no_re for rep in reps if rep.rank_no_re is not None]
-            # rank_before_sol = [rep.rank_before_sol for rep in reps if rep.rank_before_sol is not None]
-            # entry.rank_before_sol = rank_before_sol if rank_before_sol else None
-            # rank_no_re_before_sol = [rep.rank_no_re_before_sol for rep in reps if rep.rank_no_re_before_sol is not None]
-            # entry.rank_no_re_before_sol = rank_no_re_before_sol if rank_no_re_before_sol else None
+            rank_before_sol = [rep.rank_before_sol for rep in reps if rep.rank_before_sol is not None]
+            entry.rank_before_sol = rank_before_sol if rank_before_sol else None
+            rank_no_re_before_sol = [rep.rank_no_re_before_sol for rep in reps if rep.rank_no_re_before_sol is not None]
+            entry.rank_no_re_before_sol = rank_no_re_before_sol if rank_no_re_before_sol else None
             entries.append(entry)
 
         all_entries[api] = entries
@@ -377,28 +379,38 @@ def plot_solved(experiments, data_dir, repeat_exp=1, output=None):
     plt.tight_layout()
     plt.savefig(os.path.join(output, "solved.png"))
 
-def print_benchmark_results(suites, results, output=None, small=False):
+def print_benchmark_results(suites, results, output=None, small=False, csv=False):
     if small:
-        res = ("% auto-generated: ./bench.py, table 2\n"
-            "\\begin{tabular}{c|l|rrrr|r|rrr}\n"
-            "\\toprule\n"
-            "\\multirow{2}{*}{API} & \\multirow{2}{*}{ID} & \\multicolumn{4}{c|}{Solution Size} & \\multicolumn{1}{c|}{Time} & \\multicolumn{3}{c}{Rank} \\\\\n"
-            "\\cmidrule(lr){3-6} \\cmidrule(lr){8-10} \n"
-            " &  & AST & $n_{f}$ & $n_{p}$ & $n_{g}$ & (sec) & \\rorig & \\rre & \\rreto \\\\\n"
-            "\\midrule")
+        if csv:
+            res = "API,ID,AST,n_f,n_p,n_g,Time,r_orig,r_RE,r_RE^TO"
+        else:
+            res = ("% auto-generated: ./bench.py, table 2\n"
+                "\\begin{tabular}{c|l|rrrr|r|rrr}\n"
+                "\\toprule\n"
+                "\\multirow{2}{*}{API} & \\multirow{2}{*}{ID} & \\multicolumn{4}{c|}{Solution Size} & \\multicolumn{1}{c|}{Time} & \\multicolumn{3}{c}{Rank} \\\\\n"
+                "\\cmidrule(lr){3-6} \\cmidrule(lr){8-10} \n"
+                " &  & AST & $n_{f}$ & $n_{p}$ & $n_{g}$ & (sec) & \\rorig & \\rre & \\rreto \\\\\n"
+                "\\midrule")
         res += "\n"
     else:
-        res = ("% auto-generated: ./bench.py, table 2\n"
-                "\\begin{tabular}{l|lp{6.5cm}|rrrr|rr|rrrr}\n"
-                "\\toprule\n"
-                "\\multirow{2}{*}{API} & \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{4}{c|}{Solution Size} & \\multicolumn{2}{c|}{Timing} & \\multicolumn{4}{c}{Rank} \\\\\n"
-                "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9} \\cmidrule(lr){10-13} \n"
-                " & ID & Description & AST & $n_{f}$ & $n_{p}$ & $n_{g}$ & $t_{\mathit{Total}}$ & $t_{\mathit{RE}}$ & \\rorig & \\rre & $\\#$ cands & \\rreto \\\\\n"
-                "\\midrule")
+        if csv:
+            res = "API,ID,Description,AST,n_f,n_p,n_g,t_Total,t_RE,r_orig,r_RE,# cands,r_RE^TO"
+        else:
+            res = ("% auto-generated: ./bench.py, table 2\n"
+                    "\\begin{tabular}{l|lp{6.5cm}|rrrr|rr|rrrr}\n"
+                    "\\toprule\n"
+                    "\\multirow{2}{*}{API} & \\multicolumn{2}{c|}{Benchmark} & \\multicolumn{4}{c|}{Solution Size} & \\multicolumn{2}{c|}{Timing} & \\multicolumn{4}{c}{Rank} \\\\\n"
+                    "\\cmidrule(lr){2-3} \\cmidrule(lr){4-7} \\cmidrule(lr){8-9} \\cmidrule(lr){10-13} \n"
+                    " & ID & Description & AST & $n_{f}$ & $n_{p}$ & $n_{g}$ & $t_{\mathit{Total}}$ & $t_{\mathit{RE}}$ & \\rorig & \\rre & $\\#$ cands & \\rreto \\\\\n"
+                    "\\midrule")
         res += "\n"
 
     for i, (api, bench_results) in enumerate(results.items()):
-        res += f"\\multirow{{{len(bench_results)}}}{{*}}{{\\rotatebox{{90}}{{\\{consts.APIS_LATEX[i]}}}}} "
+        if csv:
+            res += consts.APIS_LATEX[i]
+        else:
+            res += f"\\multirow{{{len(bench_results)}}}{{*}}{{\\rotatebox{{90}}{{\\{consts.APIS_LATEX[i]}}}}} "
+        
         suite = suites[i]
         for j, r in enumerate(bench_results):
             bench = suite.benchmarks[j]
@@ -437,54 +449,68 @@ def print_benchmark_results(suites, results, output=None, small=False):
                 rank_no_re_str = utils.pretty_none(rank_no_re)
 
             if r.rank_no_re_before_sol:
-                rank_no_re_before_sol_str = utils.median(r.rank_no_re_before_sol)
-                rank_before_sol_str = utils.median(r.rank_before_sol)
+                rank_no_re_before_sol = r.rank_no_re_before_sol if isinstance(r.rank_no_re_before_sol, list) else [r.rank_no_re_before_sol]
+                rank_before_sol = r.rank_before_sol if isinstance(r.rank_before_sol, list) else [r.rank_before_sol]
+                rank_no_re_before_sol_str = utils.median(rank_no_re_before_sol)
+                rank_before_sol_str = utils.median(rank_before_sol)
             else:
                 rank_no_re_before_sol_str = utils.pretty_none(r.rank_no_re_before_sol)
                 rank_before_sol_str = utils.pretty_none(r.rank_before_sol)
             
             # print(r.name, r.rank_before_sol, r.ranks)
 
-            dagger = '$^{\\dagger}$'
+            
+            if csv:
+                delim = ','
+                dagger = '*'
+            else:
+                delim = '&'
+                dagger = '$^{\\dagger}$'
+
             if small:
                 res += (
-                    f"& {r.name}{dagger if bench.is_effectful else ''} "
-                    f"& {utils.pretty_none(r.ast_size)} "
-                    f"& {utils.pretty_none(r.endpoint_calls)} "
-                    f"& {utils.pretty_none(r.projects)} "
-                    f"& {utils.pretty_none(r.filters)} "
-                    f"& {utils.pretty_none(utils.avg(r.syn_time))} "
-                    f"& {rank_no_re_before_sol_str} "
-                    f"& {rank_before_sol_str} "
-                    f"& {median_rank_str} "
+                    f"{delim} {r.name}{dagger if bench.is_effectful else ''} "
+                    f"{delim} {utils.pretty_none(r.ast_size)} "
+                    f"{delim} {utils.pretty_none(r.endpoint_calls)} "
+                    f"{delim} {utils.pretty_none(r.projects)} "
+                    f"{delim} {utils.pretty_none(r.filters)} "
+                    f"{delim} {utils.pretty_none(utils.avg(r.syn_time))} "
+                    f"{delim} {rank_no_re_before_sol_str} "
+                    f"{delim} {rank_before_sol_str} "
+                    f"{delim} {median_rank_str} "
                     )
             else:
                 res += (
-                    f"& {r.name}{dagger if bench.is_effectful else ''} "
-                    f"& {bench.description} "
-                    f"& {utils.pretty_none(r.ast_size)} "
-                    f"& {utils.pretty_none(r.endpoint_calls)} "
-                    f"& {utils.pretty_none(r.projects)} "
-                    f"& {utils.pretty_none(r.filters)} "
-                    f"& {utils.pretty_none(utils.avg(r.syn_time))} "
-                    f"& {utils.pretty_none(utils.avg(r.re_time))} "
-                    f"& {rank_no_re_before_sol_str}"
-                    f"& {rank_before_sol_str}"
-                    f"& {rank_no_re_str} "
-                    f"& {median_rank_str} ")
-
-            res += r" \\"
+                    f"{delim} {r.name}{dagger if bench.is_effectful else ''} "
+                    f"{delim} {bench.description} "
+                    f"{delim} {utils.pretty_none(r.ast_size)} "
+                    f"{delim} {utils.pretty_none(r.endpoint_calls)} "
+                    f"{delim} {utils.pretty_none(r.projects)} "
+                    f"{delim} {utils.pretty_none(r.filters)} "
+                    f"{delim} {utils.pretty_none(utils.avg(r.syn_time))} "
+                    f"{delim} {utils.pretty_none(utils.avg(r.re_time))} "
+                    f"{delim} {rank_no_re_before_sol_str}"
+                    f"{delim} {rank_before_sol_str}"
+                    f"{delim} {rank_no_re_str} "
+                    f"{delim} {median_rank_str} ")
+            if not csv:
+                res += r" \\"
             res += "\n"
-        if i < len(results) - 1:
+        if not csv and i < len(results) - 1:
             res += "\\hline\n"
 
-    res += ("\\bottomrule"
-            "\\end{tabular}")
+    if not csv:
+        res += ("\\bottomrule"
+                "\\end{tabular}")
 
     # print(res)
 
     if output:
-        filename = "results_short.tex" if small else "results.tex"
+        if csv:
+            filename = "results_short.csv" if small else "results.csv"
+        else:
+            filename = "results_short.tex" if small else "results.tex"
+        
         with open(os.path.join(output, filename), "w") as of:
             of.write(res)
             print(f"written to {filename}")
@@ -503,7 +529,7 @@ def main():
 
     if args.print_results:
         results = load_exp_results(args.data_dir, args.print_results, args.repeat_exp)
-        print_benchmark_results(suites, results, args.output, small=args.print_small)
+        print_benchmark_results(suites, results, args.output, small=args.print_small, csv=args.print_csv)
         return
 
     if args.plot_all or args.plot_solved:
@@ -565,6 +591,7 @@ def main():
             print_results=args.print_results,
             print_appendix=args.print_appendix,
             print_small=args.print_small,
+            print_csv=args.print_csv,
             plot_ranks=False,
             cached_results=args.cache)
 

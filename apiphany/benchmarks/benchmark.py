@@ -100,7 +100,7 @@ class Benchmark:
         if cached and not runtime_config.cache:
             shutil.rmtree(bm_dir)
 
-        os.makedirs(bm_dir, exist_ok=True)
+            os.makedirs(bm_dir, exist_ok=True)
 
         if not cached or not runtime_config.cache:
             synthesizer = Synthesizer(configuration, entries, bm_dir)
@@ -235,7 +235,7 @@ class BenchmarkSuite:
 
         self._suite_dir = utils.prep_exp_dir(data_dir, exp_dir, self._configuration)
         # create subdirs for different runs
-        if not runtime_config.witness_only:
+        if not runtime_config.witness_only and not runtime_config.cache:
             oldest_dir = None
             oldest_ts = None
             for i in range(runtime_config.repeat_exp):
@@ -252,6 +252,8 @@ class BenchmarkSuite:
 
             if oldest_dir is not None:
                 self._iter_dir = oldest_dir
+        else:
+            self._iter_dir = os.path.join(self._suite_dir, "iter_0")
 
         self._witnesses = utils.parse_entries(
             self._configuration, 
@@ -524,6 +526,7 @@ class Bencher:
         print_results=False, 
         print_appendix=False, 
         print_small=False,
+        print_csv=False,
         plot_ranks=False, 
         output=None):
         place_counts = []
@@ -569,7 +572,7 @@ class Bencher:
         self._config.generate_witness = abs(self._config.method_coverage - 1.0) > 1e-6
 
         if print_api:
-            self.print_api_info(place_counts, trans_counts, print_small, output)
+            self.print_api_info(place_counts, trans_counts, print_small, print_csv, output)
 
         if print_results:
             self.print_benchmark_results(benchmark_results, output)
@@ -577,23 +580,29 @@ class Bencher:
         if plot_ranks:
             self.plot_ranks(benchmark_results, output)
 
-    def print_api_info(self, places, transitions, small=False, output=None):
+    def print_api_info(self, places, transitions, small=False, csv=False, output=None):
         if small:
-            res = (
-            "\\small\\begin{tabular}{l|rrrr|rr}\n"
-            "\\toprule\n"
-            "& \\multicolumn{4}{c|}{API size} & \\multicolumn{2}{c}{API Analysis} \\\\\n"
-            "\\cmidrule(lr){2-5} \\cmidrule(lr){6-7} \n"
-            "API & $|\\Lambda.f|$ & $n_{args}$ & $|\\Lambda.o|$ & $s_{objs}$ & $|\\witnesses|$ & $n_{cov}$ \\\\\n"
-            "\\midrule\n")
-        else:
-            res = (
-                "\\small\\begin{tabular}{l|rrrr|rr|rr}\n"
+            if csv:
+                res = "API , /\.f , n_args, |/\.o|, s_objs, |W|, n_cov\n"
+            else:
+                res = (
+                "\\small\\begin{tabular}{l|rrrr|rr}\n"
                 "\\toprule\n"
-                "& \\multicolumn{4}{c|}{API size} & \\multicolumn{2}{c|}{API Analysis} & \\multicolumn{2}{c}{TTN size} \\\\\n"
-                "\\cmidrule(lr){2-5} \\cmidrule(lr){6-7} \\cmidrule(lr){8-9}\n"
-                "API & $|\\Lambda.f|$ & $n_{args}$ & $|\\Lambda.o|$ & $s_{objs}$ & $|\\witnesses|$ & $n_{cov}$ & $|P|$ & $|T|$ \\\\\n"
+                "& \\multicolumn{4}{c|}{API size} & \\multicolumn{2}{c}{API Analysis} \\\\\n"
+                "\\cmidrule(lr){2-5} \\cmidrule(lr){6-7} \n"
+                "API & $|\\Lambda.f|$ & $n_{args}$ & $|\\Lambda.o|$ & $s_{objs}$ & $|\\witnesses|$ & $n_{cov}$ \\\\\n"
                 "\\midrule\n")
+        else:
+            if csv:
+                res = "API , /\.f , n_args, |/\.o|, s_objs, |W|, n_cov, |P|, |T|\n"
+            else:
+                res = (
+                    "\\small\\begin{tabular}{l|rrrr|rr|rr}\n"
+                    "\\toprule\n"
+                    "& \\multicolumn{4}{c|}{API size} & \\multicolumn{2}{c|}{API Analysis} & \\multicolumn{2}{c}{TTN size} \\\\\n"
+                    "\\cmidrule(lr){2-5} \\cmidrule(lr){6-7} \\cmidrule(lr){8-9}\n"
+                    "API & $|\\Lambda.f|$ & $n_{args}$ & $|\\Lambda.o|$ & $s_{objs}$ & $|\\witnesses|$ & $n_{cov}$ & $|P|$ & $|T|$ \\\\\n"
+                    "\\midrule\n")
         res += "\n"
 
         for i, suite in enumerate(self._suites):
@@ -601,31 +610,44 @@ class Bencher:
                 api_info = suite.get_info()
                 # avg_num_args = round(api_info.avg_num_args, 2)
                 # obj_size = round(api_info.obj_size, 2)
+                if csv:
+                    delim = ','
+                else:
+                    delim = '&'
+
                 res += (f"  \\{api_info.api_name} "
-                    f"& {api_info.ep_num} "
-                    f"& {min(api_info.num_args)} - {max(api_info.num_args)} "
-                    f"& {api_info.obj_num} "
-                    f"& {min(api_info.obj_sizes)} - {max(api_info.obj_sizes)} "
-                    f"& {api_info.gen_w} "
-                    f"& {api_info.ep_covered} ")
+                    f"{delim} {api_info.ep_num} "
+                    f"{delim} {min(api_info.num_args)} - {max(api_info.num_args)} "
+                    f"{delim} {api_info.obj_num} "
+                    f"{delim} {min(api_info.obj_sizes)} - {max(api_info.obj_sizes)} "
+                    f"{delim} {api_info.gen_w} "
+                    f"{delim} {api_info.ep_covered} ")
                 
                 if not small:
                     res += (
-                        f"& {places[i]} "
-                        f"& {transitions[i]}")
+                        f"{delim} {places[i]} "
+                        f"{delim} {transitions[i]}")
                 
-                res += r" \\"
-                res += "\n"
+                if csv:
+                    res += "\n"
+                else:
+                    res += r" \\"
+                    res += "\n"
 
-        res += ("\\bottomrule"
-                "\\end{tabular}")
+        if not csv:
+            res += ("\\bottomrule"
+                    "\\end{tabular}")
 
         # print(res)
 
         if output:
-            with open(os.path.join(output, "api_info.tex"), "w") as of:
+            if csv:
+                filename = os.path.join(output, "api_info.csv")
+            else:
+                filename = os.path.join(output, "api_info.tex")
+            with open(filename, "w") as of:
                 of.write(res)
-                print(f"written to {os.path.join(output, 'api_info.tex')}")
+                print(f"written to {filename}")
 
     def print_appendix(self, output=None):
         res = ("% auto-generated: ./bench.py, type queries and solutions\n"

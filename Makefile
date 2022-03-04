@@ -14,7 +14,7 @@ BENCH_EXE=python $(BENCH_SRC)
 # reps
 REPEAT_EXP=1
 # experiments
-EXPS=apiphany_repeat apiphany_no_semantic apiphany_no_merge
+EXPS=apiphany_artifact apiphany_no_semantic apiphany_no_merge
 # optional args
 ARGS=
 # params
@@ -23,6 +23,9 @@ uncovered_syntactic=default-to-syntactic
 coverage_onethird=0.33
 coverage_twothirds=0.67
 coverage_full=1.0
+# ablations
+ablation_syntactic="--syntactic-only"
+ablation_location="--no-merge"
 word-dash=$(word $2,$(subst -, ,$1))
 
 build:
@@ -56,6 +59,20 @@ run-full-exclude run-full-syntactic run-onethird-exclude run-onethird-syntactic 
 		((rep = rep + 1)) ; \
 	done
 
+kick-the-tires:
+	for suite in "slack" "stripe" "squareapi" ; do \
+		cd apiphany && $(BENCH_EXE) . --data-dir ../experiment_data \
+			--exp-name $(EXP_NAME) \
+			--method-coverage 1.0 \
+			--uncovered exclude \
+			--repeat-exp 1 \
+			--suites $$suite \
+			--benchmarks "1.5" "2.1" "3.1" \
+			--with-partials \
+			$(ARGS) ; \
+		cd .. ; \
+	done
+
 plot-all: plot-ranks plot-solved
 
 plot-solved:
@@ -67,7 +84,7 @@ plot-solved:
 plot-ranks:
 	cd apiphany && $(BENCH_EXE) . --data-dir ../experiment_data \
 		--exp-name $(EXP_NAME) \
-		--$@ apiphany_repeat \
+		--$@ $(EXP_NAME) \
 		--repeat-exp $(REPEAT_EXP)
 
 clean:
