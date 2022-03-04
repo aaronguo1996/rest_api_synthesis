@@ -100,6 +100,7 @@ class Benchmark:
         if cached and not runtime_config.cache:
             shutil.rmtree(bm_dir)
 
+        if not runtime_config.cache:
             os.makedirs(bm_dir, exist_ok=True)
 
         if not cached or not runtime_config.cache:
