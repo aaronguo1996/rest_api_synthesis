@@ -485,7 +485,7 @@ def print_benchmark_results(suites, results, output=None, small=False, csv=False
             else:
                 res += (
                     f"{delim} {r.name}{dagger if bench.is_effectful else ''} "
-                    f"{delim} {bench.description} "
+                    f"{delim} {bench.description if not csv else bench.description.replace(',', ' ')} "
                     f"{delim} {utils.pretty_none(r.ast_size)} "
                     f"{delim} {utils.pretty_none(r.endpoint_calls)} "
                     f"{delim} {utils.pretty_none(r.projects)} "
