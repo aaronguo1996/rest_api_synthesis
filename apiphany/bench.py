@@ -361,8 +361,11 @@ def plot_solved(experiments, data_dir, repeat_exp=1, output=None):
         "apiphany": "APIphany",
         "apiphany_repeat": "APIphany",
         "apiphany_full_timeout": "APIphany",
+        "apiphany_artifact": "APIphany",
         "apiphany_no_semantic": "APIphany-Syn",
+        "apiphany_syntactic": "APIphany-Syn",
         "apiphany_no_merge": "APIphany-Loc",
+        "apiphany_location": "APIphany-Loc",
     }
     for i, (exp, xs) in enumerate(times_dict.items()):
         ys = list(range(1, len(xs)+1))
