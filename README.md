@@ -7,9 +7,11 @@
 3. Run the virtual machine image inside VMware workstation player. The username is `apiphany` and the password is `apiphany!artifact`.
 
 ## Getting Started
-First, please go to https://www.gurobi.com/downloads/end-user-license-agreement-academic/.
+First, please go to https://www.gurobi.com/downloads/end-user-license-agreement-academic/
 and apply for a new academic license.
 Once you get the new license, run `grbgetkey <your license key>`.
+
+Now please proceed to kick-the-tires stage.
 
 ```bash
 cd ~/rest_api_synthesis
