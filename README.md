@@ -25,7 +25,7 @@ It takes about 20min to finish this small benchmark suite.
 Then, you inspect the results by running
 
 ```bash
-python apiphany/bench.py --data-dir experiment_data --print-results apiphany_artifact --output . --print-csv
+python apiphany/bench.py . --data-dir experiment_data --print-results apiphany_artifact --print-csv
 csvlook results.csv -I
 ```
 The expected results look like
