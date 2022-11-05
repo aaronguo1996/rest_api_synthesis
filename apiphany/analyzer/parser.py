@@ -20,8 +20,8 @@ def match_with_path(path, request_obj, url):
             param = p[1:-1]
             if param not in request_obj:
                 path_params.append({
-                    "name": param,
-                    "value": u,
+                    har_consts.HAR_NAME: param,
+                    har_consts.HAR_VALUE: u,
                 })
             else:
                 return None
@@ -89,7 +89,6 @@ class LogParser:
             request_obj = add_as_object(
                 request_obj, param_path, val
             )
-            # print(endpoint, "get param object", request_obj)
 
         entry_def = None
         for path, path_def in endpoints.items():
@@ -99,7 +98,11 @@ class LogParser:
                 if path_params is not None:
                     endpoint = path
                     entry_def = path_def.get(method)
-                    request_obj.update(path_params)
+                    for p in path_params:
+                        name = p[har_consts.HAR_NAME]
+                        val = p[har_consts.HAR_VALUE]
+                        request_obj = add_as_object(request_obj, [name], val)
+
                     break
 
         if entry_def is None:

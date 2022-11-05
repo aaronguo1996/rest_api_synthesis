@@ -17,6 +17,9 @@ class Expression:
     def __repr__(self):
         return self.__str__()
 
+    def __hash__(self):
+        return hash(self.__str__())
+
     def apply_subst(self):
         raise NotImplementedError
 
@@ -32,6 +35,9 @@ class Expression:
     def collect_exprs(self):
         raise NotImplementedError
 
+    def has_conversion(self):
+        return False
+
 class AppExpr(Expression):
     def __init__(self, fun, args, typ=None, sig=None):
         super().__init__(typ, sig)
@@ -40,17 +46,33 @@ class AppExpr(Expression):
 
     def __str__(self):
         arg_strs = [f"{x}={arg}" for x, arg in self._args]
-        return f"{self._fun}({', '.join(arg_strs)})"
+        return f"{self._fun.replace('.', '_')}({', '.join(arg_strs)})"
 
     def __eq__(self, other):
         if not isinstance(other, AppExpr):
             return NotImplemented
 
-        return (
-            self._fun == other._fun and
-            self._args == other._args
-        )
+        if self._fun != other._fun:
+            return False
 
+        args_dict = dict(self._args)
+        other_args_dict = dict(other._args)
+        for arg in args_dict:
+            if arg not in other_args_dict:
+                return False
+
+            if args_dict[arg] != other_args_dict[arg]:
+                return False
+
+        for arg in other_args_dict:
+            if arg not in args_dict:
+                return False
+
+        return True
+
+    def __hash__(self):
+        return hash(self.__str__())
+        
     @property
     def function(self):
         return self._fun
@@ -67,7 +89,7 @@ class AppExpr(Expression):
 
     def apply_subst(self, subst):
         args = [(x, arg.apply_subst(subst)) for x, arg in self._args]
-        return AppExpr(self._fun, args, self.type)
+        return AppExpr(self._fun, args, self.type, self.signature)
 
     def collect_exprs(self):
         res = [self]
@@ -171,7 +193,7 @@ class AppExpr(Expression):
                 args.append((name, arg_expr))
                 exprs.extend(arg_exprs)
 
-            app_expr = AppExpr(self._fun, args, self.type)
+            app_expr = AppExpr(self._fun, args, self.type, self.signature)
 
             let_x = counter.get("x", 0)
             counter["x"] += 1
@@ -188,21 +210,23 @@ class AppExpr(Expression):
 
         return exprs, let_var
 
-    def lift(self, counter, signatures):
+    def lookup_param(self, name):
+        path = name_to_path(name)
+        params = self.signature.parameters
+        for param in params:
+            if param.path == path:
+                return param
+
+    def lift(self, cache, counter, signatures):
         sig = self.signature
-        sig_params = sig.parameters
         
         arguments = []
         exprs = []
         for name, arg in self._args:
-            path = name_to_path(name)
-            for param in sig_params:
-                if path == param.path:
-                    break
-
-            arg_binds, x = insert_binds(counter, arg, param.type)
+            param = self.lookup_param(name)
+            arg_binds, x, xt = insert_binds(cache, counter, arg, param.type)
             exprs += arg_binds
-            arguments.append((name, VarExpr(x, param.type)))
+            arguments.append((name, VarExpr(x, xt)))
 
         app_expr = AppExpr(self._fun, arguments, sig.response.type, sig)        
         return exprs, app_expr
@@ -228,6 +252,17 @@ class AppExpr(Expression):
 
         return (num_endpoints + 1), num_projections, (size + 1)
 
+    def has_conversion(self):
+        # match the expected type with its actual type
+        for name, arg in self._args:
+            param = self.lookup_param(name)
+            # print("param type", param.type)
+            # print("arg type", arg.type)
+            if str(arg.type) != str(param.type):
+                return True
+
+        return False
+
 class VarExpr(Expression):
     def __init__(self, x, typ=None, sig=None):
         super().__init__(typ, sig)
@@ -242,6 +277,9 @@ class VarExpr(Expression):
 
         return self._var == other._var
 
+    def __hash__(self):
+        return hash(self.__str__())
+        
     @property
     def var(self):
         return self._var
@@ -302,7 +340,7 @@ class VarExpr(Expression):
     def sizes(self):
         return 0, 0, 1
 
-    def lift(self, counter, signatures):
+    def lift(self, cache, counter, signatures):
         return [], self
 
 class ProjectionExpr(Expression):
@@ -323,11 +361,15 @@ class ProjectionExpr(Expression):
             self._field == other._field
         )
 
+    def __hash__(self):
+        return hash(self.__str__())
+        
     def apply_subst(self, subst):
         return ProjectionExpr(
             self._obj.apply_subst(subst),
             self._field,
             self.type,
+            self.signature,
         )
 
     def collect_exprs(self):
@@ -384,7 +426,7 @@ class ProjectionExpr(Expression):
             proj_expr = var
         else:
             exprs, obj_expr = self._obj.to_multiline(signatures, subst, counter)
-            proj_expr = ProjectionExpr(obj_expr, self._field, self.type)
+            proj_expr = ProjectionExpr(obj_expr, self._field, self.type, self.signature)
 
             proj_trans = f"projection({self._obj.type}, {self._field})"
             proj_name = make_entry_name(proj_trans, "")
@@ -402,15 +444,15 @@ class ProjectionExpr(Expression):
         
         return exprs, proj_expr
 
-    def lift(self, counter, signatures):
+    def lift(self, cache, counter, signatures):
         proj_sig = self.signature
         
         param = proj_sig.parameters[0]
-        arg_binds, x = insert_binds(counter, self._obj, param.type)
+        arg_binds, x, xt = insert_binds(cache, counter, self._obj, param.type)
         proj_expr = ProjectionExpr(
             VarExpr(x, param.type),
             self._field,
-            proj_sig.response.type,
+            xt,
             proj_sig)
         return arg_binds, proj_expr
 
@@ -453,6 +495,9 @@ class EquiExpr(Expression):
             self._rhs == other._rhs
         )
 
+    def __hash__(self):
+        return hash(self.__str__())
+        
     def apply_subst(self, subst):
         return EquiExpr(
             self._lhs.apply_subst(subst),
@@ -471,7 +516,7 @@ class EquiExpr(Expression):
     def pretty(self, hang):
         return consts.SPACE * hang + f"if {self._lhs} = {self._rhs}"
 
-    def lift(self, counter, signatures):
+    def lift(self, cache, counter, signatures):
         raise NotImplementedError
 
     def get_vars(self):
@@ -500,6 +545,9 @@ class FilterExpr(Expression):
             self._val == other._val
         )
 
+    def __hash__(self):
+        return hash(self.__str__())
+        
     def apply_subst(self, subst):
         return FilterExpr(
             self._obj.apply_subst(subst),
@@ -639,7 +687,7 @@ class FilterExpr(Expression):
         val_eps, val_prs, val_sz = self._val.sizes()
         return (obj_eps + val_eps), (obj_prs + val_prs), (obj_sz + val_sz + 1)
 
-    def _expand_field(self, counter, signatures, field, in_typ, in_obj):
+    def _expand_field(self, cache, counter, signatures, field, in_typ, in_obj):
         proj_name = f"projection({in_typ}, {field})"
         trans_name = make_entry_name(proj_name, "")
         # print("getting signature for", trans_name)
@@ -652,7 +700,7 @@ class FilterExpr(Expression):
             in_obj, field, 
             proj_sig.response.type, 
             proj_sig)
-        binds, proj_expr = proj_expr.lift(counter, signatures)
+        binds, proj_expr = proj_expr.lift(cache, counter, signatures)
         let_x = counter.get("x", 0)
         counter["x"] += 1
         expr = AssignExpr(f"x{let_x}", proj_expr, False)
@@ -660,7 +708,7 @@ class FilterExpr(Expression):
         var = VarExpr(f"x{let_x}", proj_sig.response.type)
         return binds, var
 
-    def lift(self, counter, sigs):
+    def lift(self, cache, counter, sigs):
         """
         First expand the field into projections, then do the actual lifting
         """
@@ -669,8 +717,8 @@ class FilterExpr(Expression):
         # print("filter sig", [p.type for p in filter_sig.parameters], filter_sig.response.type)
         
         obj_param = filter_sig.parameters[0]
-        obj_binds, obj_x = insert_binds(counter, self._obj, obj_param.type)
-        obj_expr = VarExpr(obj_x, obj_param.type)
+        obj_binds, obj_x, xt = insert_binds(cache, counter, self._obj, obj_param.type)
+        obj_expr = VarExpr(obj_x, xt)
 
         fields = self._field.split('.')
         in_typ = obj_param.type
@@ -680,7 +728,7 @@ class FilterExpr(Expression):
                 continue
 
             in_typ = in_typ.ignore_array()
-            binds, in_obj = self._expand_field(counter, sigs, f, in_typ, in_obj)
+            binds, in_obj = self._expand_field(cache, counter, sigs, f, in_typ, in_obj)
 
             # when previous expand step fails
             if in_obj is None:
@@ -691,10 +739,10 @@ class FilterExpr(Expression):
 
         val_param = filter_sig.parameters[1]
         # print("val param type", val_param.type, flush=True)
-        lhs_binds, lhs_x = insert_binds(counter, in_obj, val_param.type)
-        in_obj = VarExpr(lhs_x, val_param.type)
-        val_binds, val_x = insert_binds(counter, self._val, val_param.type)
-        val = VarExpr(val_x, val_param.type)
+        lhs_binds, lhs_x, lhs_t = insert_binds(cache, counter, in_obj, val_param.type)
+        in_obj = VarExpr(lhs_x, lhs_t)
+        val_binds, val_x, val_t = insert_binds(cache, counter, self._val, val_param.type)
+        val = VarExpr(val_x, val_t)
 
         filter_expr = EquiExpr(in_obj, val)
 
@@ -714,6 +762,9 @@ class ListExpr(Expression):
 
         return self._item == other._item
 
+    def __hash__(self):
+        return hash(self.__str__())
+        
     def pretty(self, hang):
         return f"return {self._item}"
 
@@ -740,8 +791,85 @@ class ListExpr(Expression):
         item_eps, item_prs, item_sz = self._obj.sizes()
         return item_eps, item_prs, item_sz + 1
 
-    def lift(self, counter, signatures):
+    def lift(self, cache, counter, signatures):
         raise NotImplementedError
+
+class ObjectExpr(Expression):
+    def __init__(self, object, typ=None, sig=None):
+        super().__init__(typ, sig)
+        self._object = object
+
+    def __str__(self):
+        fields = []
+        for field, val in self._object.items():
+            fields.append(f"{field}={val}")
+
+        result = "{" + ", ".join(fields) + "}"
+        return result
+
+    def __eq__(self, other):
+        if not isinstance(other, ObjectExpr):
+            return NotImplemented
+
+        for field, val in self._object.items():
+            if other._object.get(field) != val:
+                return False
+
+        return True
+
+    def __hash__(self):
+        return hash(self.__str__())
+
+    def pretty(self, hang):
+        return self.__str__()
+
+    def apply_subst(self, subst):
+        subst_object = {}
+        for field in self._object:
+            subst_object[field] = self._object[field].apply_subst(subst)
+        
+        return ObjectExpr(subst_object, self.type, self.signature)
+
+    def collect_exprs(self):
+        exprs = [self]
+        for val in self._object.values():
+            exprs += val.collect_exprs()
+        
+        return exprs
+
+    def get_vars(self):
+        vars = set()
+        for val in self._object.values():
+            vars = vars.union(val.get_vars())
+
+        return vars
+
+    def sizes(self):
+        val_eps, val_prs, val_sz = 0,0,1
+        for val in self._object.values():
+            val_eps_, val_prs_, val_sz_ = val.sizes()
+            val_eps += val_eps_
+            val_prs += val_prs_
+            val_sz += val_sz_
+
+        return val_eps, val_prs, val_sz
+
+    # assume ANF
+    def lift(self, cache, counter, signatures):
+        object_sig = self.signature
+
+        binds = []
+        return_object = {}
+        for param in object_sig.parameters:
+            param_binds, x, xt = insert_binds(cache, counter, self._object[param.arg_name], param.type)
+            binds += param_binds
+            return_object[param.arg_name] = VarExpr(x, xt)
+
+        return binds, ObjectExpr(return_object, object_sig.response.type, object_sig)
+
+    def execute(self, analyzer, _):
+        raise NotImplementedError
+
 
 class AssignExpr(Expression):
     def __init__(self, x, expr, is_bind):
@@ -766,6 +894,9 @@ class AssignExpr(Expression):
             self._is_bind == other._is_bind
         )
 
+    def __hash__(self):
+        return hash(self.__str__())
+
     @property
     def var(self):
         return self._lhs
@@ -789,7 +920,7 @@ class AssignExpr(Expression):
         )
 
     def collect_exprs(self):
-        return [self] + self._rhs.collect_exprs()
+        return self._rhs.collect_exprs()
 
     def to_graph(self, graph):
         # print(self)
@@ -841,20 +972,23 @@ class AssignExpr(Expression):
         else:
             return endpoints, projections, sz
 
-    def lift(self, counter, signatures):
+    def lift(self, cache, counter, signatures):
         if isinstance(self._rhs, FilterExpr):
-            binds, rhs, obj = self._rhs.lift(counter, signatures)
+            binds, rhs, obj = self._rhs.lift(cache, counter, signatures)
             if rhs is None:
                 return None
 
             binds.append(rhs)
             expr = AssignExpr(self._lhs, obj, False)
         else:
-            binds, rhs = self._rhs.lift(counter, signatures)
+            binds, rhs = self._rhs.lift(cache, counter, signatures)
             expr = AssignExpr(self._lhs, rhs, False)
         
         binds.append(expr)
         return binds
+
+    def has_conversion(self):
+        return self._rhs.has_conversion()
 
 class ProgramGraph:
     def __init__(self):
@@ -943,6 +1077,13 @@ class Program:
 
     def __repr__(self):
         return self.__str__()
+
+    def has_conversion(self):
+        for expr in self._expressions:
+            if expr.has_conversion():
+                return True
+
+        return False
 
     def to_expression(self, subst={}):
         exprs = []
@@ -1048,12 +1189,34 @@ class Program:
             if not isinstance(e, AssignExpr) or e.var not in mark_delete
         ]
 
+    def remove_duplicate_binds(self):
+        exprs = []
+        subst = {}
+        mark_duplicate = False
+        for expr in self._expressions:
+            expr = expr.apply_subst(subst)
+            if isinstance(expr, AssignExpr) and expr._is_bind:
+                for e in exprs:
+                    if isinstance(e, AssignExpr) and e._is_bind:
+                        if expr._rhs == e._rhs:
+                            mark_duplicate = True
+                            # substitute the variable with previous appearing
+                            subst[expr._lhs] = VarExpr(e._lhs)
+
+            if not mark_duplicate:
+                exprs.append(expr)
+
+            mark_duplicate = False
+
+        self._expressions = exprs
+
     def simplify(self):
         old_expressions = None
         while old_expressions != self._expressions:
             old_expressions = self._expressions.copy()
             self.merge_direct_eqs(subst={})
             self.merge_projections(subst={})
+            self.remove_duplicate_binds()
             # self.remove_tautology()
             # print("old", old_expressions)
             # print("new", self._expressions)
@@ -1061,23 +1224,25 @@ class Program:
     def assign_type(self, t):
         self._expressions[-1].type = t
 
-    def lift(self, counter, signatures, target):
+    def lift(self, cache, counter, signatures, target):
         exprs = []
+        path_len = len(self._expressions)
         for expr in self._expressions:
             if isinstance(expr, AssignExpr):
-                lifted_exprs = expr.lift(counter, signatures)
+                lifted_exprs = expr.lift(cache, counter, signatures)
                 if lifted_exprs is None:
                     return None
 
                 exprs += lifted_exprs
             else: # return statement
                 # FIXME: is this correct?
-                binds, x = insert_binds(counter, expr, target.ignore_array())
+                binds, x, _ = insert_binds(cache, counter, expr, target.ignore_array())
                 exprs += binds
                 exprs.append(VarExpr(x, target))
 
         # print(exprs)
         program = Program(self._inputs, exprs)
+        # if path_len == 6:
         # print("before simplify", program, flush=True)
         program.simplify()
         return program
@@ -1228,9 +1393,13 @@ def insert_lists(counter, var, arg_typ):
     # if two types match with each other
     if (var_typ is not None and
         arg_typ is not None and
-        str(var_typ) == str(arg_typ)):
+        (
+            str(var_typ) == str(arg_typ) or
+            var_typ.get_primitive_name() == str(arg_typ) or
+            str(var_typ) == arg_typ.get_primitive_name()
+        )):
         # print("No binding, real var type", var.type, ", expect arg type", arg_typ)
-        return binds, var.var
+        return binds, var.var, var.type
 
     # print("[insert_lists] lifting", var_typ, "into type", arg_typ)
     if isinstance(arg_typ, types.ArrayType):
@@ -1239,20 +1408,27 @@ def insert_lists(counter, var, arg_typ):
         bind_typ = types.ArrayType(None, var_typ)
         bind = AssignExpr(f"x{let_x}", ListExpr(var, bind_typ), False)
         subvar = VarExpr(f"x{let_x}", bind_typ)
-        inner_binds, x = insert_lists(counter, subvar, arg_typ)
-        return ([bind] + inner_binds), x
+        inner_binds, x, xt = insert_lists(counter, subvar, arg_typ)
+        return ([bind] + inner_binds), x, xt
     else:
         raise Exception("cannot lift a non-array type", var_typ, type(var_typ), arg_typ, type(arg_typ))
 
-def insert_binds(counter, var, arg_typ):
+def insert_binds(cache, counter, var, arg_typ):
+    if var.var in cache:
+        return cache[var.var]
+
     var_typ = var.type
     
     # if two types match with each other
     if (var_typ is not None and
         arg_typ is not None and
-        str(var_typ) == str(arg_typ)):
+        (
+            str(var_typ) == str(arg_typ) or
+            var_typ.get_primitive_name() == str(arg_typ) or
+            str(var_typ) == arg_typ.get_primitive_name()
+        )):
         # print("No binding, real var type", var.type, ", expect arg type", arg_typ)
-        return [], var.var
+        return [], var.var, var.type
 
     # print("[insert_binds] lifting", var_typ, "into type", arg_typ)
     if isinstance(var_typ, types.ArrayType):
@@ -1261,7 +1437,10 @@ def insert_binds(counter, var, arg_typ):
         counter["x"] += 1
         bind = AssignExpr(f"x{let_x}", var, True)
         subvar = VarExpr(f"x{let_x}", var_typ.item)
-        inner_binds, x = insert_binds(counter, subvar, arg_typ)
-        return ([bind] + inner_binds), x
+        inner_binds, x, xt = insert_binds(cache, counter, subvar, arg_typ)
+        res = ([bind] + inner_binds), x, xt
     else:
-        return insert_lists(counter, var, arg_typ)
+        res = insert_lists(counter, var, arg_typ)
+
+    cache[var.var] = res
+    return res

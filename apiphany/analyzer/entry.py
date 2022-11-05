@@ -213,7 +213,7 @@ class Parameter:
 
         return results
 
-    def project_ad_hoc(self, analyzer):
+    def project_ad_hoc(self, analyzer, infer_type=True):
         projections = []
         if isinstance(self.type, types.ObjectType):
             fields = self.type.object_fields
@@ -229,8 +229,8 @@ class Parameter:
                     field_typ,
                     None,
                 )
-                in_param = analyzer.set_type(self)
-                out_param = analyzer.set_type(p)
+                in_param = analyzer.set_type(self, infer_type)
+                out_param = analyzer.set_type(p, infer_type)
                 proj_name = f"projection({in_param.type}, {field})"
                 proj_field = TraceEntry(
                     proj_name,
@@ -240,7 +240,7 @@ class Parameter:
                     out_param
                 )
                 projections.append(proj_field)
-                projections += p.project_ad_hoc(analyzer)
+                projections += p.project_ad_hoc(analyzer, infer_type)
         elif isinstance(self.type, types.ArrayType):
             p = Parameter(
                 self.method,
@@ -252,7 +252,7 @@ class Parameter:
                 self.type.item,
                 None,
             )
-            projections += p.project_ad_hoc(analyzer)
+            projections += p.project_ad_hoc(analyzer, infer_type)
         elif isinstance(self.type, types.UnionType):
             for t in self.type.items:
                 p = Parameter(
@@ -265,7 +265,7 @@ class Parameter:
                     t,
                     None,
                 )
-                projections += p.project_ad_hoc(analyzer)
+                projections += p.project_ad_hoc(analyzer, infer_type)
 
         return projections
 

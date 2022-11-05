@@ -1,12 +1,13 @@
 from collections import defaultdict
 import itertools
 import re
+import copy
 
 from synthesizer.utils import make_entry_name
 from analyzer.utils import path_to_name
-from program.program import (Program, VarExpr, ProjectionExpr,
+from program.program import (Program, VarExpr, ProjectionExpr, ObjectExpr,
                              FilterExpr, AssignExpr, AppExpr)
-
+import consts
 
 class ProgramGenerator:
     def __init__(self, signatures):
@@ -30,28 +31,46 @@ class ProgramGenerator:
         for name, in_typ in inputs.items():
             self._add_typed_var(typ_subst, VarExpr(name, in_typ), in_typ)
 
-        for trans in transitions:
-            if "_clone" in trans:
-                continue
+        for trans_list in transitions:
+            tmp_typ_subst = copy.deepcopy(typ_subst)
+            curr_counter = copy.deepcopy(self._name_counters)
 
-            sig = self._signatures.get(trans)
-            if not sig:
-                raise Exception(f"Unknown transition name {trans}")
+            for trans in trans_list:
+                curr_typ_subst = copy.deepcopy(typ_subst)
+                self._name_counters = copy.deepcopy(curr_counter)
+                if consts.PREFIX_CLONE in trans:
+                    continue
 
-            if re.search(r"projection\(.*, .*\)", sig.endpoint):
-                self._generate_projection(typ_subst, expr_subst, sig)
-            elif re.search(r"filter\(.*, .*\)", sig.endpoint):
-                self._generate_filter(typ_subst, expr_subst, sig)
-            else:
-                self._generate_let(typ_subst, expr_subst, sig)
+                sig = self._signatures.get(trans)
+                # print(sig.endpoint, sig.parameters, sig.response)
+                if not sig:
+                    raise Exception(f"Unknown transition name {trans}")
+
+                if consts.PREFIX_CONVERT in trans:
+                    # copy expressions with semantic types to corresponding syntactic types
+                    self._to_syntactic_mapping(curr_typ_subst, sig)
+                elif consts.PREFIX_PARTIAL in trans:
+                    self._generate_partial_object(curr_typ_subst, expr_subst, sig)
+                elif re.search(r"projection\(.*, .*\)", sig.endpoint):
+                    self._generate_projection(curr_typ_subst, expr_subst, sig)
+                elif re.search(r"filter\(.*, .*\)", sig.endpoint):
+                    self._generate_filter(curr_typ_subst, expr_subst, sig)
+                else:
+                    self._generate_let(curr_typ_subst, expr_subst, sig)
+
+                for t in curr_typ_subst:
+                    tmp_typ_subst[t] = list(set(curr_typ_subst[t] + typ_subst.get(t, [])))
+
+            typ_subst = tmp_typ_subst
 
         # print(typ_subst)
+        # print(expr_subst)
         returns = typ_subst.get(str(target.ignore_array()), [])
         # print("returns", returns)
         exprs = expr_subst.values()
         expr_vars = expr_subst.keys()
 
-        program_bodys = []
+        program_bodys = set()
         for expr_list in itertools.product(*exprs):
             program_exprs = []
             for x, e in zip(expr_vars, expr_list):
@@ -59,28 +78,44 @@ class ProgramGenerator:
                 program_exprs.append(let_expr)
 
             for r in returns:
-                program_bodys.append(program_exprs + [r])
+                program_bodys.add(tuple(program_exprs + [r]))
 
-        programs = []
+        # return programs that are equivalent in strings
+        programs = set()
         for body in program_bodys:
+            body = list(body)
             p = Program(list(inputs.keys()), body)
             p._expressions = p.reachable_expressions({})
-            if self._filter_by_names(self._signatures, transitions, inputs, p):
-                # print("Before lifting", p, flush=True)
-                p = p.lift(self._name_counters, self._signatures, target)
-                if p is not None and p not in programs:
-                    # print(p)
-                    # print(p.to_expression({}))
-                    programs.append(p)
+            # print(p, flush=True)
+            for path in itertools.product(*transitions):
+                if self._filter_by_names(self._signatures, path, inputs, p):
+                    # print("Before lifting", p, flush=True)
+                    cache = {}
+                    p = p.lift(cache, self._name_counters, self._signatures, target)
+                    if p is not None:
+                        # print("After filtering", p, flush=True)
+                        # print(p.to_expression({}))
+                        programs.add(p)
+                        # yield p
+
+                    break
 
         # raise Exception
         return programs
+
+    def _to_syntactic_mapping(self, typ_subst, sig):
+        from_typ = str(sig.parameters[0].type.ignore_array())
+        to_typ = str(sig.response.type.ignore_array())
+        exprs = typ_subst.get(from_typ, [])
+        typ_subst[to_typ] = [k for k,_ in itertools.groupby(sorted(typ_subst.get(to_typ, []) + exprs, key=str))]
 
     def _filter_by_names(self, signatures, transitions, inputs, result):
         name_counts = defaultdict(int)
         name_counts.clear()
         for tr in transitions:
-            if "_clone" in tr:
+            if (consts.PREFIX_CLONE in tr or 
+                consts.PREFIX_CONVERT in tr or
+                consts.PREFIX_PARTIAL in tr):
                 continue
             elif re.search(r"projection\(.*, .*\)", tr):
                 sig = signatures.get(tr)
@@ -115,7 +150,7 @@ class ProgramGenerator:
                 elif isinstance(expr, AppExpr):
                     name = expr._fun
                 else:
-                    pass
+                    continue
 
                 real_counts[name] += 1
 
@@ -154,45 +189,79 @@ class ProgramGenerator:
         else:
             self._add_typed_var(typ_subst, var_x, typ)
 
+    def _get_exprs_for_param(self, typ_subst, sig, param):
+        typ = param.type
+        typ_name = str(typ.ignore_array())
+        if param.is_required and typ_name not in typ_subst:
+            print(typ_subst)
+            raise Exception(
+                f"Given path is spurious, "
+                f"no program can be generated for {sig.endpoint}, "
+                f"param {param} with type {typ_name}"
+            )
+
+        return typ_subst.get(typ_name)
+
     def _generate_args(self, typ_subst, expr_subst, sig):
         # get variables for each parameter type
         args_list = [[]]
+        # print("num of parameters:", len(sig.parameters))
+        
+        required_params = []
+        optional_params = []
         for param in sig.parameters:
+            if param.is_required:
+                required_params.append(param)
+            else:
+                optional_params.append(param)
+        
+        for param in required_params:
             if not param.is_required and not param.type:
                 continue
 
-            typ = param.type
-            typ_name = str(typ.ignore_array())
-            if param.is_required and typ_name not in typ_subst:
-                raise Exception(
-                    f"Given path is spurious, "
-                    f"no program can be generated for {sig.endpoint}"
-                )
-
-            exprs = typ_subst.get(typ_name)
-            if exprs is not None:
+            exprs = self._get_exprs_for_param(typ_subst, sig, param)
+            if exprs:
                 # print("Find expressions for type", typ)
-                arg_exprs = []
-                for expr in exprs:
-                    if not isinstance(expr, VarExpr):
-                        raise Exception("should get variable here")
+                arg_exprs = [(param, expr) for expr in exprs]
+                args_list[0].append(arg_exprs)
 
-                    # expr.set_type(typ)
-                    # for e in expr_subst.get(expr.var, []):
-                    #     e.set_type(typ)
+        # args_list = [tuple(args_list[0])]
+        # yield tuple(args_list[0])
 
-                    arg_name = path_to_name(param.path)
-                    arg_exprs.append((arg_name, expr))
+        for k in range(1, consts.MAX_PARAMS - len(required_params) + 1):
+            for params in itertools.combinations(optional_params, k):
+                params_exprs = []
+                for param in params:
+                    if not param.is_required and not param.type:
+                        continue
 
-                old_args_list = [args[:] for args in args_list]
-                for args in args_list:
-                    args.append(arg_exprs)
-
-                # optional arguments can be either added or not
-                if not param.is_required:
-                    args_list += old_args_list
-
+                    exprs = self._get_exprs_for_param(typ_subst, sig, param)
+                    if exprs:
+                        arg_exprs = [(param, expr) for expr in exprs]
+                        params_exprs.append(arg_exprs)
+                    else:
+                        params_exprs = []
+                        break
+        
+                if params_exprs:
+                    args_list.append(args_list[0] + params_exprs)
+        
+        # print(args_list)
+        # args_list = list(set(args_list))
         return args_list
+
+    def _generate_partial_object(self, typ_subst, expr_subst, sig):
+        args_list = self._generate_args(typ_subst, expr_subst, sig)
+        let_x = self._fresh_var("x")
+        for args in args_list:
+            for params in itertools.product(*args):
+                obj = {}
+                for param, expr in params:
+                    obj[param.arg_name] = expr
+
+                typ = sig.response.type
+                obj_expr = ObjectExpr(obj, typ, sig)
+                self._add_results(typ_subst, expr_subst, let_x, obj_expr, typ)
 
     def _generate_projection(self, typ_subst, expr_subst, sig):
         args = self._generate_args(typ_subst, expr_subst, sig)
@@ -231,7 +300,8 @@ class ProgramGenerator:
         for args in args_list:
             for params in itertools.product(*args):
                 named_args = []
-                for arg_name, arg in params:
+                for param, arg in params:
+                    arg_name = path_to_name(param.path)
                     named_args.append((arg_name, arg))
 
                 f = make_entry_name(sig.endpoint, sig.method)

@@ -20,14 +20,15 @@ class Synthesizer:
         self._groups = {}
         self._group_names = {}
         self._landmarks = []
-        self._unique_entries = {}
         self._entries = entries
         self._program_generator = ProgramGenerator({})
         self._programs = {}
         # flags
         self._expand_group = config[consts.KEY_SYNTHESIS][consts.KEY_EXPAND_GROUP]
         self._block_perms = config[consts.KEY_SYNTHESIS][consts.KEY_BLOCK_PERM]
-        self._exp_dir = exp_dir
+        # public
+        self.unique_entries = {}
+        self.exp_dir = exp_dir
 
     @TimeStats(key=STATS_GRAPH)
     def init(self):
@@ -39,7 +40,7 @@ class Synthesizer:
         return results[0]
 
     def _write_solution(self, idx, t, p):
-        result_path = os.path.join(self._exp_dir, f"results_{idx}.txt")
+        result_path = os.path.join(self.exp_dir, f"results_{idx}.txt")
         with open(result_path, "a+") as f:
             f.write(f"time: {t: .2f}")
             f.write("\n")
@@ -49,8 +50,8 @@ class Synthesizer:
 
     # make this operation all-or-nothing
     def _serialize_solutions(self, idx, progs):
-        solution_path = os.path.join(self._exp_dir, f"solutions_{idx}.pkl")
-        bk_solution_path = os.path.join(self._exp_dir, f"solutions_{idx}_bk.pkl")
+        solution_path = os.path.join(self.exp_dir, f"solutions_{idx}.pkl")
+        bk_solution_path = os.path.join(self.exp_dir, f"solutions_{idx}_bk.pkl")
 
         if os.path.exists(solution_path):
             with open(solution_path, "rb") as f:
@@ -67,7 +68,7 @@ class Synthesizer:
     def _expand_groups(self, result):
         groups = []
         for name in result:
-            if "_clone" in name:
+            if consts.PREFIX_CLONE in name:
                 continue
 
             if self._expand_group:
@@ -76,12 +77,14 @@ class Synthesizer:
                     raise Exception("Unknown transition", name)
 
                 param_typs = [str(p.type) for p in e.parameters]
+                param_reqs = [p.is_required for p in e.parameters]
                 if isinstance(e.response.type, list):
                     response_typ = [str(t) for t in e.response.type]
                 else:
                     response_typ = [str(e.response.type)]
                 key = (tuple(param_typs), tuple(response_typ))
                 group = self._groups.get(key, [name])
+                # print("groups for", name, ":", group)
                 groups.append(group)
             else:
                 groups.append([name])
@@ -95,63 +98,36 @@ class Synthesizer:
         all_topological_sorts(perms, pgraph, [], {})
         return perms
 
-    def _generate_solutions(self, i, inputs, outputs, result, time):
-        programs = []
+    def generate_solutions(self, i, inputs, outputs, result, time):
+        programs = set()
 
-        # if tuple(result) in self._perms:
-        #     print("duplicate program, excluded", flush=True)
-        #     return programs, [list(range(len(result)))]
-
-        groups = self._expand_groups(result) 
-        for r in itertools.product(*groups):
-            programs += self._program_generator.generate_program(
-                r, inputs, outputs[0]
+        groups = self._expand_groups(result)
+        # for r in groups:
+        try:
+            # sometimes the program generation fails because 
+            # we merge programs with the same signature but they may have different necessaties
+            # If an exception is raised, we assume this is a spurious sketch
+            new_programs = self._program_generator.generate_program(
+                groups, inputs, outputs[0]
             )
+            # for p in new_programs:
+            #     yield p
+        except Exception as e:
+            # raise Exception(e)
+            print("[Warning]:", e)
+            new_programs = set()
 
-        # print(len(programs), flush=True)
-
-        # all_perms = []
-        # for p in programs:
-        #     # print(p.to_expression({}))
-        #     # write solutions to file
-        #     self._write_solution(i, time, p)
-
-        #     # generate all topological sorts for blocking
-        #     if self._block_perms:
-        #         perms = self._get_topo_sorts(p)
-        #         all_perms += perms
-
-        # # convert permutations into indices
-        # perm_indices = []
-        # if self._block_perms:
-        #     for perms in all_perms:
-        #         indices = []
-        #         for tr in perms:
-        #             for idx, r in enumerate(result):
-        #                 if tr == r[:len(tr)]:
-        #                     indices.append(idx)
-        #                     break
-
-        #         if len(indices) == len(result):
-        #             perm_indices.append(indices)
-        #             permuted = [result[i] for i in indices]
-        #             print("adding", permuted, flush=True)
-        #             self._perms.add(tuple(permuted))
-                
-
-        # # print("Get perms", perm_indices, flush=True)
-        # if not perm_indices:
-        #     perm_indices = [list(range(len(result)))]
+        programs = programs.union(new_programs)
 
         # self._serialize_solutions(i, programs)
-        if i not in self._programs:
-            self._programs[i] = set()
+        # if i not in self._programs:
+        #     self._programs[i] = set()
 
-        self._programs[i] = self._programs[i].union(set(programs))
+        # self._programs[i] = self._programs[i].union(programs)
 
-        perm_indices = [list(range(len(result)))]
+        # perm_indices = [list(range(len(result)))]
 
-        return programs, perm_indices
+        return programs #, perm_indices
 
     def _create_encoder(self):
         solver = self._config[consts.KEY_SYNTHESIS][consts.KEY_SOLVER_TYPE]
@@ -164,8 +140,11 @@ class Synthesizer:
         else:
             raise Exception("Unknown solver type in config")
 
-        for name, e in self._unique_entries.items():
+        for name, e in self.unique_entries.items():
             self._encoder.add_transition(name, e)
+
+    def type_exists(self, typ_name):
+        return self._encoder.type_exists(typ_name)
 
     def run_n(self, landmarks, inputs, outputs, n):
         """Single process version of synthesis
@@ -187,12 +166,23 @@ class Synthesizer:
         input_map = defaultdict(int)
         for _, typ in inputs.items():
             typ_name = str(typ.ignore_array())
+            # double check whether the type name is available in the encoder
+            # if not, default to its primitive type
+            if not self._encoder.type_exists(typ_name):
+                typ_name = typ.get_primitive_name()
+
             input_map[typ_name] += 1
 
         output_map = defaultdict(int)
         for typ in outputs:
             typ_name = str(typ.ignore_array())
+            if not self._encoder.type_exists(typ_name):
+                typ_name = typ.get_primitive_name()
+
             output_map[typ_name] += 1
+
+        print("input_map", input_map)
+        print("output_map", output_map)
 
         start = time.time()
         self._encoder.init(input_map, output_map)
@@ -203,7 +193,7 @@ class Synthesizer:
             result = self._encoder.solve()
             while result is not None:
                 # print("Find path", result, flush=True)
-                programs, perms = self._generate_solutions(
+                programs, perms = self.generate_solutions(
                     0, inputs, outputs, result, 
                     time.time() - start
                 )
@@ -234,7 +224,7 @@ class Synthesizer:
             pickle.dump(solutions, f)
 
         # write petri net data
-        encoder_path = os.path.join(self._exp_dir, "encoder.txt")
+        encoder_path = os.path.join(self.exp_dir, "encoder.txt")
         with open(encoder_path, "w") as f:
             f.write(str(len(self._encoder._net.place())))
             f.write("\n")
@@ -250,6 +240,8 @@ class Synthesizer:
         unique_entries = self._group_transitions(self._entries)
         lst = [
             # "/v1/customers_GET",
+            # "filter(customer, customer.email)_",
+            # "projection({'data': [customer], 'has_more': boolean, 'object': string, 'url': string}, data)_"
             # "projection(customer, email)_"
             # "/v1/subscriptions_POST",
             # "/v1/prices_GET",
@@ -259,8 +251,10 @@ class Synthesizer:
             # "/v1/prices_POST",
             # "projection(subscription, items)_",
             # "projection(subscription_item, price)_",
-            # "/v1/customers/{customer}/sources/{id}_DELETE"
+            # "/v1/customers/{customer}/sources/{id}_DELETE",
             # "/v1/invoiceitems_POST",
+            # "/v1/invoices_POST",
+            # "/v1/invoices/{invoice}/send_POST",
             # 'projection(product, active)_',
             # "/v1/invoices_GET",
             # "/v1/charges/{charge}_GET",
@@ -278,13 +272,23 @@ class Synthesizer:
             # "/v1/customers/{customer}/sources_GET",
             # 'filter(status_transitions, status_transitions.returned)_',
             # "filter(subscription, subscription.items.data.[?].price.product)_",
-            # "projection(subscription, customer)_"
+            # "projection(subscription, customer)_",
             # "projection(customer, subscriptions)_",
-            # "projection(customer, id)_"
+            # "projection(customer, id)_",
+            # "/v1/customers/{customer}_GET",
+            # "projection(customer, default_source)_",
             # "projection(payment_source, type)_"
+            # "/v1/account_GET",
+            # "/v1/payment_methods_GET",
+            # "/v1/payment_intents_POST",
+            # "/v1/payment_intents/{intent}/confirm_POST",
 
+            # "/admin.users.session.invalidate_POST",
+            # "/admin.conversations.search_GET",
             # "/conversations.list_GET",
+            # "projection(objs_user, profile)_",
             # "/users.profile.get_GET",
+            # "/users.profile.set_POST",
             # "/conversations.members_GET",
             # "/users.lookupByEmail_GET",
             # "/conversations.open_POST",
@@ -297,6 +301,7 @@ class Synthesizer:
             # "projection({'ok': defs_ok_true, 'profile': objs_user_profile}, profile)_",
             # "/conversations.history_GET",
             # "projection(objs_conversation, last_read)_",
+            # "projection(objs_conversation, user)_",
             # "/users.conversations_GET",
             # "/conversations.invite_POST",
             # "/chat.update_POST",
@@ -308,12 +313,15 @@ class Synthesizer:
             # "projection(objs_conversation, last_read)_",
             # "projection(objs_conversation, id)_",
             # "projection(objs_comment, pinned_info)_",
-            # "projection(objs_user_profile, fields)_",
+            # "projection(objs_user_profile, email)_",
             # "filter(objs_message, objs_message.comment.pinned_info)_",
             # "projection({'members': [defs_bot_id], 'ok': defs_ok_true, 'response_metadata': {'next_cursor': next_cursor_/conversations.members_GET_response_metadata.next_cursor}}, members)_"
             # "projection(objs_conversation, version)_",
             # "filter(objs_conversation, objs_conversation.version)_",
             # "projection({'channels': [objs_conversation], 'ok': defs_ok_true, 'response_metadata': {'next_cursor': next_cursor_/conversations.list_GET_response_metadata.next_cursor}}, channels)_",
+            # "convert_defs_user_id_string",
+            # "partial_fields_objs_user_profile",
+            # "convert_defs_pinned_info_object",
 
             # "projection(ListInvoicesResponse, invoices)_",
             # "projection(Invoice, id)_",
@@ -343,8 +351,16 @@ class Synthesizer:
             # "filter(Subscription, Subscription.customer_id)_",
             # "filter(Subscription, Subscription.location_id)_",
             # "/v2/catalog/search_POST",
+            # "/v2/catalog/search-catalog-items_POST",
             # "projection(SearchCatalogObjectsResponse, objects)_",
-            # "filter(CatalogObject, CatalogObject.item_data.tax_ids.[?])_"
+            # "filter(CatalogObject, CatalogObject.item_data.tax_ids.[?])_",
+            # "projection(CatalogObject, item_data)_",
+            # "projection(CatalogItem, name)_",
+            # "projection(CatalogObject, type)_",
+            # "filter(CatalogObject, CatalogObject.item_data.name)_",
+            # "/v2/catalog/object/{object_id}_DELETE",
+            # "projection(DeleteCatalogObjectResponse, deleted_object_ids)_",
+            # "partial_fulfillments_Order",
         ]
 
         for name in lst:
@@ -358,13 +374,14 @@ class Synthesizer:
         for name, e in self._entries.items():
             self._program_generator.add_signature(name, e)
 
-        self._unique_entries = unique_entries
+        self.unique_entries = unique_entries
 
     def _group_transitions(self, transitions):
         # group projections with the same input and output
         results = {}
         for proj, e in transitions.items():
             param_typs = [str(p.type.ignore_array()) for p in e.parameters]
+            param_reqs = [p.is_required for p in e.parameters]
             if isinstance(e.response.type, list):
                 response_typ = [str(t.ignore_array()) for t in e.response.type]
             else:

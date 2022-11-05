@@ -41,20 +41,12 @@ class DSU:
             self._nexts[y] = y
             self._values[y] = set([y.value])
 
-        # hard code rules for Slack, FIXME: check the type
-        if (("name" in y.arg_name and y.type and "objs_message" in y.type.name) or 
-            ("name" in x.arg_name and x.type and "objs_message" in x.type.name)):
-            return
-
-        xr, yr = self.find(x), self.find(y)
-        # xr_rep = get_representative(self.get_group(xr))
-        # yr_rep = get_representative(self.get_group(yr))
-        # if ((xr_rep == "plan.amount" and yr_rep == "line_item.period.end") or
-        #     (yr_rep == "plan.amount" and xr_rep == "line_item.period.end")):
+        # # hard code rules for Slack, FIXME: check the type
+        # if (("name" in y.arg_name and y.type and "objs_message" in y.type.name) or 
+        #     ("name" in x.arg_name and x.type and "objs_message" in x.type.name)):
         #     return
 
-        # if (xr_rep == "plan.amount" or yr_rep == "plan.amount"):
-        #     print(x, x.value, xr_rep, y, y.value, yr_rep, flush=True)
+        xr, yr = self.find(x), self.find(y)
 
         self._values[xr].add(x.value)
         self._values[yr].add(y.value)
@@ -100,7 +92,7 @@ class DSU:
         return set(result)
 
 class LogAnalyzer:
-    def __init__(self):
+    def __init__(self, uncovered_opt):
         self.value_to_param = {}
         self.type_to_param = {}
         self.dsu = DSU()
@@ -108,8 +100,11 @@ class LogAnalyzer:
         self.type_partitions = {}
         self.type_aliases = {}
         self.type_values = {}
+        self.value_map = {}
         # temporary field
         self._checked_fields = {}
+        # privates
+        self._uncovered_opt = uncovered_opt
 
     # FIXME: this function no longer works, please fix me if you want to use it
     def _add_type_fields(self, r):
@@ -244,8 +239,7 @@ class LogAnalyzer:
         # but add them as separate nodes, they are meaningless
         if ((isinstance(param.value, int) and (param.value <= 1000)) or
             (isinstance(param.value, float) and (param.value <= 1000)) or
-            isinstance(param.value, bool) or
-            "balance_transaction.source" in str(param.type)):
+            isinstance(param.value, bool)):
             self.dsu.union(param, param)
             return
 
@@ -305,23 +299,24 @@ class LogAnalyzer:
                 rep = group[0].arg_name
 
             # for debug
-            if rep == "oldest_/chat.scheduledMessages.list_GET_oldest" or rep == "defs_ts":
-                group_params = []
-                for param in group:
-                    if param.type is not None:
-                        group_params.append((
-                            param.func_name, 
-                            param.method, 
-                            param.path, 
-                            param.value, 
-                            param.type,
-                            param.type.aliases
-                        ))
+            # if rep == "oldest_/chat.scheduledMessages.list_GET_oldest" or rep == "defs_ts":
+            #     print("*******", rep)
+            #     group_params = []
+            #     for param in group:
+            #         if param.type is not None:
+            #             group_params.append((
+            #                 param.func_name, 
+            #                 param.method, 
+            #                 param.path, 
+            #                 param.value, 
+            #                 param.type,
+            #                 param.type.aliases
+            #             ))
 
-                for p in group_params:
-                    print(p)
+            #     for p in group_params:
+            #         print(p)
 
-                print("==================")
+            #     print("==================")
 
     def to_json(self):
         groups = self.analysis_result()
@@ -439,18 +434,18 @@ class LogAnalyzer:
     def sample_value_by_type(self, typ):
         if isinstance(typ, types.ArrayType):
             lst_len = random.choice(range(1, 5))
-            vals = []
-            for _ in range(lst_len):
-                val = self.sample_value_by_type(typ.item)
-                vals.append(val)
-
+            # vals = []
+            # for _ in range(lst_len):
+            #     val = self.sample_value_by_type(typ.item)
+            #     vals.append(val)
+            vals = [None for _ in range(lst_len)]
             return vals
         else:
             candidates = self.get_values_by_type(typ)
             vals = candidates
 
             if not vals:
-                print("Not val available for type", typ)
+                # print("Not val available for type", typ)
                 # x = xeger.Xeger()
                 # vals = [x.xeger("^[a-z0-9]{10,}$")]
                 vals = ["fuzz_string"]
@@ -492,6 +487,29 @@ class LogAnalyzer:
 
         self.value_map = value_map
 
+    def find_representative_for_type(self, typ, infer_type=True):
+        # assume the input type is not a union type
+        if isinstance(typ, types.ArrayType):
+            typ.item = self.find_representative_for_type(typ.item, infer_type)
+            return typ
+            # raise Exception("Array type not supported")
+
+        if not infer_type:
+            return typ
+
+        params = self.dsu._parents.keys()
+        for param in params:
+            if same_type_name(typ, param.type):
+                group = self.dsu.get_group(param)
+                rep = get_representative(group)
+
+                if rep is not None:
+                    typ.name = rep
+                    return typ
+
+        # if no representative found, return its name
+        return typ #.name # typ.get_primitive_name()
+
     def find_same_type(self, param):
         if isinstance(param.type, types.UnionType):
             items = param.type.items
@@ -504,15 +522,7 @@ class LogAnalyzer:
         for p in params:
             has_same_name = False
             for item in items:
-                tmp_param = Parameter(
-                    param.method,
-                    param.arg_name,
-                    param.func_name,
-                    param.path,
-                    param.is_required,
-                    param.array_level,
-                    item, param.value)
-                if same_type_name(p, tmp_param):
+                if same_type_name(p.type, item):
                     has_same_name = True
 
             if p == param or has_same_name:
@@ -533,7 +543,7 @@ class LogAnalyzer:
 
         return param
 
-    def set_type(self, param):
+    def set_type(self, param, infer_type=True):
         """set type for a given parameter
         if the parameter is an ad-hoc object,
         it will be splitted into several sub-params
@@ -541,6 +551,8 @@ class LogAnalyzer:
         Args:
             param: the request/response parameter to be splitted
         """
+        if not infer_type:
+            return param
         # if param.func_name == "/conversations.members":
         #     print("finding type for parameter", param)
         param_typ = param.type
@@ -572,11 +584,12 @@ class LogAnalyzer:
                         #     print("found parameter type", rep)
                     break
             
-            if (param.type.name == defs.TYPE_BOOL or
+            if (self._uncovered_opt == consts.UncoveredOption.EXCLUDE and (
+                param.type.name == defs.TYPE_BOOL or
                 param.type.name == defs.TYPE_INT or
                 param.type.name == defs.TYPE_STRING or
                 param.type.name == defs.TYPE_NUM or
-                param.type.name == defs.TYPE_OBJECT):
+                param.type.name == defs.TYPE_OBJECT)):
                 param.type.name = str(param) # defs.TYPE_UNK
 
         return param

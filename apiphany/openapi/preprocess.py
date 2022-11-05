@@ -41,7 +41,10 @@ class PreProcessor:
             raise InvalidSchemaType
 
     def _create_ref_type(self, addition_path, typ):
-        if defs.DOC_REF in typ or not isinstance(typ, dict):
+        if (defs.DOC_REF in typ or not isinstance(typ, dict) or
+            (isinstance(typ, dict) and 
+            typ.get(defs.DOC_TYPE) is not None and 
+            typ.get(defs.DOC_TYPE) != defs.TYPE_OBJECT)):
             return typ
         else:
             # create a new reference type

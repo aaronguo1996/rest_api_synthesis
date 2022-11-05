@@ -1,0 +1,89 @@
+Running 1.1
+RE time: 0.7278480529785156
+PASS, Ranks [7, 7, 8, 8, 8, 8, 41]
+Running 1.2
+RE time: 1.7611448764801025
+PASS, Ranks [1, 1, 1, 1, 1, 1, 1]
+Running 1.3
+RE time: 0.9516444206237793
+FAIL
+Running 1.4
+RE time: 6.050185680389404
+PASS, Ranks [9, 9, 9, 9, 9, 9, 9]
+Running 1.5
+RE time: 5.609817743301392
+PASS, Ranks [3, 3, 3, 3, 3, 3, 3]
+Running 1.6
+RE time: 3.967585563659668
+PASS, Ranks [3, 3, 4, 4, 4, 4, 4]
+Running 1.7
+RE time: 3.662416458129883
+PASS, Ranks [3, 3, 3, 3, 3, 4, 4]
+Running 2.1
+RE time: 15.189440250396729
+PASS, Ranks [1, 1, 1, 1, 1, 1, 1]
+Running 2.2
+RE time: 30.33912968635559
+PASS, Ranks [1, 1, 1, 1, 1, 1, 1]
+Running 2.3
+RE time: 1.9618148803710938
+PASS, Ranks [1, 1, 1, 1, 1, 1, 1]
+Running 2.4
+RE time: 4.228495121002197
+PASS, Ranks [1, 1, 1, 2, 223, 231, 235]
+Running 2.5
+RE time: 225.60165929794312
+PASS, Ranks [2, 2, 2, 2, 2, 2, 2]
+Running 2.6
+RE time: 1.1390819549560547
+PASS, Ranks [2, 2, 2, 2, 2, 2, 2]
+Running 2.7
+RE time: 3.9050796031951904
+PASS, Ranks [1, 1, 1, 1, 1, 1, 284]
+Running 2.8
+RE time: 1.4930670261383057
+PASS, Ranks [26, 26, 27, 27, 28, 28, 29]
+Running 2.9
+RE time: 0.8542075157165527
+PASS, Ranks [1, 1, 1, 1, 1, 1, 1]
+Running 2.10
+RE time: 0.9756081104278564
+PASS, Ranks [1, 1, 1, 1, 1, 1, 1]
+Running 3.1
+RE time: 0.12041616439819336
+PASS, Ranks [1, 1, 1, 1, 1, 1, 1]
+Running 3.2
+RE time: 0.09614181518554688
+PASS, Ranks [5, 5, 5, 5, 5, 5, 5]
+Running 3.3
+RE time: 2.546088695526123
+PASS, Ranks [4, 4, 4, 4, 4, 4, 4]
+Running 3.4
+RE time: 0.266460657119751
+PASS, Ranks [1, 1, 1, 1, 1, 1, 1]
+Running 3.5
+RE time: 0.011106252670288086
+FAIL
+Running 3.6
+RE time: 0.2268834114074707
+PASS, Ranks [1, 1, 1, 1, 1, 1, 300]
+Running 3.7
+RE time: 0.23376679420471191
+PASS, Ranks [1, 1, 1, 1, 1, 1, 1]
+Running 3.8
+RE time: 0.14168047904968262
+PASS, Ranks [1, 1, 1, 1, 1, 1, 1]
+Running 3.9
+RE time: 0.4222092628479004
+PASS, Ranks [2, 2, 2, 2, 2, 2, 2]
+('/conversations.list', 'GET') is not covered
+('/users.lookupByEmail', 'GET') is not covered
+('/users.conversations', 'GET') is not covered
+('/conversations.list', 'GET') is not covered
+('/conversations.list', 'GET') is not covered
+slack has 5 benchmarks with not covered endpoints
+('/v1/refunds', 'POST') is not covered
+stripe has 1 benchmarks with not covered endpoints
+squareapi has 0 benchmarks with not covered endpoints
+written to ./api_info.tex
+written to ./results.tex

@@ -1,7 +1,7 @@
 import unittest
 from program.generator import *
 from analyzer.entry import TraceEntry, Parameter
-from schemas.schema_type import SchemaType
+from schemas.types import SchemaObject
 
 class GeneratorTestCase(unittest.TestCase):
     def setUp(self):
@@ -13,12 +13,12 @@ class GeneratorTestCase(unittest.TestCase):
             [
                 Parameter(
                     "", "id", "projection(user, id)", [],
-                    True, None, SchemaType("user", None), None
+                    True, None, SchemaObject("user", None), None
                 ),
             ],
             Parameter(
                 "", "user.id", "projection(user, id)",
-                [], True, 0, SchemaType("user.id", None), None
+                [], True, 0, SchemaObject("user.id", None), None
             ),
         )
         subst = {
@@ -40,16 +40,16 @@ class GeneratorTestCase(unittest.TestCase):
             [
                 Parameter(
                     "", "id", "filter(user, user.id)", [], 
-                    True, None, SchemaType("user", None), None
+                    True, None, SchemaObject("user", None), None
                 ),
                 Parameter(
                     "", "user.id", "filter(user, user.id)", [],
-                    True, None, SchemaType("user.id", None), None
+                    True, None, SchemaObject("user.id", None), None
                 ),
             ],
             Parameter(
                 "", "user.id", "filter(user, user.id)",
-                [], True, 0, SchemaType("user", None), None
+                [], True, 0, SchemaObject("user", None), None
             ),
             )
         subst = {
@@ -77,12 +77,12 @@ class GeneratorTestCase(unittest.TestCase):
             [
                 Parameter(
                     "get", "email", "/users.lookupByEmail", [], 
-                    True, None, SchemaType("user.profile.email", None), None
+                    True, None, SchemaObject("user.profile.email", None), None
                 ),
             ],
             Parameter(
                 "get", "user", "/users.lookupByEmail",
-                ["user"], True, 0, SchemaType("user", None), None
+                ["user"], True, 0, SchemaObject("user", None), None
             ),
         )
         subst = {
@@ -109,7 +109,7 @@ class GeneratorTestCase(unittest.TestCase):
                     Parameter(
                         "get", "channels", "/conversations.list",
                         ["channels"], True, 1,
-                        SchemaType("objs_conversation", None), None
+                        SchemaObject("objs_conversation", None), None
                     ),
                 ),
             "/conversations.members:get":
@@ -117,13 +117,13 @@ class GeneratorTestCase(unittest.TestCase):
                     [
                         Parameter(
                             "get", "channel", "/conversations.members", [],
-                            True, None, SchemaType("objs_channel.id", None), None
+                            True, None, SchemaObject("objs_channel.id", None), None
                         ),
                     ],
                     Parameter(
                         "get", "users", "/conversations.members",
                         ["users"], True, 1,
-                        SchemaType("defs_user_id", None), None
+                        SchemaObject("defs_user_id", None), None
                     )
                 ),
             "/users.info:get":
@@ -131,13 +131,13 @@ class GeneratorTestCase(unittest.TestCase):
                     [
                         Parameter(
                             "get", "user", "/users.info", [],
-                            True, None, SchemaType("defs_user_id", None), None
+                            True, None, SchemaObject("defs_user_id", None), None
                         ),
                     ],
                     Parameter(
                         "get", "user", "/users.info",
                         ["user"], True, 1,
-                        SchemaType("objs_user", None), None
+                        SchemaObject("objs_user", None), None
                     ),
                 ),
             "filter(objs_conversation, objs_conversation.name):":
@@ -148,20 +148,20 @@ class GeneratorTestCase(unittest.TestCase):
                             "", "", 
                             "filter(objs_conversation, objs_conversation.name)", 
                             [], True, None,
-                            SchemaType("objs_conversation", None), None
+                            SchemaObject("objs_conversation", None), None
                         ),
                         Parameter(
                             "", "", 
                             "filter(objs_conversation, objs_conversation.name)",
                             [], True, None,
-                            SchemaType("objs_conversation.name", None), None
+                            SchemaObject("objs_conversation.name", None), None
                         ),
                     ],
                     Parameter(
                         "", "", 
                         "filter(objs_conversation, objs_conversation.name)",
                         [], True, 1,
-                        SchemaType("objs_conversation", None), None
+                        SchemaObject("objs_conversation", None), None
                     ),
                 ),
             "projection(objs_conversation, id):":
@@ -170,13 +170,13 @@ class GeneratorTestCase(unittest.TestCase):
                         Parameter(
                             "", "", "projection(objs_conversation, id)", [],
                             True, None,
-                            SchemaType("objs_conversation", None), None
+                            SchemaObject("objs_conversation", None), None
                         ),
                     ],
                     Parameter(
                         "", "", "projection(objs_conversation, id)",
                         [], True, 0,
-                        SchemaType("objs_channel.id", None), None
+                        SchemaObject("objs_channel.id", None), None
                     )
                 ),
             "projection(objs_user, profile):":
@@ -184,13 +184,13 @@ class GeneratorTestCase(unittest.TestCase):
                     [
                         Parameter(
                             "", "", "projection(objs_user, profile)", [],
-                            True, None, SchemaType("objs_user", None), None
+                            True, None, SchemaObject("objs_user", None), None
                         ),
                     ],
                     Parameter(
                         "", "", "projection(objs_user, profile)",
                         [], True, 0,
-                        SchemaType("objs_user.profile", None), None
+                        SchemaObject("objs_user.profile", None), None
                     )
                 ),
             "projection(objs_user.profile, email):":
@@ -199,19 +199,19 @@ class GeneratorTestCase(unittest.TestCase):
                         Parameter(
                             "", "", "projection(objs_user.profile, email)", [],
                             True, None, 
-                            SchemaType("objs_user.profile", None), None
+                            SchemaObject("objs_user.profile", None), None
                         ),
                     ],
                     Parameter(
                         "", "", "projection(objs_user.profile, email)",
                         [], True, 0,
-                        SchemaType("objs_user.profile.email", None), None
+                        SchemaObject("objs_user.profile.email", None), None
                     )
                 ),
         }
 
         inputs = {
-            "channel_name": SchemaType("objs_conversation.name", None),
+            "channel_name": SchemaObject("objs_conversation.name", None),
         }
 
         for name, sig in sigs.items():
@@ -227,7 +227,7 @@ class GeneratorTestCase(unittest.TestCase):
                 "projection(objs_user.profile, email):",
             ], 
             inputs, 
-            SchemaType("objs_user.profile.email", None)
+            SchemaObject("objs_user.profile.email", None)
         )
 
         target = Program(

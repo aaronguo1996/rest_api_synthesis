@@ -1,20 +1,23 @@
 import os
 import pickle
 import re
+import random
+import math
 
 import consts
 from analyzer import parser
 from synthesizer.utils import make_entry_name
 from analyzer.utils import path_to_name
-from analyzer.entry import ErrorResponse
+from analyzer.entry import ErrorResponse, TraceEntry
+from analyzer.analyzer import LogAnalyzer
 
-def prep_exp_dir(config):
-    exp_name = config[consts.KEY_EXP_NAME]
-    exp_dir = os.path.join("../experiment_data/", exp_name)
-    if not os.path.exists(exp_dir):
-        os.makedirs(exp_dir)
+def prep_exp_dir(data_dir, exp_dir, config):
+    api_name = config[consts.KEY_EXP_NAME]
+    api_dir = os.path.join(data_dir, exp_dir, api_name)
+    if not os.path.exists(api_dir):
+        os.makedirs(api_dir)
 
-    return exp_dir
+    return api_dir
 
 def update_type(skip_fields, entries, endpoints):
     for e in entries:
@@ -33,6 +36,8 @@ def update_type(skip_fields, entries, endpoints):
 
             param.type = match_param.type
 
+        e.response.type = entry_def.response.type
+
 def get_initial_witnesses(configuration, exp_dir, base_path, endpoints):
     trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
     skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
@@ -48,10 +53,21 @@ def get_initial_witnesses(configuration, exp_dir, base_path, endpoints):
     return entries
 
 
+def sanitize_traces(entries):
+    sanitized_entries = []
+    for entry in entries:
+        if "projection" in entry.endpoint:
+            continue
+
+        sanitized_entries.append(entry) 
+
+    return sanitized_entries
+
 def parse_entries(configuration, exp_dir, base_path, endpoints):
     trace_file = os.path.join(exp_dir, consts.FILE_TRACE)
     skip_fields = configuration.get(consts.KEY_SKIP_FIELDS)
-    if not os.path.exists(trace_file):
+    initial_witness_only = configuration.get(consts.KEY_INITIAL_WITNESS_ONLY)
+    if initial_witness_only or not os.path.exists(trace_file):
         print("Parsing OpenAPI document...")
         # entries = None
         log_parser = parser.LogParser(
@@ -68,8 +84,9 @@ def parse_entries(configuration, exp_dir, base_path, endpoints):
         #     for e in entries:
         #         logging.debug(e)
 
-        with open(trace_file, 'wb') as f:
-            pickle.dump(entries, f)
+        if not initial_witness_only:
+            with open(trace_file, 'wb') as f:
+                pickle.dump(entries, f)
     else:
         with open(trace_file, 'rb') as f:
             entries = pickle.load(f)
@@ -99,7 +116,17 @@ def compare_program_strings(progstr_a, progstr_b):
     return replace_variables(progstr_a) == replace_variables(progstr_b)
 
 def avg(lst):
-    return sum(lst) / len(lst)
+    if len(lst):
+        return sum(lst) / len(lst)
+    else:
+        return None
+
+def median(lst):
+    lst = sorted(lst)
+    if len(lst) % 2 == 0:
+        return (lst[len(lst) // 2 - 1] + lst[len(lst) // 2]) / 2
+    else:
+        return lst[len(lst) // 2]
 
 def get_obj_weight(obj):
     """
@@ -124,7 +151,7 @@ def index_entries(entries, skip_fields):
     index_result = {}
     for e in entries:
         if (isinstance(e.response, ErrorResponse) or
-            e.response.value is None):
+            not e.response.value):
             continue
 
         ep = e.endpoint
@@ -156,12 +183,20 @@ def index_entries(entries, skip_fields):
             if v == e.response.value:
                 found = True
 
-        if not found:
+        if not found and e.response.value:
             weight = get_obj_weight(e.response.value)
             index_result[fun][param_names].append(
                 (param_values, e.response.value, weight)
             )
 
+        # if fun == "/v2/orders/batch-retrieve_POST":
+        #     print(index_result[fun].keys())
+
+    # for fun, fun_results in index_result.items():
+    #     for param, param_results in fun_results.items():
+    #         if len(param_results) > 10:
+    #             index_result[fun][param] = param_results[-10:]
+                
     return index_result
 
 def pretty_none(v):
@@ -172,3 +207,92 @@ def pretty_none(v):
         return round(v, 1)
         
     return v if v is not None else '-'
+
+def get_petri_net_data(exp_dir):
+    encoder_path = os.path.join(exp_dir, "encoder.txt")
+    with open(encoder_path, "r") as f:
+        numbers = []
+        line = f.readline()
+        while line:
+            numbers.append(int(line) if "None" not in line else 0)
+            line = f.readline()
+
+    return numbers[0], numbers[1], numbers[2]
+    
+def within_expected_coverage(curr_coverage, target_coverage):
+    return abs(curr_coverage - target_coverage) < 0.025
+
+def to_syntactic_type(param):
+    typ = param.type
+    if typ is None:
+        raise Exception("Parameter", param, "does not have type")
+
+    param.type = typ.to_syntactic()
+    return param
+
+def create_entries(doc, config, ascription, infer_types=True):
+    entries = {}
+
+    endpoints = config.get(consts.KEY_ENDPOINTS)
+    if not endpoints:
+        endpoints = doc.keys()
+
+    for endpoint, ep_def in doc.items():
+        if endpoint not in endpoints:
+            continue
+
+        for _, method_def in ep_def.items():
+            typed_entries = ascription.ascribe_type(method_def, infer_types)
+
+            for entry in typed_entries:
+                # store results
+                entry_name = make_entry_name(entry.endpoint, entry.method)
+                entries[entry_name] = entry
+
+    return entries
+
+def prune_by_coverage(paths, witnesses, coverage):
+    methods = set()
+    for ep, ep_def in paths.items():
+        for md in ep_def.keys():
+            methods.add((ep, md.upper()))
+
+    covered = set()
+    for w in witnesses:
+        key = (w.endpoint, w.method.upper())
+        if (key in methods and
+            not isinstance(w.response, ErrorResponse) and
+            w.response.value is not None):
+            covered.add(key)
+
+    print("Original coverage:", len(covered), "out of", len(methods), ", percentage:", len(covered) / len(methods))
+
+    # coverage = len(covered) / len(methods) * coverage # relative coverage
+    # if curr_coverage <= coverage or within_expected_coverage(curr_coverage, coverage):
+    #     print("Warning: the provided coverage cannot be reached")
+    #     return witnesses
+
+    # drop a random subset of methods to reach the target coverage
+    expected_covered_num = math.floor(coverage * len(covered)) # relative coverage
+    sampled_covered = random.sample(list(covered), k=expected_covered_num)
+
+    sampled_witnesses = []
+    # counts = {}
+    for w in witnesses:
+        key = (w.endpoint, w.method.upper())
+        if key in sampled_covered:
+            sampled_witnesses.append(w)
+    #         if key not in counts:
+    #             counts[key] = []
+
+    #         counts[key].append(w)
+
+    # 
+    # # control the witness size to reduce the memory usage
+    # for k, ws in counts.items():
+    #     if len(ws) > 10:
+    #         sampled_witnesses += ws[-10:]
+    #     else:
+    #         sampled_witnesses += ws
+
+    return sampled_witnesses

@@ -1,0 +1,9 @@
+Academic license - for non-commercial use only - expires 2022-06-24
+Using license file /home/zheng/gurobi.lic
+["{'ok': defs_ok_true}", 'defs_channel', 'defs_bot_id', 'defs_ts', "{'channel': objs_conversation, 'ok': defs_ok_true}", "{'ok': defs_ok_true, 'usergroup': objs_subteam}", "{'file': objs_file, 'ok': defs_ok_true}", "{'channel': defs_channel, 'ok': defs_ok_true, 'ts': defs_ts}", 'objs_conversation.name', "{'ok': defs_ok_true, 'reminder': objs_reminder}"]
+Academic license - for non-commercial use only - expires 2022-06-24
+Using license file /home/zheng/gurobi.lic
+['customer.id', 'source.id', 'plan.id', 'subscription.id', 'coupon.id', 'invoice.id', 'invoice', 'address.line1', 'charge.id', 'fee.currency']
+Academic license - for non-commercial use only - expires 2022-06-24
+Using license file /home/zheng/gurobi.lic
+['Location.id', 'Address', 'Money', 'V1Employee', 'V1EmployeeRole', 'V1Order', 'Order', 'V1Payment', 'V1Refund', 'V1Settlement']

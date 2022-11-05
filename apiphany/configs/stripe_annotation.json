@@ -72,14 +72,8 @@
         "endpoint": null,
         "producer": [
             {
-                "endpoint": "/v1/customers",
-                "method": "get",
-                "path": "data/[?]/id"
-            },
-            {
-                "endpoint": "/v1/customers",
-                "method": "post",
-                "path": "id"
+                "enum": ["cus_JXqQwlgvr7TbPD", "cus_JXqRVg8RTl3qu4"],
+                "combine": false
             }
         ]
     },
@@ -104,14 +98,8 @@
         "endpoint": null,
         "producer": [
             {
-                "endpoint": "/v1/invoices",
-                "method": "get",
-                "path": "data/[?]/id"
-            },
-            {
-                "endpoint": "/v1/invoices",
-                "method": "post",
-                "path": "id"
+                "enum": ["in_1JrCq4DLm14arRKVaEH11ZEi"],
+                "combine": false
             }
         ]
     },
@@ -196,6 +184,16 @@
         ]
     },
     {
+        "consumer": "intent",
+        "endpoint": "/v1/payment_intents/{intent}/confirm",
+        "producer": [
+            {
+                "enum": ["pi_3Jw0LsDLm14arRKV2sVmsvDp", "pi_3Jw0LsDLm14arRKV0Ahm3vBV", "pi_3Jw0LsDLm14arRKV1B8zjKfj"],
+                "combine": false
+            }
+        ]
+    },
+    {
         "consumer": "source",
         "endpoint": null,
         "producer": [
@@ -213,6 +211,16 @@
                 "endpoint": "/v1/sources/{source}",
                 "method": "get",
                 "path": "id"
+            }
+        ]
+    },
+    {
+        "consumer": "id",
+        "endpoint": "/v1/customers/{customer}/sources/{id}",
+        "producer": [
+            {
+                "enum": ["card_1J1nmJDLm14arRKVVkwe9RIJ", "src_1IyVSHDLm14arRKVfxg2sics", "card_1J1nlnDLm14arRKVER5VdVTk", "ba_1IuknTDLm14arRKVhttZGkbh"],
+                "combine": false
             }
         ]
     },
@@ -285,14 +293,8 @@
         "endpoint": null,
         "producer": [
             {
-                "endpoint": "/v1/payment_methods",
-                "method": "get",
-                "path": "data/[?]/id"
-            },
-            {
-                "endpoint": "/v1/payment_methods",
-                "method": "post",
-                "path": "id"
+                "enum": ["card_1J1nmJDLm14arRKVVkwe9RIJ"],
+                "combine": false
             }
         ]
     },

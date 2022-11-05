@@ -4,11 +4,12 @@ import time
 import gurobipy as gp
 from gurobipy import GRB
 
-from stats.time_stats import TimeStats, STATS_ENCODE, STATS_SEARCH
-from synthesizer.utils import group_params, make_entry_name
+from stats.time_stats import TimeStats, STATS_ENCODE
+from synthesizer.utils import group_params, is_syntactic
 from synthesizer.underapprox import Approximation
+import consts
 
-SOLS_PER_SOLVE = 100
+SOLS_PER_SOLVE = 300
 
 # preprocess the spec file and canonicalize the parameters and responses
 class ILPetriEncoder:
@@ -28,6 +29,12 @@ class ILPetriEncoder:
         self._cf = None
         self._soln_ix = None
         self._finals = None
+        # control of how many syntactic type are used
+        self._syntactic_constr = None
+        self._syntactic_quota = 0
+        # control of how many partial objects are created
+        self._partial_constr = None
+        self._partial_quota = 0
 
         # encode place and transition names into integers
         self._place_names = []
@@ -37,14 +44,14 @@ class ILPetriEncoder:
         self._block = []
 
     @TimeStats(key=STATS_ENCODE)
-    def init(self, inputs, outputs):
+    def init(self, inputs, outputs, prim_as_return=False):
         self._model.reset()
         self._path_len = 0
 
         # variables and constraints
         self._add_copy_transitions()
 
-        self._run_approximation(inputs, outputs)
+        self._run_approximation(inputs, outputs, prim_as_return)
 
         self._add_initial_vars()
         self._add_initial_constrs(inputs)
@@ -61,15 +68,11 @@ class ILPetriEncoder:
 
         return res
 
-    def get_length_of(self, path_len, inputs, outputs):
-        self.init(inputs, outputs)
-        while self._path_len < path_len:
-            self.increment()
-        self.set_final(outputs)
-
-        return self.solve()
+    def type_exists(self, typ_name):
+        return self._net.has_place(typ_name)
 
     def solve(self):
+        # print(self._path_len, self._soln_ix, flush=True)
         # previous run failed; assume everything's been incremented and rerun the solver
         if self._soln_ix is None:
             # run the solver
@@ -103,7 +106,7 @@ class ILPetriEncoder:
         if self._model.status == GRB.OPTIMAL:
             s = self._get_sol()
             self._block.append(self._model.addConstr(
-                gp.quicksum(self._fires.sum(x, '*') for x in s) <= len(s) - 1, 
+                gp.quicksum(self._fires.sum(x, i) for i, x in enumerate(s)) <= len(s) - 1, 
                 name='block'))
             transitions = [self._trans_names[t] for t in s]
             return transitions
@@ -115,7 +118,7 @@ class ILPetriEncoder:
             return None
 
     # blocking impl:
-    def block_prev(self, arg):
+    def block_prev(self):
         self._soln_ix += 1
         self._model.setParam(GRB.Param.SolutionNumber, self._soln_ix)
 
@@ -145,28 +148,51 @@ class ILPetriEncoder:
         self._model.remove(self._block)
         self._block = []
 
-    def _run_approximation(self, inputs, output):
+    def increment_syntactic(self):
+        if self._syntactic_quota < 2 * self._path_len:
+            self._syntactic_quota += 1
+            self.reset_syntactic()
+            return True
+        else:
+            return False
+
+    def increment_partial(self):
+        if self._partial_quota < self._path_len:
+            self._partial_quota += 1
+            self.reset_partial()
+            return True
+        else:
+            return False
+
+    def _run_approximation(self, inputs, output, prim_as_return=False):
         # print("before approximation:", len(self._net.transition()))
         # on top of the input types,
         # we also need to add output types of transitions with no required args
-        self._reachables = set()
-        input_places = list(inputs.keys())
-        null_places = []
-        for trans, e in self._entries.items():
-            no_required = True
-            for p in e.parameters:
-                if p.is_required:
-                    no_required = False
-                    break
+        if not prim_as_return:
+            self._reachables = set()
+            input_places = list(inputs.keys())
+            null_places = []
+            for trans, e in self._entries.items():
+                no_required = True
+                for p in e.parameters:
+                    if p.is_required:
+                        no_required = False
+                        break
 
-            if no_required:
-                null_places.append(str(e.response.type.ignore_array()))
-                self._reachables.add(trans)
+                if no_required:
+                    null_places.append(str(e.response.type.ignore_array()))
+                    self._reachables.add(trans)
 
-        reachables = self._approx.approx_reachability(
-            input_places + null_places, output
-        )
-        self._reachables = self._reachables.union(reachables)
+            reachables = self._approx.approx_reachability(
+                input_places + null_places, output
+            )
+            self._reachables = self._reachables.union(reachables)
+        else:
+            self._reachables = set(self._entries.keys()) # everything is reachable
+
+        # print("clone_customer.id", "clone_customer.id" in self._reachables)
+        # print("/v1/customers/{customer}/sources/{id}_DELETE", "/v1/customers/{customer}/sources/{id}_DELETE" in self._reachables)
+        # print("/v1/customers/{customer}_GET", "/v1/customers/{customer}_GET" in self._reachables)
 
         for trans in self._net.transition():
             if trans.name not in self._reachables:
@@ -268,11 +294,9 @@ class ILPetriEncoder:
                             output_changes += self._tokens[(p_idx, ck + 1)]
                     else: # FIXME: changes separate for filters and non-filters
                         if output_changes is None:
-                            output_changes = self._tokens[(p_idx, ck + 1)] - \
-                                self._tokens[(p_idx, ck + 1)]
+                            output_changes = self._tokens[(p_idx, ck + 1)] - self._tokens[(p_idx, ck + 1)]
                         else:
-                            output_changes += self._tokens[(p_idx, ck + 1)] - \
-                                self._tokens[(p_idx, ck + 1)]
+                            output_changes += self._tokens[(p_idx, ck + 1)] - self._tokens[(p_idx, ck + 1)]
                 else: # required outputs
                     if entry is None: # clone transitions
                         tokens[p.name] = (req_in - 2, opt_in, 0)
@@ -349,7 +373,7 @@ class ILPetriEncoder:
         places = self._net.place()
         for place in places:
             # copy transitions
-            trans_name = place.name + "_clone"
+            trans_name = consts.PREFIX_CLONE + place.name
             self._net.add_transition(Transition(trans_name))
             self._net.add_input(place.name, trans_name, Value(1))
             self._net.add_output(place.name, trans_name, Value(2))
@@ -390,6 +414,28 @@ class ILPetriEncoder:
                 (self._tokens[(p, t)] == self._finals.get(self._place_names[p], 0) for p in places),
                 name='final_marking')
 
+    def reset_syntactic(self):
+        if self._syntactic_constr:
+            self._model.remove(self._syntactic_constr)
+
+        usage = 0
+        for p in range(len(self._place_names)):
+            if is_syntactic(self._place_names[p]):
+                usage += self._tokens.sum(p, '*')
+    
+        self._syntactic_constr = self._model.addConstr(usage == self._syntactic_quota)
+
+    def reset_partial(self):
+        if self._partial_constr:
+            self._model.remove(self._partial_constr)
+
+        usage = 0
+        for t in range(len(self._trans_names)):
+            if consts.PREFIX_PARTIAL in self._trans_names[t]:
+                usage += self._fires.sum(t, '*')
+
+        self._partial_constr = self._model.addConstr(usage == self._partial_quota)
+
     def set_final(self, typs):
         # Final marking
         # Will be removed and re-added on each increment of ck.
@@ -397,4 +443,3 @@ class ILPetriEncoder:
         # constraint enforcing the final val of void.
         self._finals = typs
         self._reset_finals(self._path_len)
-

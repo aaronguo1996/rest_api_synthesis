@@ -23,6 +23,9 @@ pub enum Expr {
     App(u16),
     Push(MiniSpur),
 
+    // Object conversion
+    Object(u16),
+
     // Handling binds
     Bind(MiniSpur),
 }

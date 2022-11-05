@@ -1,0 +1,95 @@
+Parsing OpenAPI document...
+Parsing OpenAPI document...
+Parsing OpenAPI document...
+Running 1.1
+RE time: 4.0531158447265625e-06
+FAIL
+Running 1.2
+RE time: 0.0029256343841552734
+FAIL
+Running 1.3
+RE time: 3.0994415283203125e-06
+FAIL
+Running 1.4
+RE time: 3.337860107421875e-06
+FAIL
+Running 1.5
+RE time: 3.0994415283203125e-06
+FAIL
+Running 1.6
+RE time: 1.0893778800964355
+PASS, Ranks [145]
+Running 1.7
+RE time: 0.718595027923584
+PASS, Ranks [20]
+Running 2.1
+RE time: 0.7314467430114746
+PASS, Ranks [43]
+Running 2.2
+RE time: 0.7859582901000977
+PASS, Ranks [31]
+Running 2.3
+RE time: 0.23062729835510254
+FAIL
+Running 2.4
+RE time: 0.7365143299102783
+PASS, Ranks [1]
+Running 2.5
+RE time: 0.45073747634887695
+PASS, Ranks [3]
+Running 2.6
+RE time: 0.07935500144958496
+FAIL
+Running 2.7
+RE time: 0.4544355869293213
+PASS, Ranks [1]
+Running 2.8
+RE time: 0.465531587600708
+PASS, Ranks [11]
+Running 2.9
+RE time: 0.18968462944030762
+PASS, Ranks [1]
+Running 2.10
+RE time: 0.13423562049865723
+FAIL
+Running 3.1
+RE time: 0.07420134544372559
+PASS, Ranks [102]
+Running 3.2
+RE time: 0.05537152290344238
+PASS, Ranks [4]
+Running 3.3
+RE time: 0.03502988815307617
+FAIL
+Running 3.4
+RE time: 0.0563349723815918
+PASS, Ranks [5]
+Running 3.5
+RE time: 0.001954793930053711
+FAIL
+Running 3.6
+RE time: 0.030488967895507812
+FAIL
+Running 3.7
+RE time: 0.21325922012329102
+PASS, Ranks [263]
+Running 3.8
+RE time: 0.02202892303466797
+FAIL
+Running 3.9
+RE time: 0.10622859001159668
+PASS, Ranks [39]
+{('/conversations.mark', 'POST'), ('/conversations.leave', 'POST'), ('/conversations.invite', 'POST'), ('/chat.delete', 'POST'), ('/conversations.kick', 'POST'), ('/stars.remove', 'POST'), ('/stars.add', 'POST'), ('/users.profile.set', 'POST'), ('/conversations.unarchive', 'POST'), ('/conversations.create', 'POST'), ('/chat.postMessage', 'POST'), ('/conversations.rename', 'POST'), ('/pins.add', 'POST'), ('/conversations.open', 'POST'), ('/conversations.setPurpose', 'POST'), ('/chat.update', 'POST'), ('/conversations.join', 'POST'), ('/conversations.close', 'POST'), ('/conversations.archive', 'POST'), ('/pins.remove', 'POST')}
+('/conversations.list', 'GET') is not covered
+('/users.lookupByEmail', 'GET') is not covered
+('/users.conversations', 'GET') is not covered
+('/conversations.list', 'GET') is not covered
+('/conversations.list', 'GET') is not covered
+slack has 5 benchmarks with not covered endpoints
+{('/v1/customers', 'GET'), ('/v1/customers/{customer}/sources', 'POST'), ('/v1/payment_intents/{intent}', 'GET'), ('/v1/subscription_schedules', 'GET'), ('/v1/products', 'GET'), ('/v1/disputes', 'GET'), ('/v1/credit_notes', 'POST'), ('/v1/charges/{charge}', 'GET'), ('/v1/invoices/upcoming', 'GET'), ('/v1/products/{id}', 'GET'), ('/v1/customers', 'POST'), ('/v1/products', 'POST'), ('/v1/events', 'GET'), ('/v1/billing_portal/configurations', 'GET'), ('/v1/coupons', 'GET'), ('/v1/subscriptions', 'GET'), ('/v1/invoices/{invoice}', 'GET'), ('/v1/payment_intents', 'POST'), ('/v1/invoices/{invoice}/pay', 'POST'), ('/v1/invoices', 'GET'), ('/v1/customers/{customer}/balance_transactions', 'GET'), ('/v1/orders', 'GET'), ('/v1/prices', 'GET'), ('/v1/invoiceitems/{invoiceitem}', 'POST'), ('/v1/subscriptions', 'POST'), ('/v1/invoices/{invoice}', 'POST'), ('/v1/coupons', 'POST'), ('/v1/prices', 'POST'), ('/v1/invoiceitems', 'GET'), ('/v1/plans', 'GET'), ('/v1/customers/{customer}', 'GET'), ('/v1/subscriptions/{subscription_exposed_id}', 'GET'), ('/v1/invoiceitems', 'POST'), ('/v1/tax_rates', 'GET'), ('/v1/invoices/upcoming/lines', 'GET'), ('/v1/reviews', 'GET'), ('/v1/subscriptions/{subscription_exposed_id}', 'POST'), ('/v1/credit_notes/preview', 'GET'), ('/v1/customers/{customer}/sources', 'GET'), ('/v1/tax_rates', 'POST'), ('/v1/credit_notes', 'GET'), ('/v1/accounts/{account}', 'GET'), ('/v1/payment_methods', 'GET')}
+('/v1/refunds', 'POST') is not covered
+stripe has 1 benchmarks with not covered endpoints
+{('/v2/customers/groups', 'POST'), ('/v2/orders/batch-retrieve', 'POST'), ('/v2/locations/{location_id}/checkouts', 'POST'), ('/v2/catalog/info', 'GET'), ('/v2/catalog/object/{object_id}', 'DELETE'), ('/v2/payments', 'GET'), ('/v2/orders/search', 'POST'), ('/v2/customers/{customer_id}/groups/{group_id}', 'PUT'), ('/v2/customers/groups/{group_id}', 'PUT'), ('/v2/catalog/update-item-taxes', 'POST'), ('/v2/invoices/{invoice_id}', 'PUT'), ('/v2/catalog/object', 'POST'), ('/v2/subscriptions/{subscription_id}/events', 'GET'), ('/v2/customers/groups/{group_id}', 'GET'), ('/v2/invoices/{invoice_id}', 'GET'), ('/v2/payments', 'POST'), ('/v2/catalog/batch-upsert', 'POST'), ('/v2/invoices', 'GET'), ('/v2/locations/{location_id}/transactions', 'GET'), ('/v2/invoices/{invoice_id}/publish', 'POST'), ('/v2/loyalty/programs', 'GET'), ('/v2/customers', 'GET'), ('/v2/payments/cancel', 'POST'), ('/v2/catalog/list', 'GET'), ('/v2/invoices/search', 'POST'), ('/v2/subscriptions/{subscription_id}/cancel', 'POST'), ('/v2/locations/{location_id}', 'PUT'), ('/v2/invoices', 'POST'), ('/v2/locations', 'GET'), ('/v2/orders', 'POST'), ('/v2/catalog/search-catalog-items', 'POST'), ('/v2/locations/{location_id}/transactions', 'POST'), ('/v2/customers', 'POST'), ('/v2/catalog/object/{object_id}', 'GET'), ('/v2/locations/{location_id}', 'GET'), ('/v2/catalog/batch-delete', 'POST'), ('/v2/customers/{customer_id}', 'DELETE'), ('/v2/locations', 'POST'), ('/v2/invoices/{invoice_id}/cancel', 'POST'), ('/v2/locations/{location_id}/transactions/{transaction_id}', 'GET'), ('/v2/payments/{payment_id}', 'PUT'), ('/v2/customers/{customer_id}/cards', 'POST'), ('/v2/catalog/search', 'POST'), ('/v2/orders/calculate', 'POST'), ('/v2/subscriptions', 'POST'), ('/v2/payments/{payment_id}/cancel', 'POST'), ('/v2/customers/{customer_id}', 'PUT'), ('/v2/payments/{payment_id}', 'GET'), ('/v2/customers/search', 'POST'), ('/v2/customers/groups/{group_id}', 'DELETE'), ('/v2/invoices/{invoice_id}', 'DELETE'), ('/v2/customers/groups', 'GET'), ('/v2/customers/{customer_id}', 'GET'), ('/v2/customers/{customer_id}/groups/{group_id}', 'DELETE'), ('/v2/orders/{order_id}', 'PUT'), ('/v2/locations/{location_id}/transactions/{transaction_id}/capture', 'POST'), ('/v2/payments/{payment_id}/complete', 'POST'), ('/v2/subscriptions/{subscription_id}', 'PUT'), ('/v2/orders/{order_id}', 'GET'), ('/v2/subscriptions/{subscription_id}', 'GET'), ('/v2/catalog/batch-retrieve', 'POST'), ('/v2/subscriptions/search', 'POST')}
+squareapi has 0 benchmarks with not covered endpoints
+written to ./api_info.tex
+written to ./results.tex

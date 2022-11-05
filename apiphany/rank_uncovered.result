@@ -1,0 +1,78 @@
+Running 1.1
+RE time: 1.960949420928955
+PASS, Ranks [64, 67, 68]
+Running 1.2
+RE time: 1.2903337478637695
+PASS, Ranks [1, 1, 1]
+Running 1.3
+RE time: 0.5167276859283447
+FAIL
+Running 1.4
+RE time: 3.4663872718811035
+PASS, Ranks [9, 9, 9]
+Running 1.5
+RE time: 5.585322380065918
+PASS, Ranks [7, 7, 7]
+Running 1.6
+RE time: 0.4683868885040283
+FAIL
+Running 1.7
+RE time: 2.568021059036255
+PASS, Ranks [2, 2, 3]
+Running 2.1
+RE time: 3.028348684310913
+PASS, Ranks [1, 1, 1]
+Running 2.2
+RE time: 4.286485195159912
+PASS, Ranks [1, 1, 1]
+Running 2.3
+RE time: 3.0105621814727783
+PASS, Ranks [1, 1, 1]
+Running 2.4
+RE time: 2.3738908767700195
+PASS, Ranks [1, 1, 76]
+Running 2.5
+RE time: 1.2788307666778564
+PASS, Ranks [2, 2, 2]
+Running 2.6
+RE time: 2.166516065597534
+PASS, Ranks [2, 2, 2]
+Running 2.7
+RE time: 3.7322824001312256
+PASS, Ranks [65, 112, 117]
+Running 2.8
+RE time: 2.7519006729125977
+PASS, Ranks [5, 6, 6]
+Running 2.9
+RE time: 1.6019220352172852
+PASS, Ranks [1, 1, 1]
+Running 2.10
+RE time: 1.167356014251709
+PASS, Ranks [1, 1, 1]
+Running 3.1
+RE time: 0.21062731742858887
+PASS, Ranks [1, 1, 1]
+Running 3.2
+RE time: 0.10869884490966797
+PASS, Ranks [3, 4, 4]
+Running 3.3
+RE time: 2.2242696285247803
+PASS, Ranks [4, 4, 4]
+Running 3.4
+RE time: 0.28911495208740234
+PASS, Ranks [1, 1, 1]
+Running 3.5
+RE time: 0.0294034481048584
+FAIL
+Running 3.6
+RE time: 0.5365505218505859
+PASS, Ranks [1, 1, 1]
+Running 3.7
+RE time: 0.47279930114746094
+PASS, Ranks [1, 1, 1]
+Running 3.8
+RE time: 0.27707958221435547
+PASS, Ranks [1, 1, 1]
+Running 3.9
+RE time: 0.3819711208343506
+PASS, Ranks [210, 215, 216]

@@ -1,7 +1,9 @@
+from enum import Enum
+
 OBJ_MATCH_THRESHOLD = 0.6
 REF_PREFIX = "#/components/schemas/"
 CUSTOM_PREFIX = "x-"
-DEFAULT_LENGTH_LIMIT = 10
+DEFAULT_LENGTH_LIMIT = 9
 JSON_TYPE = "application/json"
 HOSTNAME_PREFIX = "https://"
 HOSTNAME_PREFIX_LEN = len(HOSTNAME_PREFIX)
@@ -38,6 +40,7 @@ KEY_EXPAND_GROUP = "expand_group"
 KEY_BLOCK_PERM = "block_perms"
 KEY_EXECUTION = "execution"
 KEY_BIAS = "bias_type"
+KEY_INITIAL_WITNESS_ONLY = "initial_witness_only"
 
 SOLVER_PN_SMT = "petri net SMT"
 SOLVER_HYPER = "hypergraph"
@@ -46,6 +49,33 @@ SOLVER_PN_ILP = "petri net ILP"
 FILE_TRACE = "traces.pkl"
 FILE_ENTRIES = "entries.pkl"
 FILE_GRAPH = "graph.pkl"
+FILE_RESULTS = "bench_results.pkl"
+
+PREFIX_CLONE = "clone_"
+PREFIX_CONVERT = "convert_"
+PREFIX_PARTIAL = "partial_"
 
 SPACE = '    '
 MAX_COST = 99999.9
+MAX_PARAMS = 4
+
+EXP_DEFAULT = "default_apiphany"
+DATA_DEFAULT = "experiment_data"
+
+# benchmarking
+APIS = ["slack_api_test", "stripe_api_test", "square_api_test"]
+APIS_LATEX = ["slack", "stripe", "squareapi"]
+TOTAL_BENCHMARKS = 32
+TIMEOUT = 150
+
+class UncoveredOption(Enum):
+    EXCLUDE = "exclude"
+    DEFAULT_TO_SYNTACTIC = "default-to-syntactic"
+
+    def __str__(self):
+        return self.value
+
+class SearchStatus(Enum):
+    FOUND_EXPECTED = "found-expected"
+    NOT_FOUND = "not-found"
+    TIMEOUT = "timeout"

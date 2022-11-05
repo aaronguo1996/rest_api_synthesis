@@ -1,10 +1,10 @@
-use crate::{Expr, ExprIx, Prog, ProgIx, RValue, RootSlab, ThreadSlab, Traces, ValueIx};
+use crate::{Expr, ExprIx, Prog, RValue, RootSlab, ThreadSlab, Traces, ValueIx, RODEO};
 use hashbrown::HashMap;
 use lasso::{MiniSpur, Rodeo, RodeoResolver};
 use nanorand::{tls_rng, RNG};
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
-use rayon::prelude::*;
+// use rayon::prelude::*;
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryInto;
 
@@ -16,14 +16,14 @@ pub type Cost = usize;
 pub struct Runner {
     arena: Arena,
     /// A list of programs stored in the `arena`.
-    progs: Vec<Prog>,
+    prog: Prog,
     default_inputs: HashMap<MiniSpur, Vec<ValueIx>>,
 }
 
 impl Runner {
     pub fn new(
         mut arena: Arena,
-        progs: Vec<Prog>,
+        prog: Prog,
         default_inputs: HashMap<MiniSpur, Vec<ValueIx>>,
     ) -> Self {
         // Swap arena into read-only mode
@@ -31,7 +31,7 @@ impl Runner {
 
         Self {
             arena,
-            progs,
+            prog,
             default_inputs,
         }
     }
@@ -41,118 +41,79 @@ impl Runner {
     /// values for that input.
     pub fn run(
         self,
-        target_ix: ProgIx,
         multiple: bool,
         slab: &RootSlab,
-        filter_num: usize,
         repeat: usize,
-    ) -> Vec<usize> {
-        // Not sure why the list of input solutions would be empty but
-        // Apparently it happens lol
-        if self.progs.is_empty() {
-            return vec![];
+    ) -> Cost {
+        let mut all_none = true;
+        let mut all_singleton = true;
+        let mut all_multiple = true;
+        let mut all_empty = true;
+
+        let mut costs: Vec<Cost> = Vec::with_capacity(repeat);
+        let mut t = ThreadSlab::new(slab);
+        for _rep in 0..repeat {
+            // Make a new execution environment
+            let mut ex = ExecEnv::new(
+                &self.arena,
+                self.prog.start,
+                self.prog.end,
+                &self.default_inputs,
+            );
+
+            // Run RE!
+            let (result, cost) = ex.run(&mut t).unwrap_or_else(|| (None, 99999));
+
+            if let Some(r) = result {
+                all_none = false;
+
+                if !(t.get(r).unwrap().is_empty()) {
+                    all_empty = false;
+                }
+
+                let mut rr = t.get(r).unwrap();
+                // flatten the array
+
+                while let Some(ra) = rr.as_array() {
+                    if ra.len() == 1 {
+                        rr = t.get(ra[0]).unwrap();
+                    } else {
+                        break;
+                    }
+                }
+
+                if rr.is_array() && rr.as_array().unwrap().len() > 1 {
+                    all_singleton = false;
+                } else {
+                    all_multiple = false;
+                }
+
+                costs.push(cost);
+            }
+
+            t.clear();
         }
 
-        let mut avgs: Vec<usize> = (0..filter_num)
-            .into_par_iter()
-            .map(|_exp| {
-                let mut res = Vec::with_capacity(self.progs.len());
-                // let res;
+        // println!("overall slab size: {}", slab.data.len());
+        // println!("thread slab size: {}", t.data.len());
 
-                self.progs
-                    .par_iter()
-                    .enumerate()
-                    .map(|(ix, prog)| {
-                        let mut all_none = true;
-                        let mut all_singleton = true;
-                        let mut all_multiple = true;
-                        let mut all_empty = true;
+        if all_none {
+            return 99999;
+        }
 
-                        let mut costs: Vec<Cost> = Vec::with_capacity(repeat);
-                        let mut t = ThreadSlab::new(slab);
-                        for _rep in 0..repeat {
-                            // Make a new execution environment
-                            let mut ex = ExecEnv::new(
-                                &self.arena,
-                                prog.start,
-                                prog.end,
-                                &self.default_inputs,
-                            );
+        let mut cost_avg = costs.iter().filter(|c| c < &&99999).sum::<Cost>() / costs.len();
 
-                            // Run RE!
-                            let (result, cost) = ex.run(&mut t).unwrap_or_else(|| (None, 99999));
+        if all_singleton && multiple {
+            cost_avg += 25;
+        } else if all_multiple && !multiple {
+            cost_avg += 50;
+        }
 
-                            if let Some(r) = result {
-                                all_none = false;
+        if all_empty {
+            cost_avg += 10;
+        }
 
-                                if !(t.get(r).unwrap().is_empty()) {
-                                    all_empty = false;
-                                }
-
-                                let mut rr = t.get(r).unwrap();
-
-                                while let Some(ra) = rr.as_array() {
-                                    if ra.len() == 1 {
-                                        rr = t.get(ra[0]).unwrap();
-                                    } else {
-                                        break;
-                                    }
-                                }
-
-                                if rr.is_array() && rr.as_array().unwrap().len() > 1 {
-                                    all_singleton = false;
-                                } else {
-                                    all_multiple = false;
-                                }
-
-                                costs.push(cost);
-                            }
-
-                            t.clear();
-                        }
-
-                        // println!("overall slab size: {}", slab.data.len());
-                        // println!("thread slab size: {}", t.data.len());
-
-                        if all_none {
-                            return (ix, 99999);
-                        }
-
-                        let mut cost_avg = costs.iter().sum::<Cost>() / costs.len();
-
-                        if all_singleton && multiple {
-                            cost_avg += 25;
-                        } else if all_multiple && !multiple {
-                            cost_avg += 50;
-                        }
-
-                        if all_empty {
-                            cost_avg += 10;
-                        }
-
-                        // println!("{}", cost_avg);
-
-                        (ix, cost_avg)
-                    })
-                    .collect_into_vec(&mut res);
-
-                let tgt_cost = res.get(target_ix).unwrap().1;
-
-                // Sort the result by cost and get the cost of the target ix
-                res.sort_by_key(|x| x.1);
-
-                // println!("min (rank 1): {:?}", &res[0..20]);
-                (
-                    tgt_cost,
-                    res.iter().position(|x| x.1 == tgt_cost).unwrap() + 1,
-                )
-            })
-            .filter(|x| x.0 < 99999)
-            .map(|x| x.1)
-            .collect();
-
-        avgs.sort();
-        avgs
+        cost_avg
     }
 }
 
@@ -251,6 +212,7 @@ impl<'a> ExecEnv<'a> {
                 Expr::Var(v) => {
                     // Get var out of heap and push to stack.
                     let v = if let Some(val) = self.env.get(v) {
+                        // println!("find in the environment for {:?} of value {:?}", self.arena.get_str(v), heap.get(*val)?);
                         *val
                     } else {
                         // If we're trying to reference an undefined variable, it must
@@ -260,11 +222,12 @@ impl<'a> ExecEnv<'a> {
                         // to populate this variable. Otherwise, use the default inputs.
                         if self.candidates {
                             let last = self.data.last()?;
+                            // println!("getting candidate {:?}", heap.get(*last)?);
                             if let Some(choices) = heap.get(*last).unwrap().as_array() {
                                 // Choose one of these values for our input
                                 // TODO: flatten list
                                 let mut rng = tls_rng();
-                                let choice = choices[rng.generate_range(0, choices.len() - 1)];
+                                let choice = choices[rng.generate_range(0, choices.len())];
                                 self.env.insert(*v, choice);
 
                                 choice
@@ -283,12 +246,13 @@ impl<'a> ExecEnv<'a> {
                                 return None;
                             }
 
-                            let choice = choices[rng.generate_range(0, choices.len() - 1)];
+                            let choice = choices[rng.generate_range(0, choices.len())];
                             self.env.insert(*v, choice);
 
                             choice
                         }
                     };
+                    // println!("Choose {:?}", v);
 
                     self.data.push(v);
 
@@ -343,7 +307,7 @@ impl<'a> ExecEnv<'a> {
                         }
                     }
 
-                    if let RValue::Null = tmp.1 {
+                    if tmp.1.is_none() {
                         self.set_error();
                         continue 'outer;
                     }
@@ -383,7 +347,13 @@ impl<'a> ExecEnv<'a> {
                         self.cost = 0;
 
                         // Push x[0] to env.
-                        self.env.insert(*v, *x.get(0).unwrap());
+                        let xaddr = *x.get(0).unwrap();
+                        let xv = heap.get_mut(xaddr)?;
+                        if !xv.1.is_none() {
+                            // println!("bind {:?} to value {:?}", *v, *x.get(0).unwrap());
+                            self.env.insert(*v, xaddr);
+                        }
+                        // self.env.insert(*v, *x.get(0).unwrap());
 
                         // Set tip to error recovery spot; the last place with
                         // a valid data val.
@@ -407,7 +377,7 @@ impl<'a> ExecEnv<'a> {
 
                         // Insert in sorted order of the param name
                         match names.binary_search(&name) {
-                            Ok(_pos) => unreachable!(),
+                            Ok(_pos) => unreachable!(self.arena.get_str(&name)),
                             Err(pos) => {
                                 names.insert(pos, name);
                                 vals.insert(pos, val);
@@ -433,6 +403,20 @@ impl<'a> ExecEnv<'a> {
                     } else {
                         self.set_error();
                     }
+                }
+                Expr::Object(n) => {
+                    let n = (*n).try_into().unwrap();
+                    let mut object: HashMap<String, ValueIx> = HashMap::with_capacity(n);
+
+                    for _i in 0..n {
+                        let name = heap.get(self.data.pop()?)?.as_symbol()?;
+                        let val = self.data.pop()?;
+                        object.insert(self.arena.get_str(&name).to_string(), val);
+                    }
+
+                    self.data.push(heap.push_rval(RValue::Object(object)));
+                    self.cost += 5;
+                    self.ip += 1;
                 }
                 Expr::Push(s) => {
                     // We push a MiniSpur by pushing a usize number to the stack
@@ -659,28 +643,36 @@ impl Arena {
         };
 
         if !responses.is_empty() {
+            // println!(
+            //     "trace found for: {:?}\nnames: {:?}\nvals: {:?}",
+            //     self.get_str(&f),
+            //     args
+            //         .iter()
+            //         .map(|x| self.get_str(x))
+            //         .collect::<Vec<_>>(),
+            //     vals
+            // );
             let dist = WeightedIndex::new(&weights).unwrap();
             let mut rng = thread_rng();
-            Some(responses[dist.sample(&mut rng)])
+            let ix = dist.sample(&mut rng);
+            // println!("trace index: {:?}", ix);
+            Some(responses[ix])
 
             // Some(responses[weighted_choice(&weights)])
         } else {
+            // println!("trace not found for {:?} and {:?}", args, vals);
             None
         }
     }
 
     pub fn intern_str(&mut self, s: &str) -> MiniSpur {
-        match &mut self.strs {
-            RWRodeo::Write(r) => r.get_or_intern(s),
-            RWRodeo::Read(_) => panic!("can't write, haven't switched rodeos!"),
-        }
+        let rodeo = unsafe { RODEO.as_mut().unwrap() };
+        rodeo.get_or_intern(s)
     }
 
     pub fn get_str(&self, s: &MiniSpur) -> &str {
-        match &self.strs {
-            RWRodeo::Read(r) => r.resolve(s),
-            RWRodeo::Write(_) => panic!("can't read, haven't switched rodeos!"),
-        }
+        let rodeo = unsafe { RODEO.as_mut().unwrap() };
+        rodeo.resolve(s)
     }
 
     // TODO: Add some type safety? some state machine stuff

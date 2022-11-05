@@ -1,17 +1,20 @@
-import jsonref
-import json
+import re
+import copy
+import random
 
 from openapi import defs
 from analyzer.entry import Parameter, TraceEntry
 from openapi.utils import blacklist
 from schemas import types
-from synthesizer.utils import make_entry_name
+from synthesizer.utils import make_entry_name, make_type_transition_name, make_partial_trans_name
 import consts
+from analyzer.utils import get_representative
 
 class Constructor:
-    def __init__(self, doc, analyzer):
+    def __init__(self, doc, analyzer, infer_types=True):
         self._doc = doc
         self._analyzer = analyzer
+        self._infer_types = infer_types
 
     def _create_projections(self):
         projections = {}
@@ -66,31 +69,27 @@ class Constructor:
                 else:
                     to_field_typ = name
 
-                in_name = None
+                
+                in_name = obj_name
+                if '{' in in_name and '}' in in_name:
+                    in_typ = types.construct_type(
+                        field_name if self._infer_types else None, 
+                        obj_def)
+                else:
+                    if types.BaseType.object_lib.get(in_name) is None:
+                        return results
 
-                parts = self._analyzer.type_partitions.get(obj_name)
-                if parts is not None:
-                    for i, part in enumerate(parts):
-                        for p in part:
-                            if to_field_typ == p[:len(to_field_typ)]:
-                                in_name = f"{obj_name}_{i}"
-                                break
-                            if in_name is not None:
-                                break
-                        else:
-                            in_name = None
-
-                if in_name is None:
-                    in_name = obj_name
+                    in_typ = types.SchemaObject(in_name)
 
                 endpoint = f"projection({in_name}, {name})"
                 proj_in = Parameter(
-                    "", "obj", endpoint, ["obj"],
-                    True, None, types.SchemaObject(in_name), None
+                    "", "obj", endpoint, ["obj"], True, None, in_typ, None
                 )
 
                 is_array = prop.get(defs.DOC_TYPE) == defs.TYPE_ARRAY
-                out_type = types.construct_type(f"{field_name}.{name}", prop)
+                out_type = types.construct_type(
+                    f"{field_name}.{name}" if self._infer_types else None, 
+                    prop)
 
                 # skip uninformative fields
                 if (isinstance(out_type, types.ObjectType) and
@@ -98,11 +97,11 @@ class Constructor:
                     continue
 
                 proj_out = Parameter(
-                    "", "field", endpoint, ["field"],
-                    True, int(is_array), out_type, None
+                    "", "field", endpoint, ["field"], True, int(is_array), out_type, None
                 )
-                proj_in = self._analyzer.find_same_type(proj_in)
-                proj_out = self._analyzer.find_same_type(proj_out)
+                if self._infer_types:
+                    proj_in = self._analyzer.find_same_type(proj_in)
+                    proj_out = self._analyzer.find_same_type(proj_out)
                 entry = TraceEntry(endpoint, "", None, [proj_in], proj_out)
                 result_key = make_entry_name(endpoint, "")
                 results[result_key] = entry
@@ -131,7 +130,8 @@ class Constructor:
         objs = self._doc.get(defs.DOC_COMPONENTS).get(defs.DOC_SCHEMAS)
         for obj_name, obj_def in objs.items():
             # skip temporary types defined by ourselves
-            if blacklist(obj_name):
+            if (blacklist(obj_name) or 
+                re.search("(.*Request)|(.*Response)", obj_name)):
                 continue
 
             filter_entries = self._create_filter(obj_name, obj_name, obj_def)
@@ -175,7 +175,9 @@ class Constructor:
         elif defs.DOC_PROPERTIES in field_def: # if the object has sub-fields
             properties = field_def.get(defs.DOC_PROPERTIES)
             for name, prop in properties.items():
-                field_type = types.construct_type(f"{field_name}.{name}", prop)
+                field_type = types.construct_type(
+                    f"{field_name}.{name}" if self._infer_types else None, 
+                    prop)
                 # skip uninformative fields
                 if (isinstance(field_type, types.ObjectType) and
                     not field_type.object_fields):
@@ -196,36 +198,8 @@ class Constructor:
                     else:
                         to_field_typ = name
 
-                    in_name = None
-                    parts = self._analyzer.type_partitions.get(obj_name)
-                    opt_ins = []
-                    if parts is not None:
-                        for i, part in enumerate(parts):
-                            if to_field_typ in part:
-                                in_name = f"{obj_name}_{i}"
-                                break
-                            else:
-                                in_name = None
-
-                        for j in range(len(parts)):
-                            if j != i:
-                                param = Parameter(
-                                    "", "obj",
-                                    f"filter({in_name}, {in_name}.{to_field_typ})",
-                                    ["obj"], False, None,
-                                    types.SchemaObject(f"{obj_name}_{j}"), None
-                                )
-                                opt_ins.append(param)
-
-                        out_type = [
-                            types.SchemaObject(f"{obj_name}_{j}")
-                            for j in range(len(parts))
-                        ]
-
-                    if in_name is None:
-                        in_name = obj_name
-                        out_type = types.SchemaObject(obj_name)
-
+                    in_name = obj_name
+                    out_type = types.SchemaObject(obj_name)
                     endpoint = f"filter({in_name}, {in_name}.{to_field_typ})"
                     filter_in = [
                         Parameter(
@@ -237,22 +211,24 @@ class Constructor:
                             "", "field", endpoint, ["field"],
                             True, None, field_type, None
                         )
-                    ] + opt_ins
+                    ]
                     filter_out = Parameter(
                         "", "obj", endpoint,
                         ["obj"], True, 1, out_type, None
                     )
-                    filter_in = [self._analyzer.find_same_type(fin)
-                        for fin in filter_in]
 
-                    if parts is None:
+                    if self._infer_types:
+                        filter_in = [self._analyzer.find_same_type(fin)
+                            for fin in filter_in]
                         filter_out = self._analyzer.find_same_type(filter_out)
 
                     entry = TraceEntry(endpoint, "", None, filter_in, filter_out)
                     result_key = make_entry_name(endpoint, "")
                     results[result_key] = entry
         elif obj_name != field_name:
-            field_type = types.construct_type(f"{field_name}", field_def)
+            field_type = types.construct_type(
+                f"{field_name}" if self._infer_types else None,
+                field_def)
             # skip uninformative fields
             if (isinstance(field_type, types.ObjectType) and
                 not field_type.object_fields):
@@ -274,9 +250,11 @@ class Constructor:
                 "", "obj", endpoint,
                 ["obj"], True, 1, types.SchemaObject(obj_name), None
             )
-            filter_in = [self._analyzer.find_same_type(fin)
-                for fin in filter_in]
-            filter_out = self._analyzer.find_same_type(filter_out)
+
+            if self._infer_types:
+                filter_in = [self._analyzer.find_same_type(fin)
+                    for fin in filter_in]
+                filter_out = self._analyzer.find_same_type(filter_out)
 
             entry = TraceEntry(endpoint, "", None, filter_in, filter_out)
             result_key = make_entry_name(endpoint, "")
@@ -284,10 +262,87 @@ class Constructor:
 
         return results
 
+    def _construct_type_trans(self, projections):
+        results = {}
 
-    def construct_graph(self):
+        # for all semantic types, transition to its syntactic type
+        semantic_types = {}
+
+        # semantic types appear in the union-find results
+        groups = self._analyzer.dsu.groups()
+        for group in groups:
+            rep = get_representative(group)
+            if rep is not None:
+                param = random.choice(list(group))
+                while param.type is None or param.type.name is None:
+                    param = random.choice(list(group))
+                    
+                semantic_types[rep] = param
+
+        # semantic types appear in the projections (this should subsumes those in filters)
+        for proj in projections.values():
+            for param in proj.parameters + [proj.response]:
+                if param.type.name is not None:
+                    semantic_types[param.type.name] = param
+
+        for name, param in semantic_types.items():
+            if (name != defs.TYPE_BOOL and
+                name != defs.TYPE_INT and
+                name != defs.TYPE_STRING and
+                name != defs.TYPE_NUM and
+                name != defs.TYPE_OBJECT):
+                
+                # skip non-schema types when syntactic_only is True
+                if not self._infer_types and '.' in name:
+                    continue
+
+                prim_name = param.type.get_primitive_name()
+                out_type = copy.deepcopy(param.type)
+                out_type = out_type.to_syntactic()
+
+                trans_name = make_type_transition_name(name, prim_name)
+                results[trans_name] = TraceEntry(
+                    trans_name, "", None,
+                    [Parameter("", "in", trans_name, ["in"], True, None, 
+                        param.type, None)],
+                    Parameter("", "out", trans_name, ["out"], True, None,
+                        out_type, None)
+                )
+
+        return results
+
+    def _create_partial_trans(self, projections):
+        results = {}
+        for f, entry in projections.items():
+            match = re.search(r"projection\((.*), (.*)\)_", f)
+            obj_name = match.group(1)
+            field_name = match.group(2)
+
+            # skip response objects for Square API
+            if re.search(r".*Response", obj_name) or re.search(r".*Request", obj_name):
+                continue
+
+            # reverse the filters to construct complete objects from partial fields
+            trans_name = make_partial_trans_name(obj_name, field_name)
+            params = [Parameter("", field_name, trans_name, [field_name], True, None, entry.response.type, None)]
+            response = entry.parameters[0]
+            results[trans_name] = TraceEntry(trans_name, "", None, params, response)
+
+        return results
+
+    def construct_graph(self, with_syntactic=False, with_partials=False):
         projections = self._create_projections()
         filters = self._create_filters()
+        
         entries = dict(projections)
         entries.update(filters)
+
+        if with_syntactic:
+            transitions = self._construct_type_trans(projections)
+            entries.update(transitions)
+
+        if with_partials:
+            partials = self._create_partial_trans(projections)
+            entries.update(partials)
+            
         return entries
