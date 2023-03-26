@@ -17,7 +17,7 @@ serde_json = "1.0.59"
 smallvec = { version = "1.6.1", features = ["union"] }
 
 [dependencies.pyo3]
-version = "0.13.2"
+version = "0.18.2"
 features = ["extension-module"]
 
 [lib]
