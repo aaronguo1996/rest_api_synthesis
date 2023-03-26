@@ -7,7 +7,7 @@ authors = ["David Cao <david@cao.sh>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-hashbrown = "0.11.2"
+hashbrown = "0.13.2"
 mimalloc = { version = "0.1.26", default-features = false }
 lasso = { version = "0.5.1", features = ["multi-threaded", "ahasher"] }
 nanorand = "0.5.2"
