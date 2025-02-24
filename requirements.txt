@@ -1,4 +1,4 @@
-graphviz==0.20.1
+graphviz==0.20.3
 z3-solver
 SNAKES
 # seaborn
